@@ -2,7 +2,7 @@
 
 import '@/lib/polyfill';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { getDashboard, getOpenOrders, getOrderHistory, getTopCoins, saveCoinSettings, getTradingSignals, getDataSourcesStatus, getTradingConfig, saveTradingConfig, updateCoinConfig, addCustomTopCoin, removeCustomTopCoin, getDashboardState, getDashboardSnapshot, quickOrder, updateWatchlistAlert, updateBuyAlert, updateSellAlert, simulateAlert, deleteDashboardItemBySymbol, toggleLiveTrading, getTPSLOrderValues, getAlertRatio, getOpenOrdersSummary, dashboardBalancesToPortfolioAssets, getExpectedTakeProfitSummary, getExpectedTakeProfitDetails, getTelegramMessages, DashboardState, DashboardBalance, WatchlistItem, OpenOrder, PortfolioAsset, TradingSignals, TopCoin, DataSourceStatus, TradingConfig, CoinSettings, TPSLOrderValues, UnifiedOpenOrder, OpenPosition, ExpectedTPSummary, ExpectedTPDetails, SimulateAlertResponse, TelegramMessage, StrategyDecision } from '@/lib/api';
+import { getDashboard, getOpenOrders, getOrderHistory, getTopCoins, saveCoinSettings, getTradingSignals, getDataSourcesStatus, getTradingConfig, saveTradingConfig, updateCoinConfig, addCustomTopCoin, removeCustomTopCoin, getDashboardState, getDashboardSnapshot, quickOrder, updateWatchlistAlert, updateBuyAlert, updateSellAlert, simulateAlert, deleteDashboardItemBySymbol, toggleLiveTrading, getTPSLOrderValues, getOpenOrdersSummary, dashboardBalancesToPortfolioAssets, getExpectedTakeProfitSummary, getExpectedTakeProfitDetails, getTelegramMessages, DashboardState, DashboardBalance, WatchlistItem, OpenOrder, PortfolioAsset, TradingSignals, TopCoin, DataSourceStatus, TradingConfig, CoinSettings, TPSLOrderValues, UnifiedOpenOrder, OpenPosition, ExpectedTPSummary, ExpectedTPDetails, SimulateAlertResponse, TelegramMessage, StrategyDecision } from '@/lib/api';
 import { getApiUrl } from '@/lib/environment';
 import { MonitoringNotificationsProvider, useMonitoringNotifications } from '@/app/context/MonitoringNotificationsContext';
 
@@ -900,7 +900,6 @@ function DashboardPageContent() {
   const [newSymbol, setNewSymbol] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [signals, setSignals] = useState<Record<string, TradingSignals | null>>({});
-  const [alertRatios, setAlertRatios] = useState<Record<string, number>>({});  // Store alert ratios: {symbol: ratio}
   const [showSignalConfig, setShowSignalConfig] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [dataSourceStatus, setDataSourceStatus] = useState<DataSourceStatus | null>(null);
@@ -1627,7 +1626,9 @@ function DashboardPageContent() {
       rules.tp.rr ? `TP≈ price + ${rules.tp.rr}×(price-SL)` : `TP≈ +${rules.tp.pct ?? '-'}%`,
     );
     if (rules.notes?.length) lines.push(`Notas: ${rules.notes.join(' · ')}`);
-      if (currentStrategy) {
+    // Safely handle currentStrategy - validate it's a proper StrategyDecision before accessing
+    const validStrategy = safeGetStrategyDecision(currentStrategy);
+    if (validStrategy) {
       lines.push('');
       lines.push('⚙️ Estado actual (backend):');
       const reasonLabels: Record<string, string> = {
@@ -1639,25 +1640,103 @@ function DashboardPageContent() {
         sell_trend_ok: 'Reversa confirmada',
         sell_volume_ok: 'Volumen SELL >= mínimo',
       };
-      if (currentStrategy?.reasons && typeof currentStrategy.reasons === 'object' && !Array.isArray(currentStrategy.reasons)) {
+      // Safely access reasons with multiple layers of validation
+      if (validStrategy.reasons && typeof validStrategy.reasons === 'object' && !Array.isArray(validStrategy.reasons)) {
         try {
-          Object.entries(currentStrategy.reasons).forEach(([key, val]) => {
+          Object.entries(validStrategy.reasons).forEach(([key, val]) => {
             if (val === null || val === undefined) return;
             const label = reasonLabels[key] || key;
             lines.push(`  • ${label}: ${val ? '✓' : '✗'}`);
           });
         } catch (e) {
-          // Silently ignore if reasons is malformed
+          // Silently ignore if reasons is malformed - don't break the tooltip
+          console.debug('Error processing strategy reasons:', e);
         }
       }
-      if (currentStrategy?.summary) {
+      if (validStrategy.summary && typeof validStrategy.summary === 'string') {
         lines.push('');
-        lines.push(`Resumen backend: ${currentStrategy.summary}`);
+        lines.push(`Resumen backend: ${validStrategy.summary}`);
       }
     }
     return lines.join('\n');
   }
   
+  // Helper function to safely validate and extract StrategyDecision
+  function safeGetStrategyDecision(
+    strategyState: unknown,
+    fallback?: StrategyDecision
+  ): StrategyDecision | undefined {
+    // Check if it's a valid object (not null, not array, has decision property)
+    if (
+      strategyState &&
+      typeof strategyState === 'object' &&
+      strategyState !== null &&
+      !Array.isArray(strategyState) &&
+      'decision' in strategyState &&
+      typeof (strategyState as { decision?: unknown }).decision === 'string'
+    ) {
+      const decision = (strategyState as { decision: string }).decision;
+      // Validate decision is one of the allowed values
+      if (decision === 'BUY' || decision === 'SELL' || decision === 'WAIT') {
+        return strategyState as StrategyDecision;
+      }
+    }
+    return fallback;
+  }
+
+type StrategyDecisionValue = 'BUY' | 'SELL' | 'WAIT';
+
+function getReasonPrefix(decision: StrategyDecisionValue): 'buy_' | 'sell_' {
+  return decision === 'SELL' ? 'sell_' : 'buy_';
+}
+
+function hasBlockingStrategyReason(
+  decision: StrategyDecisionValue,
+  reasons: Record<string, unknown>
+): boolean {
+  const prefix = getReasonPrefix(decision);
+  return Object.entries(reasons).some(([key, value]) => key.startsWith(prefix) && value === false);
+}
+
+function computeStrategyIndex(
+  decision: StrategyDecisionValue,
+  reasons: Record<string, unknown>
+): number | null {
+  const prefix = getReasonPrefix(decision);
+  const relevant = Object.entries(reasons).filter(
+    ([key, value]) => key.startsWith(prefix) && typeof value === 'boolean'
+  );
+  if (!relevant.length) {
+    return null;
+  }
+  const satisfied = relevant.filter(([, value]) => value === true).length;
+  return Math.round((satisfied / relevant.length) * 100);
+}
+
+function buildDecisionIndexTitle(
+  decision: StrategyDecisionValue,
+  reasons: Record<string, unknown>,
+  indexValue: number
+): string {
+  const prefix = getReasonPrefix(decision);
+  const summary = Object.entries(reasons)
+    .filter(([key, value]) => key.startsWith(prefix) && typeof value === 'boolean')
+    .map(([key, value]) => `${key.replace(prefix, '')}: ${value ? '✓' : '✗'}`)
+    .join(' | ');
+  const decisionLabel = decision === 'SELL' ? 'SELL readiness' : 'BUY readiness';
+  return summary
+    ? `${decisionLabel} index: ${indexValue}% (${summary})`
+    : `${decisionLabel} index: ${indexValue}%`;
+}
+
+function resolveDecisionIndexColor(value: number): string {
+  if (value >= 90) return 'text-green-600';
+  if (value >= 70) return 'text-green-500';
+  if (value >= 50) return 'text-gray-600';
+  if (value >= 30) return 'text-orange-500';
+  return 'text-red-500';
+}
+
   // Helper function to build signal criteria explanation tooltip
   function buildSignalCriteriaTooltip(
     preset: Preset,
@@ -2740,54 +2819,6 @@ function DashboardPageContent() {
     return `Price: ${priceLabel}\nSignals: ${signalsLabel}`;
   }, [lastUpdateTimes]);
 
-  // Throttled alert ratio fetching - batch requests to avoid overwhelming backend
-  const alertRatioFetchQueue = useRef<Set<string>>(new Set());
-  const alertRatioFetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  
-  const fetchAlertRatiosBatch = useCallback(async () => {
-    const symbolsToFetch = Array.from(alertRatioFetchQueue.current);
-    if (symbolsToFetch.length === 0) return;
-    
-    alertRatioFetchQueue.current.clear();
-    
-    // Fetch ratios sequentially with delay to avoid overwhelming backend
-    for (let i = 0; i < symbolsToFetch.length; i++) {
-      const symbol = symbolsToFetch[i];
-      try {
-        const ratioData = await getAlertRatio(symbol);
-        if (ratioData?.ratio !== undefined) {
-          setAlertRatios(prev => {
-            const updated = { ...prev, [symbol]: ratioData.ratio };
-            return updated;
-          });
-        }
-      } catch (err) {
-        console.warn(`⚠️ Failed to fetch alert ratio for ${symbol}:`, err);
-        // Don't throw - ratio is optional
-      }
-      
-      // Add delay between requests (except for the last one)
-      if (i < symbolsToFetch.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 200)); // 200ms delay between requests
-      }
-    }
-  }, []);
-  
-  const queueAlertRatioFetch = useCallback((symbol: string) => {
-    alertRatioFetchQueue.current.add(symbol);
-    
-    // Clear existing timer
-    if (alertRatioFetchTimer.current) {
-      clearTimeout(alertRatioFetchTimer.current);
-    }
-    
-    // Batch fetch after 2 seconds of inactivity (debounce)
-    alertRatioFetchTimer.current = setTimeout(() => {
-      fetchAlertRatiosBatch();
-      alertRatioFetchTimer.current = null;
-    }, 2000);
-  }, [fetchAlertRatiosBatch]);
-
   // Fetch trading signals for a symbol
   const fetchSignals = useCallback(async (symbol: string) => {
     try {
@@ -2826,9 +2857,6 @@ function DashboardPageContent() {
           [symbol]: { ...(prev[symbol] || {}), ...updatedSignal } as TradingSignals,
         }));
       }
-      
-      // Queue alert ratio fetch (will be batched and throttled)
-      queueAlertRatioFetch(symbol);
       
       // Record signals update time - preserve existing price update time if available
       const now = new Date();
@@ -8453,26 +8481,18 @@ ${marginText}
                       })()}
                     </td>
                     {(() => {
-                      // masterAlertEnabled is calculated in parent scope for use in both IIFE and button
-                      
                       return (
                         <>
                           <td className="px-4 py-3 text-center w-24">
                             {(() => {
                               const signalEntry = signals[coin.instrument_name];
-                              const signalStatus = signalEntry?.signals;
                               // Use strategy_state from coin (backend source of truth) or fallback to signalEntry.strategy
-                              // Defensive: handle null/undefined and ensure it's a valid StrategyDecision object
+                              // Defensive: use safe validation function to prevent crashes
                               const strategyState: StrategyDecision | undefined = 
-                                (coin.strategy_state && typeof coin.strategy_state === 'object' && coin.strategy_state !== null && 'decision' in coin.strategy_state)
-                                  ? coin.strategy_state as StrategyDecision
-                                  : (signalEntry?.strategy && typeof signalEntry.strategy === 'object' && signalEntry.strategy !== null && 'decision' in signalEntry.strategy)
-                                    ? signalEntry.strategy as StrategyDecision
-                                    : (coin.strategy && typeof coin.strategy === 'object' && coin.strategy !== null && 'decision' in coin.strategy)
-                                      ? coin.strategy as StrategyDecision
-                                      : undefined;
-                              const decision = strategyState?.decision;
-                              const reasons = strategyState?.reasons ?? {};
+                                safeGetStrategyDecision(coin.strategy_state) ||
+                                safeGetStrategyDecision(signalEntry?.strategy) ||
+                                safeGetStrategyDecision(coin.strategy) ||
+                                undefined;
                               
                               const preset = coinPresets[coin.instrument_name] || 'swing';
                               let presetType: Preset;
@@ -8500,89 +8520,35 @@ ${marginText}
                               const ema10 = signalEntry?.ema10 ?? coin.ema10;
                               const ma200 = signalEntry?.ma200 ?? coin.ma200;
                               const currentPrice = coin.current_price;
-                              const ratio = alertRatios[coin.instrument_name];
                               
-                              // Use backend strategy_state.decision as source of truth (with safe fallback)
-                              let signal: 'BUY' | 'WAIT' | 'SELL' = (decision === 'BUY' || decision === 'SELL' || decision === 'WAIT') ? decision : 'WAIT';
-                              let sellConditions = false;
+                              const strategyReasons =
+                                strategyState?.reasons &&
+                                typeof strategyState.reasons === 'object' &&
+                                !Array.isArray(strategyState.reasons)
+                                  ? strategyState.reasons
+                                  : {};
                               
-                              // Only recompute if strategy_state is not available (fallback for old data)
-                              if (!strategyState?.decision) {
-                                if (rsi !== undefined && ma50 !== undefined && ema10 !== undefined && currentPrice) {
-                                  const buyBelow = rules?.rsi?.buyBelow || 40;
-                                  const sellAbove = rules?.rsi?.sellAbove || 70;
-                                  const ma50Check = rules?.maChecks?.ma50 || false;
-                                  const ma200Check = rules?.maChecks?.ma200 || false;
-                                  
-                                  let buyConditions = rsi < buyBelow;
-                                  if (ma50Check && ema10 !== undefined) {
-                                    buyConditions = buyConditions && ma50 > ema10;
-                                  }
-                                  if (ma200Check && ma200 !== undefined) {
-                                    buyConditions = buyConditions && currentPrice > ma200;
-                                  }
-                                  
-                                  const minVolumeRatio = rules?.volumeMinRatio || 0.5;
-                                  const currentVolume = signalEntry?.current_volume ?? coin.current_volume;
-                                  const volumeRatio = signalEntry?.volume_ratio ?? coin.volume_ratio;
-                                  const avgVolume = signalEntry?.avg_volume ?? coin.avg_volume;
-                                  if (volumeRatio !== undefined && volumeRatio > 0) {
-                                    buyConditions = buyConditions && volumeRatio >= minVolumeRatio;
-                                  } else if (currentVolume !== undefined && avgVolume !== undefined && avgVolume > 0) {
-                                    const calculatedRatio = currentVolume / avgVolume;
-                                    buyConditions = buyConditions && calculatedRatio >= minVolumeRatio;
-                                  }
-                                  
-                                  const rsiSell = rsi > sellAbove;
-                                  let maReversal = false;
-                                  if (ma50Check && ema10 !== undefined) {
-                                    const priceDiff = Math.abs(ma50 - ema10);
-                                    const avgPrice = (ma50 + ema10) / 2;
-                                    const percentDiff = (priceDiff / avgPrice) * 100;
-                                    maReversal = ma50 < ema10 && percentDiff >= 0.5;
-                                  }
-                                  const currentVolumeForSell = signalEntry?.current_volume ?? coin.current_volume;
-                                  const volumeRatioForSell = signalEntry?.volume_ratio ?? coin.volume_ratio;
-                                  const avgVolumeForSell = signalEntry?.avg_volume ?? coin.avg_volume;
-                                  const minVolumeRatioForSell = minVolumeRatio;
-                                  let volumeCheck = false;
-                                  if (volumeRatioForSell !== undefined && volumeRatioForSell > 0) {
-                                    volumeCheck = volumeRatioForSell >= minVolumeRatioForSell;
-                                  } else if (currentVolumeForSell !== undefined && avgVolumeForSell !== undefined && avgVolumeForSell > 0) {
-                                    const calculatedRatioForSell = currentVolumeForSell / avgVolumeForSell;
-                                    volumeCheck = calculatedRatioForSell >= minVolumeRatioForSell;
-                                  } else {
-                                    volumeCheck = true;
-                                  }
-                                  
-                                  if (ma50Check) {
-                                    sellConditions = rsiSell && maReversal && volumeCheck;
-                                  } else {
-                                    sellConditions = rsiSell && volumeCheck;
-                                  }
-                                  
-                                  if (buyConditions && !sellConditions) {
-                                    signal = 'BUY';
-                                  } else if (sellConditions) {
-                                    signal = 'SELL';
-                                  } else {
-                                    signal = 'WAIT';
-                                  }
-                                } else if (signalStatus?.buy) {
-                                  signal = 'BUY';
-                                } else if (signalStatus?.sell) {
-                                  signal = 'SELL';
-                                }
-                                
-                                if (ratio !== undefined) {
-                                  if (ratio >= 100) {
-                                    signal = 'BUY';
-                                  } else if (ratio === 0) {
-                                    signal = sellConditions ? 'SELL' : 'WAIT';
-                                  } else if (signal === 'BUY' && ratio < 100) {
-                                    signal = 'WAIT';
-                                  }
-                                }
+                              const backendDecision = strategyState?.decision;
+                              let signal: 'BUY' | 'WAIT' | 'SELL' =
+                                backendDecision === 'BUY' || backendDecision === 'SELL' || backendDecision === 'WAIT'
+                                  ? backendDecision
+                                  : 'WAIT';
+                              
+                              if (signal !== 'WAIT' && hasBlockingStrategyReason(signal, strategyReasons)) {
+                                signal = 'WAIT';
+                              }
+                              
+                              const strategyIndex = computeStrategyIndex(signal, strategyReasons);
+                              const showIndex = typeof strategyIndex === 'number';
+                              
+                              if (process.env.NODE_ENV !== 'production') {
+                                console.debug('[WATCHLIST_STRATEGY]', {
+                                  symbol: coin.instrument_name,
+                                  backendDecision,
+                                  normalizedDecision: signal,
+                                  reasons: strategyReasons,
+                                  strategyIndex,
+                                });
                               }
                               
                               const colorClasses = {
@@ -8607,48 +8573,60 @@ ${marginText}
                                 coin.instrument_name,
                                 strategyState as StrategyDecision | undefined
                               );
-                              const showRatio = ratio !== undefined && hasAlertEnabled;
-                              
-                              if (hasAlertEnabled && ratio === undefined) {
-                                console.debug(`🔍 ${coin.instrument_name}: alert_enabled=true but ratio not loaded yet`);
-                              } else if (hasAlertEnabled && ratio !== undefined) {
-                                console.debug(`✅ ${coin.instrument_name}: alert_enabled=true, ratio=${ratio}%, will show: ${showRatio}`);
-                              }
                         
-                        return (
-                          <div className="flex flex-col items-center gap-1">
-                          <span className={colorClasses[signal]} title={signalTooltip}>
-                            {signal}
-                          </span>
-                            {showRatio && (
-                              <span 
-                                className={`text-xs font-semibold ${
-                                  ratio >= 80 ? 'text-green-600' :
-                                  ratio >= 60 ? 'text-green-500' :
-                                  ratio >= 40 ? 'text-gray-600' :
-                                  ratio >= 20 ? 'text-orange-500' :
-                                  'text-red-500'
-                                }`}
-                                title={`Alert Ratio: ${ratio}% (100=BUY, 0=SELL, 50=WAIT)`}
-                              >
-                                INDEX:{ratio.toFixed(1)}%
-                              </span>
-                            )}
-                          </div>
-                        );
+                              const decisionIndexTitle =
+                                showIndex && typeof strategyIndex === 'number'
+                                  ? buildDecisionIndexTitle(signal, strategyReasons, strategyIndex)
+                                  : 'Decision index unavailable (awaiting backend reasons)';
+                              const decisionIndexClass =
+                                showIndex && typeof strategyIndex === 'number'
+                                  ? resolveDecisionIndexColor(strategyIndex)
+                                  : 'text-gray-400';
+
+                              return (
+                                <div className="flex flex-col items-center gap-1">
+                                  <span className={colorClasses[signal]} title={signalTooltip}>
+                                    {signal}
+                                  </span>
+                                  {showIndex && typeof strategyIndex === 'number' && (
+                                    <span
+                                      className={`text-xs font-semibold ${decisionIndexClass}`}
+                                      title={decisionIndexTitle}
+                                    >
+                                      INDEX:{strategyIndex.toFixed(0)}%
+                                    </span>
+                                  )}
+                                </div>
+                              );
                       })()}
                     </td>
                     <td className="px-4 py-3 text-center w-20">
                       <div className="flex gap-1 justify-center flex-wrap">
-                        <button
-                          onClick={() => handleMasterAlertToggle(coin.instrument_name)}
-                          className={`px-2 py-1 rounded text-xs font-semibold ${
-                            masterAlertEnabled ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-500 hover:bg-gray-600 text-white'
-                          }`}
-                          title={`Alerts: ${masterAlertEnabled ? 'ENABLED' : 'DISABLED'} (master toggle)`}
-                        >
-                          ALERTS {masterAlertEnabled ? '✅' : '❌'}
-                        </button>
+                        {(() => {
+                          // Recalculate masterAlertEnabled here to ensure it's in scope
+                          const watchlistItem = watchlistItems.find(item => item.symbol === coin.instrument_name);
+                          const storedMasterAlert = coinAlertStatus[coin.instrument_name];
+                          const hasAlertEnabled = coin.alert_enabled === true || watchlistItem?.alert_enabled === true;
+                          const masterAlertEnabled = storedMasterAlert !== undefined
+                            ? storedMasterAlert
+                            : Boolean(
+                                hasAlertEnabled ||
+                                coinBuyAlertStatus[coin.instrument_name] === true ||
+                                coinSellAlertStatus[coin.instrument_name] === true
+                              );
+                          
+                          return (
+                            <button
+                              onClick={() => handleMasterAlertToggle(coin.instrument_name)}
+                              className={`px-2 py-1 rounded text-xs font-semibold ${
+                                masterAlertEnabled ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-500 hover:bg-gray-600 text-white'
+                              }`}
+                              title={`Alerts: ${masterAlertEnabled ? 'ENABLED' : 'DISABLED'} (master toggle)`}
+                            >
+                              ALERTS {masterAlertEnabled ? '✅' : '❌'}
+                            </button>
+                          );
+                        })()}
                         {alertSavedMessages[`${coin.instrument_name}_alerts`] && (
                           <span className="text-xs text-green-600 font-medium ml-1 animate-[fadeIn_0.2s_ease-in-out_forwards]">
                             Saved

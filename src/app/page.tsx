@@ -2,11 +2,14 @@
 
 import '@/lib/polyfill';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { getDashboard, getOpenOrders, getOrderHistory, getTopCoins, saveCoinSettings, getTradingSignals, getDataSourcesStatus, getTradingConfig, saveTradingConfig, updateCoinConfig, addCustomTopCoin, removeCustomTopCoin, getDashboardState, getDashboardSnapshot, quickOrder, updateWatchlistAlert, updateBuyAlert, updateSellAlert, simulateAlert, deleteDashboardItemBySymbol, toggleLiveTrading, getTPSLOrderValues, getAlertRatio, getOpenOrdersSummary, dashboardBalancesToPortfolioAssets, getExpectedTakeProfitSummary, getExpectedTakeProfitDetails, getTelegramMessages, DashboardState, DashboardBalance, WatchlistItem, OpenOrder, PortfolioAsset, TradingSignals, TopCoin, DataSourceStatus, TradingConfig, CoinSettings, TPSLOrderValues, UnifiedOpenOrder, OpenPosition, ExpectedTPSummary, ExpectedTPDetails, SimulateAlertResponse, TelegramMessage } from '@/lib/api';
+import { getDashboard, getOpenOrders, getOrderHistory, getTopCoins, saveCoinSettings, getTradingSignals, getDataSourcesStatus, getTradingConfig, saveTradingConfig, updateCoinConfig, addCustomTopCoin, removeCustomTopCoin, getDashboardState, getDashboardSnapshot, quickOrder, updateWatchlistAlert, updateBuyAlert, updateSellAlert, simulateAlert, deleteDashboardItemBySymbol, toggleLiveTrading, getTPSLOrderValues, getAlertRatio, getOpenOrdersSummary, dashboardBalancesToPortfolioAssets, getExpectedTakeProfitSummary, getExpectedTakeProfitDetails, getTelegramMessages, DashboardState, DashboardBalance, WatchlistItem, OpenOrder, PortfolioAsset, TradingSignals, TopCoin, DataSourceStatus, TradingConfig, CoinSettings, TPSLOrderValues, UnifiedOpenOrder, OpenPosition, ExpectedTPSummary, ExpectedTPDetails, SimulateAlertResponse, TelegramMessage, StrategyDecision } from '@/lib/api';
 import { getApiUrl } from '@/lib/environment';
 import { MonitoringNotificationsProvider, useMonitoringNotifications } from '@/app/context/MonitoringNotificationsContext';
 
 const TELEGRAM_REFRESH_INTERVAL_MS = 20000;
+
+// Cleaned duplicate error handlers in alert toggle logic (handleMasterAlertToggle, updateBuyAlert, updateSellAlert)
+// All try-catch blocks for alert toggles now have single, clean error handling paths
 
 // Extended OpenOrder type for additional properties
 type ExtendedOpenOrder = OpenOrder & {
@@ -324,23 +327,17 @@ function formatNumber(num: number | null | undefined, symbol?: string): string {
   // Backend uses: price_precision = 2 if current_price >= 100 else 4
   // We'll use similar logic but with more granular precision for better display
   
-  if (num >= 1000) {
-    // High-value coins (BTC, ETH, etc.) >= $1000 - use 2 decimal places
-    formatted = num.toFixed(2);
-  } else if (num >= 100) {
-    // Medium-high value coins $100-$999 - use 2 decimal places
+  if (num >= 100) {
+    // High-value coins >= $100 - use 2 decimal places
     formatted = num.toFixed(2);
   } else if (num >= 1) {
-    // Medium-value coins $1-$99 - use 4 decimal places for better precision
-    formatted = num.toFixed(4);
+    // Medium-value coins $1-$99 - use 2 decimal places
+    formatted = num.toFixed(2);
   } else if (num >= 0.01) {
-    // Low-value coins $0.01-$0.99 - use 6 decimal places (increased from 6 to ensure precision)
+    // Low-value coins $0.01-$0.99 - use 6 decimal places
     formatted = num.toFixed(6);
-  } else if (num >= 0.0001) {
-    // Very low-value coins $0.0001-$0.01 - use 8 decimal places
-    formatted = num.toFixed(8);
   } else {
-    // Extremely low-value coins < $0.0001 - use 10 decimal places for VET and similar coins
+    // Very low-value coins < $0.01 - use 10 decimal places
     formatted = num.toFixed(10);
   }
   
@@ -351,19 +348,35 @@ function formatNumber(num: number | null | undefined, symbol?: string): string {
     return addThousandSeparators(formatted);
   }
   
-  // For larger values, remove trailing zeros for cleaner display
-  // But keep at least 2 significant digits after decimal
+  // For values < 0.01, preserve all decimal places (don't remove trailing zeros)
+  // This ensures precision for very low-value coins like VET, XLM, etc.
+  if (num < 0.01) {
+    // Don't remove trailing zeros for very small values - they're significant
+    return addThousandSeparators(formatted);
+  }
+  
+  // For values >= 0.01, remove trailing zeros but preserve minimum decimals based on value range
   const parts = formatted.split('.');
   if (parts.length === 2) {
-    // Remove trailing zeros but keep at least 2 decimal places
+    // Determine minimum decimals to keep based on value magnitude
+    let minDecimals = 2;
+    if (num >= 100) {
+      minDecimals = 2; // Values >= $100: keep at least 2 decimals
+    } else if (num >= 1) {
+      minDecimals = 2; // Values $1-$99: keep at least 2 decimals
+    } else if (num >= 0.01) {
+      minDecimals = 6; // Values $0.01-$0.99: keep at least 6 decimals
+    }
+    
+    // Remove trailing zeros but keep at least minDecimals
     const decimals = parts[1].replace(/0+$/, '');
     if (decimals.length === 0) {
-      // If all decimals were zeros, keep at least 2 decimal places
-      formatted = parts[0] + '.' + parts[1].substring(0, Math.min(2, parts[1].length)).padEnd(2, '0');
+      // If all decimals were zeros, keep at least minDecimals
+      formatted = parts[0] + '.' + parts[1].substring(0, Math.min(minDecimals, parts[1].length)).padEnd(Math.min(minDecimals, parts[1].length), '0');
     } else {
-      // Keep meaningful decimals, but ensure at least 2 for numbers < 1
-      if (num < 1 && decimals.length < 2) {
-        formatted = parts[0] + '.' + decimals.padEnd(2, '0');
+      // Keep meaningful decimals, but ensure at least minDecimals
+      if (decimals.length < minDecimals) {
+        formatted = parts[0] + '.' + decimals.padEnd(minDecimals, '0');
       } else {
         formatted = parts[0] + '.' + decimals;
       }
@@ -407,7 +420,7 @@ type StrategyRules = {
   maChecks: { ema10: boolean; ma50: boolean; ma200: boolean };
   sl: { pct?: number; atrMult?: number };     // si hay ATR, usar atrMult; si no, pct
   tp: { pct?: number; rr?: number };          // rr = risk:reward basado en SL
-  volumeMinRatio?: number;                    // Minimum volume ratio (e.g., 1, 1.5, 2)
+  volumeMinRatio?: number;                    // Minimum volume ratio (e.g., 0.5, 1, 1.5, 2)
   minPriceChangePct?: number;                 // Minimum price change % required for order creation/alerts (default: 1.0)
   alertCooldownMinutes?: number;              // Cooldown in minutes between same-side alerts (default: 5.0)
   notes?: string[];
@@ -427,7 +440,7 @@ const PRESET_CONFIG: PresetConfig = {
         maChecks: { ema10: true, ma50: true, ma200: true },
         sl: { atrMult: 1.5 },
         tp: { rr: 1.5 },
-        volumeMinRatio: 2.0,
+        volumeMinRatio: 0.5,
         minPriceChangePct: 1.0,
         alertCooldownMinutes: 5.0,
         notes: ['Operaciones multi-día', 'Confirmación MA50/MA200']
@@ -437,7 +450,7 @@ const PRESET_CONFIG: PresetConfig = {
         maChecks: { ema10: true, ma50: true, ma200: true },
         sl: { atrMult: 1.0 },
         tp: { rr: 1.2 },
-        volumeMinRatio: 2.0,
+        volumeMinRatio: 0.5,
         minPriceChangePct: 1.0,
         alertCooldownMinutes: 5.0,
         notes: ['Entrada más temprana', 'SL más estrecho']
@@ -452,7 +465,7 @@ const PRESET_CONFIG: PresetConfig = {
         maChecks: { ema10: true, ma50: true, ma200: false },
         sl: { atrMult: 1.0 },
         tp: { rr: 1.2 },
-        volumeMinRatio: 2.0,
+        volumeMinRatio: 0.5,
         minPriceChangePct: 1.0,
         notes: ['Cierra en el día', 'Evita overnight']
       },
@@ -461,7 +474,7 @@ const PRESET_CONFIG: PresetConfig = {
         maChecks: { ema10: true, ma50: true, ma200: false },
         sl: { atrMult: 0.8 },
         tp: { rr: 1.0 },
-        volumeMinRatio: 2.0,
+        volumeMinRatio: 0.5,
         minPriceChangePct: 1.0,
         alertCooldownMinutes: 5.0,
         notes: ['Más señales', 'Más ruido']
@@ -476,7 +489,7 @@ const PRESET_CONFIG: PresetConfig = {
         maChecks: { ema10: true, ma50: false, ma200: false },
         sl: { pct: 0.5 },
         tp: { pct: 0.8 },
-        volumeMinRatio: 2.0,
+        volumeMinRatio: 0.5,
         minPriceChangePct: 1.0,
         alertCooldownMinutes: 5.0,
         notes: ['Movimientos muy cortos', 'Slippage importa']
@@ -486,7 +499,7 @@ const PRESET_CONFIG: PresetConfig = {
         maChecks: { ema10: true, ma50: false, ma200: false },
         sl: { pct: 0.35 },
         tp: { pct: 0.5 },
-        volumeMinRatio: 2.0,
+        volumeMinRatio: 0.5,
         minPriceChangePct: 1.0,
         alertCooldownMinutes: 5.0,
         notes: ['Entradas anticipadas', 'Muchas micro-salidas']
@@ -874,6 +887,9 @@ function DashboardPageContent() {
   const [coinAlertStatus, setCoinAlertStatus] = useState<Record<string, boolean>>({});  // Legacy - kept for backward compatibility
   const [coinBuyAlertStatus, setCoinBuyAlertStatus] = useState<Record<string, boolean>>({});
   const [coinSellAlertStatus, setCoinSellAlertStatus] = useState<Record<string, boolean>>({});
+  // Subtle "Saved" confirmation messages: { [symbol_type]: { type: 'success' | 'error', timestamp: number } }
+  const [alertSavedMessages, setAlertSavedMessages] = useState<Record<string, { type: 'success' | 'error', timestamp: number }>>({});
+  const savedMessageTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
   const [coinAmounts, setCoinAmounts] = useState<Record<string, string>>({});
   const [coinSLPercent, setCoinSLPercent] = useState<Record<string, string>>({});
   const [coinTPPercent, setCoinTPPercent] = useState<Record<string, string>>({});
@@ -897,6 +913,96 @@ function DashboardPageContent() {
   const [watchlistOrder, setWatchlistOrder] = useState<Record<string, number>>({});
   const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
   const [tpSlOrderValues, setTpSlOrderValues] = useState<TPSLOrderValues>({});
+
+  const persistAlertFlag = useCallback(
+    (
+      setter: React.Dispatch<React.SetStateAction<Record<string, boolean>>>,
+      storageKey: string,
+      symbolKey: string,
+      value: boolean
+    ) => {
+      setter(prev => {
+        const updated = { ...prev };
+        if (value) {
+          updated[symbolKey] = value;
+        } else {
+          delete updated[symbolKey];
+        }
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(updated));
+        } catch (err) {
+          console.warn(`Failed to persist ${storageKey}:`, err);
+        }
+        return updated;
+      });
+    },
+    []
+  );
+
+  const handleMasterAlertToggle = useCallback(
+    async (symbol: string) => {
+      const normalizedSymbol = symbol.toUpperCase();
+      const previousBuy = coinBuyAlertStatus[normalizedSymbol] ?? false;
+      const previousSell = coinSellAlertStatus[normalizedSymbol] ?? false;
+      const storedMaster = coinAlertStatus[normalizedSymbol];
+      const previousMaster =
+        storedMaster !== undefined ? storedMaster : previousBuy || previousSell;
+      const newStatus = !previousMaster;
+
+      const applyState = (masterValue: boolean, buyValue: boolean, sellValue: boolean) => {
+        persistAlertFlag(setCoinAlertStatus, 'watchlist_alert_status', normalizedSymbol, masterValue);
+        persistAlertFlag(setCoinBuyAlertStatus, 'watchlist_buy_alert_status', normalizedSymbol, buyValue);
+        persistAlertFlag(setCoinSellAlertStatus, 'watchlist_sell_alert_status', normalizedSymbol, sellValue);
+      };
+
+      applyState(newStatus, newStatus, newStatus);
+
+      const messageKey = `${normalizedSymbol}_alerts`;
+
+      try {
+        const baseResponse = await updateWatchlistAlert(normalizedSymbol, newStatus, {
+          buyAlertEnabled: newStatus,
+          sellAlertEnabled: newStatus,
+        });
+        const [buyResponse, sellResponse] = await Promise.all([
+          updateBuyAlert(normalizedSymbol, newStatus),
+          updateSellAlert(normalizedSymbol, newStatus)
+        ]);
+
+        const resolvedMaster =
+          baseResponse?.alert_enabled !== undefined ? baseResponse.alert_enabled : newStatus;
+        const resolvedBuy =
+          buyResponse?.buy_alert_enabled !== undefined ? buyResponse.buy_alert_enabled : newStatus;
+        const resolvedSell =
+          sellResponse?.sell_alert_enabled !== undefined ? sellResponse.sell_alert_enabled : newStatus;
+
+        applyState(!!resolvedMaster, !!resolvedBuy, !!resolvedSell);
+
+        setAlertSavedMessages(prev => ({
+          ...prev,
+          [messageKey]: { type: 'success', timestamp: Date.now() }
+        }));
+        if (savedMessageTimersRef.current[messageKey]) {
+          clearTimeout(savedMessageTimersRef.current[messageKey]);
+        }
+        savedMessageTimersRef.current[messageKey] = setTimeout(() => {
+          setAlertSavedMessages(prev => {
+            const updated = { ...prev };
+            delete updated[messageKey];
+            return updated;
+          });
+          delete savedMessageTimersRef.current[messageKey];
+        }, 2500);
+      } catch (error) {
+        const errorObj = error as { detail?: string; message?: string };
+        console.error(`❌ Failed to toggle alerts for ${normalizedSymbol}:`, error);
+        applyState(previousMaster, previousBuy, previousSell);
+        const errorMsg = errorObj.detail || errorObj.message || 'Error desconocido';
+        alert(`Error updating alerts for ${normalizedSymbol}: ${errorMsg}`);
+      }
+    },
+    [coinAlertStatus, coinBuyAlertStatus, coinSellAlertStatus, persistAlertFlag]
+  );
 
   const fetchTelegramMessages = useCallback(
     async (options?: { silent?: boolean }) => {
@@ -1464,7 +1570,7 @@ function DashboardPageContent() {
 
   function buildTooltip(preset: Preset, risk: RiskMode, ctx: {
     rsi?: number; ema10?: number; ma50?: number; ma200?: number; atr?: number; currentPrice?: number;
-  }) {
+  }, currentStrategy?: StrategyDecision) {
     // Use presetsConfig (editable) if available, fallback to PRESET_CONFIG (defaults)
     const cfg = presetsConfig[preset] || PRESET_CONFIG[preset];
     if (!cfg) {
@@ -1521,6 +1627,34 @@ function DashboardPageContent() {
       rules.tp.rr ? `TP≈ price + ${rules.tp.rr}×(price-SL)` : `TP≈ +${rules.tp.pct ?? '-'}%`,
     );
     if (rules.notes?.length) lines.push(`Notas: ${rules.notes.join(' · ')}`);
+      if (currentStrategy) {
+      lines.push('');
+      lines.push('⚙️ Estado actual (backend):');
+      const reasonLabels: Record<string, string> = {
+        buy_rsi_ok: 'RSI < umbral BUY',
+        buy_ma_ok: 'Tendencia (MAs)',
+        buy_volume_ok: 'Volumen BUY >= mínimo',
+        buy_target_ok: 'Precio dentro de buy target',
+        sell_rsi_ok: 'RSI > umbral SELL',
+        sell_trend_ok: 'Reversa confirmada',
+        sell_volume_ok: 'Volumen SELL >= mínimo',
+      };
+      if (currentStrategy?.reasons && typeof currentStrategy.reasons === 'object' && !Array.isArray(currentStrategy.reasons)) {
+        try {
+          Object.entries(currentStrategy.reasons).forEach(([key, val]) => {
+            if (val === null || val === undefined) return;
+            const label = reasonLabels[key] || key;
+            lines.push(`  • ${label}: ${val ? '✓' : '✗'}`);
+          });
+        } catch (e) {
+          // Silently ignore if reasons is malformed
+        }
+      }
+      if (currentStrategy?.summary) {
+        lines.push('');
+        lines.push(`Resumen backend: ${currentStrategy.summary}`);
+      }
+    }
     return lines.join('\n');
   }
   
@@ -1536,14 +1670,15 @@ function DashboardPageContent() {
     currentPrice: number | undefined,
     volume: number | undefined,
     avgVolume: number | undefined,
-    symbol?: string
+    symbol?: string,
+    currentStrategy?: StrategyDecision
   ): string {
     if (!rules) {
       return `Estrategia no configurada`;
     }
 
     // Volume minimum ratio constant (used throughout function)
-    const minVolumeRatio = rules.volumeMinRatio || 2.0;
+    const minVolumeRatio = rules.volumeMinRatio || 0.5;
 
     const lines: string[] = [];
     const fullStrategyName = formatFullStrategyName(preset, riskMode);
@@ -1554,7 +1689,7 @@ function DashboardPageContent() {
     lines.push('🟢 CRITERIOS BUY (todos deben cumplirse):');
     const buyBelow = rules.rsi?.buyBelow || 40;
     const rsiBuyStatus = (rsi !== undefined && rsi !== null) ? (rsi < buyBelow ? '✓' : '✗') : '?';
-    lines.push(`  • RSI < ${buyBelow} ${(rsi !== undefined && rsi !== null) ? `(actual: ${rsi.toFixed(1)}${rsiBuyStatus})` : ''}`);
+    lines.push(`  • RSI < ${buyBelow} ${(rsi !== undefined && rsi !== null) ? `(actual: ${rsi.toFixed(2)}${rsiBuyStatus})` : ''}`);
     
     if (rules.maChecks?.ma50 && ma50 !== undefined && ma50 !== null && ema10 !== undefined && ema10 !== null) {
       const ma50Status = ma50 > ema10 ? '✓' : '✗';
@@ -1597,7 +1732,7 @@ function DashboardPageContent() {
     }
     const sellAbove = rules.rsi?.sellAbove || 70;
     const rsiSellStatus = (rsi !== undefined && rsi !== null) ? (rsi > sellAbove ? '✓' : '✗') : '?';
-    lines.push(`  • RSI > ${sellAbove} ${(rsi !== undefined && rsi !== null) ? `(actual: ${rsi.toFixed(1)}${rsiSellStatus})` : ''}`);
+    lines.push(`  • RSI > ${sellAbove} ${(rsi !== undefined && rsi !== null) ? `(actual: ${rsi.toFixed(2)}${rsiSellStatus})` : ''}`);
     
     if (rules.maChecks?.ma50 && ma50 !== undefined && ema10 !== undefined) {
       // Calculate percentage difference
@@ -1890,6 +2025,7 @@ function DashboardPageContent() {
       volume_ratio: chooseValue(incoming.volume_ratio, existing.volume_ratio, true),
       res_up: chooseValue(incoming.res_up, existing.res_up),
       res_down: chooseValue(incoming.res_down, existing.res_down),
+      strategy: incoming.strategy ?? existing.strategy,
     };
   }, []);
 
@@ -2038,6 +2174,11 @@ function DashboardPageContent() {
         // Extract resistance levels from coin data (newly added from backend)
         if (coin.res_up !== undefined) signalData.res_up = coin.res_up;
         if (coin.res_down !== undefined) signalData.res_down = coin.res_down;
+        if (coin.strategy) {
+          signalData.strategy = coin.strategy;
+        } else if (!signalData.strategy && existingSignal?.strategy) {
+          signalData.strategy = existingSignal.strategy;
+        }
         
         // Preserve existing signal data if present (but allow override from coin data)
         if (existingSignal.res_up === undefined && coin.res_up === undefined) {
@@ -2679,7 +2820,12 @@ function DashboardPageContent() {
         applyPriceToTopCoins(symbol, price);
       }
 
-      setSignals(prev => ({ ...prev, [symbol]: updatedSignal }));
+      if (updatedSignal) {
+        setSignals(prev => ({
+          ...prev,
+          [symbol]: { ...(prev[symbol] || {}), ...updatedSignal } as TradingSignals,
+        }));
+      }
       
       // Queue alert ratio fetch (will be batched and throttled)
       queueAlertRatioFetch(symbol);
@@ -3983,21 +4129,22 @@ function DashboardPageContent() {
       if (config?.presets) {
         const backendPresetsConfig: PresetConfig = { ...PRESET_CONFIG };
         
-        Object.entries(config.presets).forEach(([presetKey, presetData]: [string, any]) => {
+        Object.entries(config.presets).forEach(([presetKey, presetData]) => {
+          const presetPayload = presetData as { rules?: Record<string, StrategyRules> } | undefined;
           // Convert backend key (lowercase) to frontend key (capitalized)
           const presetName = presetKey.charAt(0).toUpperCase() + presetKey.slice(1) as Preset;
           
-          if (presetData?.rules) {
+            if (presetPayload?.rules) {
             // Backend has new format with rules structure
-            backendPresetsConfig[presetName] = {
+              backendPresetsConfig[presetName] = {
               ...backendPresetsConfig[presetName],
-              rules: {
-                ...backendPresetsConfig[presetName]?.rules,
-                ...presetData.rules
-              }
-            };
-          }
-        });
+                rules: {
+                  ...backendPresetsConfig[presetName]?.rules,
+                  ...presetPayload?.rules
+                }
+              };
+            }
+          });
         
         // Update presetsConfig with backend data (merge with existing to preserve any local changes)
         setPresetsConfig(prev => {
@@ -4027,6 +4174,17 @@ function DashboardPageContent() {
         err
       );
     }
+  }, []);
+
+  // Cleanup saved message timers on unmount
+  useEffect(() => {
+    return () => {
+      // Cleanup all timers on unmount
+      Object.values(savedMessageTimersRef.current).forEach(timer => {
+        if (timer) clearTimeout(timer);
+      });
+      savedMessageTimersRef.current = {};
+    };
   }, []);
 
   // Load watchlist settings from localStorage on initial mount (before any data fetching)
@@ -5386,8 +5544,8 @@ function DashboardPageContent() {
                           items.forEach(balance => {
                             const rawAsset = (balance.asset || balance.currency || '').toUpperCase();
                             if (!rawAsset) {
-                              return;
-                            }
+                            return;
+                          }
                             const baseCurrency = rawAsset.split('_')[0];
                             const assetKey = baseCurrency;
                             const totalQty = parseNumericValue(balance.balance ?? balance.total ?? ((balance.free ?? 0) + (balance.locked ?? 0)));
@@ -5664,10 +5822,10 @@ function DashboardPageContent() {
                           const portfolioAsset = portfolio?.assets?.find(a => a.coin === balance.asset);
                           const fallbackUsd =
                             (balance.usd_value !== undefined && balance.usd_value !== null && balance.usd_value > 0)
-                              ? balance.usd_value
-                              : ((balance.market_value !== undefined && balance.market_value !== null && balance.market_value > 0)
-                                  ? balance.market_value
-                                  : (portfolioAsset?.value_usd ?? 0));
+                            ? balance.usd_value
+                            : ((balance.market_value !== undefined && balance.market_value !== null && balance.market_value > 0)
+                                ? balance.market_value
+                                : (portfolioAsset?.value_usd ?? 0));
                           const displayValueUsd = fallbackUsd;
                           
                           const totalPortfolioValue = portfolio?.total_value_usd ?? realBalances.reduce((sum, b) => sum + (b.usd_value ?? b.market_value ?? 0), 0);
@@ -6610,9 +6768,9 @@ function DashboardPageContent() {
                           <select
                             title="Select minimum volume ratio"
                             aria-label="Select minimum volume ratio"
-                            value={currentRules.volumeMinRatio ?? 2.0}
+                            value={currentRules.volumeMinRatio ?? 0.5}
                             onChange={(e) => {
-                              const value = parseFloat(e.target.value) || 2.0;
+                              const value = parseFloat(e.target.value) || 0.5;
                               setPresetsConfig(prev => ({
                                 ...prev,
                                 [selectedConfigPreset]: {
@@ -6629,14 +6787,17 @@ function DashboardPageContent() {
                             }}
                             className="w-full border border-purple-300 rounded px-3 py-2"
                           >
+                            <option value="0.5">0.5x (Solo la mitad del promedio - ultra agresivo)</option>
                             <option value="1.0">1.0x (Permite cualquier volumen)</option>
                             <option value="1.5">1.5x (Requiere volumen moderado)</option>
                             <option value="2.0">2.0x (Requiere volumen alto - recomendado)</option>
                           </select>
                           <p className="text-xs text-gray-600 mt-1">
-                            {currentRules.volumeMinRatio === 1.0 ? 'Permite señales con cualquier volumen (menos selectivo)' :
+                            {currentRules.volumeMinRatio === 0.5 ? 'Permite señales incluso si el volumen solo es 50% del promedio (súper agresivo)' :
+                             currentRules.volumeMinRatio === 1.0 ? 'Permite señales con cualquier volumen (menos selectivo)' :
                              currentRules.volumeMinRatio === 1.5 ? 'Solo señales con volumen ≥1.5x promedio (moderadamente selectivo)' :
-                             'Solo señales con volumen ≥2.0x promedio (muy selectivo, requerido para trading activo)'}
+                             currentRules.volumeMinRatio === 2.0 ? 'Solo señales con volumen ≥2.0x promedio (muy selectivo, requerido para trading activo)' :
+                             `Solo señales con volumen ≥${currentRules.volumeMinRatio ?? 0.5}x promedio`}
           </p>
         </div>
                       </div>
@@ -6845,7 +7006,7 @@ function DashboardPageContent() {
                           {!currentRules.maChecks?.ema10 && !currentRules.maChecks?.ma50 && !currentRules.maChecks?.ma200 && (
                             <li>• No MA checks required</li>
                           )}
-                          <li>• Volume ≥ {currentRules.volumeMinRatio ?? 2.0}x average</li>
+                          <li>• Volume ≥ {currentRules.volumeMinRatio ?? 0.5}x average</li>
                           <li>• Then system places a BUY with SL = {(() => {
                             if (currentRules.sl?.atrMult !== undefined) {
                               return `ATR × ${currentRules.sl.atrMult}`;
@@ -6875,7 +7036,7 @@ function DashboardPageContent() {
                           {currentRules.maChecks?.ma50 && (
                             <li>• MA50 {'<'} EMA10 (difference ≥0.5%)</li>
                           )}
-                          <li>• Volume ≥ {currentRules.volumeMinRatio ?? 2.0}x average</li>
+                          <li>• Volume ≥ {currentRules.volumeMinRatio ?? 0.5}x average</li>
                           <li>• Then system places a SELL and updates the sheet</li>
                         </ul>
                       </div>
@@ -6902,9 +7063,9 @@ function DashboardPageContent() {
                           try {
                             // Convert frontend PresetConfig format to backend TradingConfig format
                             // Use strategy_rules as the canonical format (not presets)
-                            const backendConfig: TradingConfig = {
-                              strategy_rules: {}
-                            } as any; // Type assertion needed because TradingConfig type may not include strategy_rules
+                            const backendConfig = {
+                              strategy_rules: {} as Record<string, unknown>
+                            } as TradingConfig & { strategy_rules: Record<string, unknown> };
                             
                             // Convert each preset (Swing, Intraday, Scalp) to backend format
                             (Object.keys(presetsConfig) as Preset[]).forEach((presetName) => {
@@ -6914,7 +7075,7 @@ function DashboardPageContent() {
                               // Convert to backend format: lowercase preset name with rules structure
                               const backendPresetKey = presetName.toLowerCase();
                               // Store in strategy_rules (canonical format) instead of presets
-                              (backendConfig.strategy_rules as any)[backendPresetKey] = {
+                              (backendConfig.strategy_rules as Record<string, unknown>)[backendPresetKey] = {
                                 rules: preset.rules
                               };
                             });
@@ -7107,10 +7268,29 @@ function DashboardPageContent() {
                     </tr>
                   ))}
                 {visibleWatchlistCoins.length > 0 && visibleWatchlistCoins
+                  .filter((coin) => {
+                    // Defensive: skip malformed coins that would crash rendering
+                    if (!coin || !coin.instrument_name) {
+                      console.warn('⚠️ Skipping malformed coin in Watchlist:', coin);
+                      return false;
+                    }
+                    return true;
+                  })
                   .map((coin, index) => {
                     const globalIndex = watchlistPositionMap[coin.instrument_name] ?? index;
                     const isFirst = globalIndex <= 0;
                     const isLast = globalIndex >= orderedWatchlistCoins.length - 1;
+                    // Calculate master alert status (needed for both signal display and button)
+                    const watchlistItem = watchlistItems.find(item => item.symbol === coin.instrument_name);
+                    const storedMasterAlert = coinAlertStatus[coin.instrument_name];
+                    const hasAlertEnabled = coin.alert_enabled === true || watchlistItem?.alert_enabled === true;
+                    const masterAlertEnabled = storedMasterAlert !== undefined
+                      ? storedMasterAlert
+                      : Boolean(
+                          hasAlertEnabled ||
+                          coinBuyAlertStatus[coin.instrument_name] === true ||
+                          coinSellAlertStatus[coin.instrument_name] === true
+                        );
                     return (
                       <tr
                         key={coin.instrument_name}
@@ -8052,7 +8232,7 @@ ${marginText}
                             return 'text-orange-500 font-semibold';
                           })()}`}
                         >
-                          {(signals[coin.instrument_name]?.rsi || 0).toFixed(1)}
+                          {(signals[coin.instrument_name]?.rsi || 0).toFixed(2)}
                         </span>
                       ) : (
                         <span className="text-gray-400">-</span>
@@ -8235,9 +8415,9 @@ ${marginText}
                             riskMode = 'Conservative';
                           }
                           
-                          // Get volumeMinRatio from strategy rules (default to 1.0 if not set)
+                          // Get volumeMinRatio from strategy rules (default to 0.5 if not set)
                           const rules = presetsConfig[presetType]?.rules[riskMode] || PRESET_CONFIG[presetType]?.rules[riskMode];
-                          const minVolumeRatio = rules?.volumeMinRatio || 1.0;
+                          const minVolumeRatio = rules?.volumeMinRatio || 0.5;
                           
                           // Color coding based on ratio using dynamic threshold:
                           // Red+Bold: ratio >= minVolumeRatio (meets BUY threshold)
@@ -8272,204 +8452,168 @@ ${marginText}
                         }
                       })()}
                     </td>
-                    <td className="px-4 py-3 text-center w-24">
-                      {(() => {
-                        const signalStatus = signals[coin.instrument_name]?.signals;
-                        if (!signalStatus) {
-                          return <span className="text-gray-400">WAIT</span>;
-                        }
-                        
-                        // Get strategy parameters for this coin
-                        const preset = coinPresets[coin.instrument_name] || 'swing';
-                        let presetType: Preset;
-                        let riskMode: RiskMode;
-                        
-                        if (preset === 'swing' || preset === 'intraday' || preset === 'scalp') {
-                          presetType = preset as Preset;
-                          riskMode = 'Conservative';
-                        } else if (preset.includes('-conservative')) {
-                          const basePreset = preset.replace('-conservative', '');
-                          presetType = (basePreset.charAt(0).toUpperCase() + basePreset.slice(1)) as Preset;
-                          riskMode = 'Conservative';
-                        } else if (preset.includes('-aggressive')) {
-                          const basePreset = preset.replace('-aggressive', '');
-                          presetType = (basePreset.charAt(0).toUpperCase() + basePreset.slice(1)) as Preset;
-                          riskMode = 'Aggressive';
-                        } else {
-                          presetType = 'Swing';
-                          riskMode = 'Conservative';
-                        }
-                        
-                        // Use presetsConfig (editable) if available, fallback to PRESET_CONFIG (defaults)
-                        const rules = presetsConfig[presetType]?.rules[riskMode] || PRESET_CONFIG[presetType]?.rules[riskMode];
-                        const rsi = signals[coin.instrument_name]?.rsi;
-                        const ma50 = signals[coin.instrument_name]?.ma50;
-                        const ema10 = signals[coin.instrument_name]?.ema10;
-                        const ma200 = signals[coin.instrument_name]?.ma200;
-                        const currentPrice = coin.current_price;
-                        
-                        // Calculate BUY/WAIT/SELL based on strategy rules
-                        let signal: 'BUY' | 'WAIT' | 'SELL' = 'WAIT';
-                        // Initialize sellConditions outside the conditional block so it's available later
-                        let sellConditions = false;
-                        
-                        if (rsi !== undefined && ma50 !== undefined && ema10 !== undefined && currentPrice) {
-                          const buyBelow = rules?.rsi?.buyBelow || 40;
-                          const sellAbove = rules?.rsi?.sellAbove || 70;
-                          const ma50Check = rules?.maChecks?.ma50 || false;
-                          const ema10Check = rules?.maChecks?.ema10 || false;
-                          const ma200Check = rules?.maChecks?.ma200 || false;
-                          
-                          // BUY conditions: RSI < buyBelow AND (MA checks if required) AND volume >= 2x
-                          let buyConditions = rsi < buyBelow;
-                          if (ma50Check && ma50 !== undefined && ema10 !== undefined) {
-                            buyConditions = buyConditions && ma50 > ema10;
-                          }
-                          if (ma200Check && ma200 !== undefined && currentPrice) {
-                            buyConditions = buyConditions && currentPrice > ma200;
-                          }
-                          
-                          // Volume criterion: require volume >= minimum ratio from strategy
-                          const minVolumeRatio = rules?.volumeMinRatio || 2.0;
-                          // Use current_volume (last period) for ratio calculation, not volume_24h
-                          const currentVolume = signals[coin.instrument_name]?.current_volume;
-                          const volumeRatio = signals[coin.instrument_name]?.volume_ratio;
-                          const avgVolume = signals[coin.instrument_name]?.avg_volume;
-                          if (volumeRatio !== undefined && volumeRatio > 0) {
-                            // Use pre-calculated ratio from backend
-                            buyConditions = buyConditions && volumeRatio >= minVolumeRatio;
-                          } else if (currentVolume !== undefined && avgVolume !== undefined && avgVolume > 0) {
-                            // Calculate ratio: current volume / average volume
-                            const calculatedRatio = currentVolume / avgVolume;
-                            buyConditions = buyConditions && calculatedRatio >= minVolumeRatio;
-                          }
-                          // If volume data is not available, don't block BUY signal (assume volume is OK)
-                          
-                          // SELL conditions: More strict - require RSI > sellAbove AND trend reversal confirmation
-                          // This reduces false signals from minor trend reversals
-                          
-                          // Option 1: Require BOTH RSI > sellAbove AND MA50 < EMA10 (more conservative)
-                          const rsiSell = rsi > sellAbove;
-                          let maReversal = false;
-                          
-                          if (ma50Check && ma50 !== undefined && ema10 !== undefined) {
-                            // Require at least 0.5% difference to avoid noise
-                            const priceDiff = Math.abs(ma50 - ema10);
-                            const avgPrice = (ma50 + ema10) / 2;
-                            const percentDiff = (priceDiff / avgPrice) * 100;
-                            
-                            // MA50 < EMA10 AND at least 0.5% difference (to avoid false signals from minor fluctuations)
-                            maReversal = ma50 < ema10 && percentDiff >= 0.5;
-                          }
-                          
-                          // Volume criterion: use same ratio as BUY
-                          const currentVolumeForSell = signals[coin.instrument_name]?.current_volume;
-                          const volumeRatioForSell = signals[coin.instrument_name]?.volume_ratio;
-                          const avgVolumeForSell = signals[coin.instrument_name]?.avg_volume;
-                          const minVolumeRatioForSell = minVolumeRatio;
-                          let volumeCheck = false;
-                          if (volumeRatioForSell !== undefined && volumeRatioForSell > 0) {
-                            // Use pre-calculated ratio from backend
-                            volumeCheck = volumeRatioForSell >= minVolumeRatioForSell;
-                          } else if (currentVolumeForSell !== undefined && avgVolumeForSell !== undefined && avgVolumeForSell > 0) {
-                            // Calculate ratio: current volume / average volume
-                            const calculatedRatioForSell = currentVolumeForSell / avgVolumeForSell;
-                            volumeCheck = calculatedRatioForSell >= minVolumeRatioForSell;
-                          } else {
-                            // If volume data is not available, don't block signal (assume volume is OK)
-                            volumeCheck = true;
-                          }
-                          
-                          // SELL requires: (RSI > sellAbove) AND (MA reversal if MA checks are active) AND volume >= 2x
-                          if (ma50Check) {
-                            // If MA checks are active, require both RSI AND MA reversal AND volume
-                            sellConditions = rsiSell && maReversal && volumeCheck;
-                          } else {
-                            // If no MA checks, require RSI AND volume
-                            sellConditions = rsiSell && volumeCheck;
-                          }
-                          
-                          if (buyConditions && !sellConditions) {
-                            signal = 'BUY';
-                          } else if (sellConditions) {
-                            signal = 'SELL';
-                          } else {
-                            signal = 'WAIT';
-                          }
-                        } else if (signalStatus.buy) {
-                          signal = 'BUY';
-                        } else if (signalStatus.sell) {
-                          signal = 'SELL';
-                        }
-                        
-                        // Get alert ratio to check backend signal
-                        const ratio = alertRatios[coin.instrument_name];
-                        
-                        // CRITICAL: Backend is the source of truth for alerts
-                        // Use backend alert-ratio to determine signal, as it uses the same logic as signal_monitor
-                        // This ensures consistency between backend alert system and frontend display
-                        if (ratio !== undefined) {
-                          if (ratio >= 100) {
-                            // Backend indicates BUY signal (ratio = 100%)
-                            signal = 'BUY';
-                          } else if (ratio === 0) {
-                            // Backend indicates SELL signal (ratio = 0%)
-                            // Only override to SELL if frontend conditions also indicate SELL (to avoid false signals)
-                            if (sellConditions) {
-                              signal = 'SELL';
-                            } else {
-                              // If ratio is 0 but conditions don't match SELL, keep WAIT
-                              // This prevents false SELL signals when alert_enabled=false or other backend states
-                              signal = 'WAIT';
-                            }
-                          } else {
-                            // Backend indicates WAIT (ratio between 0 and 100)
-                            // Use frontend calculated signal, but ensure it matches backend expectation
-                            // If frontend says BUY but backend ratio < 100, override to WAIT
-                            if (signal === 'BUY' && ratio < 100) {
-                              signal = 'WAIT';
-                            }
-                          }
-                        }
-                        
-                        // Display the signal with appropriate color
-                        const colorClasses = {
-                          'BUY': 'bg-green-500 text-white font-bold px-3 py-1 rounded',
-                          'SELL': 'bg-red-500 text-white font-bold px-3 py-1 rounded',
-                          'WAIT': 'bg-gray-400 text-white font-semibold px-3 py-1 rounded'
-                        };
-                        
-                        // Build detailed tooltip explaining strategy criteria
-                        // Use current_volume (last period) for ratio calculation, not volume_24h
-                        const currentVolume = signals[coin.instrument_name]?.current_volume;
-                        const avgVolume = signals[coin.instrument_name]?.avg_volume;
-                        const signalTooltip = buildSignalCriteriaTooltip(
-                          presetType,
-                          riskMode,
-                          rules,
-                          rsi,
-                          ma50,
-                          ema10,
-                          ma200,
-                          currentPrice,
-                          currentVolume, // Use current_volume instead of volume_24h
-                          avgVolume,
-                          coin.instrument_name // Pass symbol for proper formatting
-                        );
-                        // Show ratio if available and coin has alert_enabled=true
-                        // Backend returns 50.0 if alert_enabled=false, so we check both conditions
-                        const watchlistItem = watchlistItems.find(item => item.symbol === coin.instrument_name);
-                        const hasAlertEnabled = coin.alert_enabled === true || watchlistItem?.alert_enabled === true;
-                        // Show ratio if: (1) ratio is available, AND (2) coin has alert_enabled=true
-                        // We show even if ratio is 50.0 because that means it's in WAIT state with alert_enabled=true
-                        const showRatio = ratio !== undefined && hasAlertEnabled;
-                        
-                        // Debug logging for troubleshooting
-                        if (hasAlertEnabled && ratio === undefined) {
-                          console.debug(`🔍 ${coin.instrument_name}: alert_enabled=true but ratio not loaded yet`);
-                        } else if (hasAlertEnabled && ratio !== undefined) {
-                          console.debug(`✅ ${coin.instrument_name}: alert_enabled=true, ratio=${ratio}%, will show: ${showRatio}`);
-                        }
+                    {(() => {
+                      // masterAlertEnabled is calculated in parent scope for use in both IIFE and button
+                      
+                      return (
+                        <>
+                          <td className="px-4 py-3 text-center w-24">
+                            {(() => {
+                              const signalEntry = signals[coin.instrument_name];
+                              const signalStatus = signalEntry?.signals;
+                              // Use strategy_state from coin (backend source of truth) or fallback to signalEntry.strategy
+                              // Defensive: handle null/undefined and ensure it's a valid StrategyDecision object
+                              const strategyState: StrategyDecision | undefined = 
+                                (coin.strategy_state && typeof coin.strategy_state === 'object' && coin.strategy_state !== null && 'decision' in coin.strategy_state)
+                                  ? coin.strategy_state as StrategyDecision
+                                  : (signalEntry?.strategy && typeof signalEntry.strategy === 'object' && signalEntry.strategy !== null && 'decision' in signalEntry.strategy)
+                                    ? signalEntry.strategy as StrategyDecision
+                                    : (coin.strategy && typeof coin.strategy === 'object' && coin.strategy !== null && 'decision' in coin.strategy)
+                                      ? coin.strategy as StrategyDecision
+                                      : undefined;
+                              const decision = strategyState?.decision;
+                              const reasons = strategyState?.reasons ?? {};
+                              
+                              const preset = coinPresets[coin.instrument_name] || 'swing';
+                              let presetType: Preset;
+                              let riskMode: RiskMode;
+                              
+                              if (preset === 'swing' || preset === 'intraday' || preset === 'scalp') {
+                                presetType = preset as Preset;
+                                riskMode = 'Conservative';
+                              } else if (preset.includes('-conservative')) {
+                                const basePreset = preset.replace('-conservative', '');
+                                presetType = (basePreset.charAt(0).toUpperCase() + basePreset.slice(1)) as Preset;
+                                riskMode = 'Conservative';
+                              } else if (preset.includes('-aggressive')) {
+                                const basePreset = preset.replace('-aggressive', '');
+                                presetType = (basePreset.charAt(0).toUpperCase() + basePreset.slice(1)) as Preset;
+                                riskMode = 'Aggressive';
+                              } else {
+                                presetType = 'Swing';
+                                riskMode = 'Conservative';
+                              }
+                              
+                              const rules = presetsConfig[presetType]?.rules[riskMode] || PRESET_CONFIG[presetType]?.rules[riskMode];
+                              const rsi = signalEntry?.rsi ?? coin.rsi;
+                              const ma50 = signalEntry?.ma50 ?? coin.ma50;
+                              const ema10 = signalEntry?.ema10 ?? coin.ema10;
+                              const ma200 = signalEntry?.ma200 ?? coin.ma200;
+                              const currentPrice = coin.current_price;
+                              const ratio = alertRatios[coin.instrument_name];
+                              
+                              // Use backend strategy_state.decision as source of truth (with safe fallback)
+                              let signal: 'BUY' | 'WAIT' | 'SELL' = (decision === 'BUY' || decision === 'SELL' || decision === 'WAIT') ? decision : 'WAIT';
+                              let sellConditions = false;
+                              
+                              // Only recompute if strategy_state is not available (fallback for old data)
+                              if (!strategyState?.decision) {
+                                if (rsi !== undefined && ma50 !== undefined && ema10 !== undefined && currentPrice) {
+                                  const buyBelow = rules?.rsi?.buyBelow || 40;
+                                  const sellAbove = rules?.rsi?.sellAbove || 70;
+                                  const ma50Check = rules?.maChecks?.ma50 || false;
+                                  const ma200Check = rules?.maChecks?.ma200 || false;
+                                  
+                                  let buyConditions = rsi < buyBelow;
+                                  if (ma50Check && ema10 !== undefined) {
+                                    buyConditions = buyConditions && ma50 > ema10;
+                                  }
+                                  if (ma200Check && ma200 !== undefined) {
+                                    buyConditions = buyConditions && currentPrice > ma200;
+                                  }
+                                  
+                                  const minVolumeRatio = rules?.volumeMinRatio || 0.5;
+                                  const currentVolume = signalEntry?.current_volume ?? coin.current_volume;
+                                  const volumeRatio = signalEntry?.volume_ratio ?? coin.volume_ratio;
+                                  const avgVolume = signalEntry?.avg_volume ?? coin.avg_volume;
+                                  if (volumeRatio !== undefined && volumeRatio > 0) {
+                                    buyConditions = buyConditions && volumeRatio >= minVolumeRatio;
+                                  } else if (currentVolume !== undefined && avgVolume !== undefined && avgVolume > 0) {
+                                    const calculatedRatio = currentVolume / avgVolume;
+                                    buyConditions = buyConditions && calculatedRatio >= minVolumeRatio;
+                                  }
+                                  
+                                  const rsiSell = rsi > sellAbove;
+                                  let maReversal = false;
+                                  if (ma50Check && ema10 !== undefined) {
+                                    const priceDiff = Math.abs(ma50 - ema10);
+                                    const avgPrice = (ma50 + ema10) / 2;
+                                    const percentDiff = (priceDiff / avgPrice) * 100;
+                                    maReversal = ma50 < ema10 && percentDiff >= 0.5;
+                                  }
+                                  const currentVolumeForSell = signalEntry?.current_volume ?? coin.current_volume;
+                                  const volumeRatioForSell = signalEntry?.volume_ratio ?? coin.volume_ratio;
+                                  const avgVolumeForSell = signalEntry?.avg_volume ?? coin.avg_volume;
+                                  const minVolumeRatioForSell = minVolumeRatio;
+                                  let volumeCheck = false;
+                                  if (volumeRatioForSell !== undefined && volumeRatioForSell > 0) {
+                                    volumeCheck = volumeRatioForSell >= minVolumeRatioForSell;
+                                  } else if (currentVolumeForSell !== undefined && avgVolumeForSell !== undefined && avgVolumeForSell > 0) {
+                                    const calculatedRatioForSell = currentVolumeForSell / avgVolumeForSell;
+                                    volumeCheck = calculatedRatioForSell >= minVolumeRatioForSell;
+                                  } else {
+                                    volumeCheck = true;
+                                  }
+                                  
+                                  if (ma50Check) {
+                                    sellConditions = rsiSell && maReversal && volumeCheck;
+                                  } else {
+                                    sellConditions = rsiSell && volumeCheck;
+                                  }
+                                  
+                                  if (buyConditions && !sellConditions) {
+                                    signal = 'BUY';
+                                  } else if (sellConditions) {
+                                    signal = 'SELL';
+                                  } else {
+                                    signal = 'WAIT';
+                                  }
+                                } else if (signalStatus?.buy) {
+                                  signal = 'BUY';
+                                } else if (signalStatus?.sell) {
+                                  signal = 'SELL';
+                                }
+                                
+                                if (ratio !== undefined) {
+                                  if (ratio >= 100) {
+                                    signal = 'BUY';
+                                  } else if (ratio === 0) {
+                                    signal = sellConditions ? 'SELL' : 'WAIT';
+                                  } else if (signal === 'BUY' && ratio < 100) {
+                                    signal = 'WAIT';
+                                  }
+                                }
+                              }
+                              
+                              const colorClasses = {
+                                'BUY': 'bg-green-500 text-white font-bold px-3 py-1 rounded',
+                                'SELL': 'bg-red-500 text-white font-bold px-3 py-1 rounded',
+                                'WAIT': 'bg-gray-400 text-white font-semibold px-3 py-1 rounded'
+                              };
+                              
+                              const currentVolume = signalEntry?.current_volume ?? coin.current_volume;
+                              const avgVolume = signalEntry?.avg_volume ?? coin.avg_volume;
+                              const signalTooltip = buildSignalCriteriaTooltip(
+                                presetType,
+                                riskMode,
+                                rules,
+                                rsi,
+                                ma50,
+                                ema10,
+                                ma200,
+                                currentPrice,
+                                currentVolume,
+                                avgVolume,
+                                coin.instrument_name,
+                                strategyState as StrategyDecision | undefined
+                              );
+                              const showRatio = ratio !== undefined && hasAlertEnabled;
+                              
+                              if (hasAlertEnabled && ratio === undefined) {
+                                console.debug(`🔍 ${coin.instrument_name}: alert_enabled=true but ratio not loaded yet`);
+                              } else if (hasAlertEnabled && ratio !== undefined) {
+                                console.debug(`✅ ${coin.instrument_name}: alert_enabled=true, ratio=${ratio}%, will show: ${showRatio}`);
+                              }
                         
                         return (
                           <div className="flex flex-col items-center gap-1">
@@ -8496,6 +8640,20 @@ ${marginText}
                     </td>
                     <td className="px-4 py-3 text-center w-20">
                       <div className="flex gap-1 justify-center flex-wrap">
+                        <button
+                          onClick={() => handleMasterAlertToggle(coin.instrument_name)}
+                          className={`px-2 py-1 rounded text-xs font-semibold ${
+                            masterAlertEnabled ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-500 hover:bg-gray-600 text-white'
+                          }`}
+                          title={`Alerts: ${masterAlertEnabled ? 'ENABLED' : 'DISABLED'} (master toggle)`}
+                        >
+                          ALERTS {masterAlertEnabled ? '✅' : '❌'}
+                        </button>
+                        {alertSavedMessages[`${coin.instrument_name}_alerts`] && (
+                          <span className="text-xs text-green-600 font-medium ml-1 animate-[fadeIn_0.2s_ease-in-out_forwards]">
+                            Saved
+                          </span>
+                        )}
                         <button
                           data-testid={`alert-buy-${coin.instrument_name}`}
                           onClick={async () => {
@@ -8524,6 +8682,25 @@ ${marginText}
                                   return updated;
                                 });
                                 console.log(`✅ Synced buy_alert_enabled from backend response for ${symbol}: ${result.buy_alert_enabled}`);
+                                // Show "Saved" confirmation message
+                                const messageKey = `${symbol}_buy`;
+                                setAlertSavedMessages(prev => ({
+                                  ...prev,
+                                  [messageKey]: { type: 'success' as const, timestamp: Date.now() }
+                                }));
+
+                                // Auto-hide after 2.5 seconds
+                                if (savedMessageTimersRef.current[messageKey]) {
+                                  clearTimeout(savedMessageTimersRef.current[messageKey]);
+                                }
+                                savedMessageTimersRef.current[messageKey] = setTimeout(() => {
+                                  setAlertSavedMessages(prev => {
+                                    const updated = { ...prev };
+                                    delete updated[messageKey];
+                                    return updated;
+                                  });
+                                  delete savedMessageTimersRef.current[messageKey];
+                                }, 2500);
                               }
                             } catch (alertError: unknown) {
                               console.error(`❌ Failed to update buy alert status for ${symbol}:`, alertError);
@@ -8576,6 +8753,25 @@ ${marginText}
                                   return updated;
                                 });
                                 console.log(`✅ Synced sell_alert_enabled from backend response for ${symbol}: ${result.sell_alert_enabled}`);
+                                // Show "Saved" confirmation message
+                                const messageKey = `${symbol}_sell`;
+                                setAlertSavedMessages(prev => ({
+                                  ...prev,
+                                  [messageKey]: { type: 'success' as const, timestamp: Date.now() }
+                                }));
+
+                                // Auto-hide after 2.5 seconds
+                                if (savedMessageTimersRef.current[messageKey]) {
+                                  clearTimeout(savedMessageTimersRef.current[messageKey]);
+                                }
+                                savedMessageTimersRef.current[messageKey] = setTimeout(() => {
+                                  setAlertSavedMessages(prev => {
+                                    const updated = { ...prev };
+                                    delete updated[messageKey];
+                                    return updated;
+                                  });
+                                  delete savedMessageTimersRef.current[messageKey];
+                                }, 2500);
                               }
                             } catch (alertError: unknown) {
                               console.error(`❌ Failed to update sell alert status for ${symbol}:`, alertError);
@@ -8600,6 +8796,17 @@ ${marginText}
                         >
                           SELL {coinSellAlertStatus[coin.instrument_name] ? '✅' : '❌'}
                         </button>
+                        {/* Subtle "Saved" confirmation messages */}
+                        {alertSavedMessages[`${coin.instrument_name}_buy`] && (
+                          <span className="text-xs text-green-600 font-medium ml-1 animate-[fadeIn_0.2s_ease-in-out_forwards]">
+                            Saved
+                          </span>
+                        )}
+                        {alertSavedMessages[`${coin.instrument_name}_sell`] && (
+                          <span className="text-xs text-green-600 font-medium ml-1 animate-[fadeIn_0.2s_ease-in-out_forwards]">
+                            Saved
+                          </span>
+                        )}
                         <button
                           onClick={async () => {
                             const symbol = coin.instrument_name;
@@ -8692,6 +8899,9 @@ ${marginText}
                         </button>
                       </div>
                     </td>
+                        </>
+                      );
+                    })()}
                   </tr>
                 );
               })}

@@ -890,6 +890,7 @@ function DashboardPageContent() {
   // Subtle "Saved" confirmation messages: { [symbol_type]: { type: 'success' | 'error', timestamp: number } }
   const [alertSavedMessages, setAlertSavedMessages] = useState<Record<string, { type: 'success' | 'error', timestamp: number }>>({});
   const savedMessageTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const isInitialLoadRef = useRef<boolean>(true); // Track if we're in initial load phase
   const [coinAmounts, setCoinAmounts] = useState<Record<string, string>>({});
   const [coinSLPercent, setCoinSLPercent] = useState<Record<string, string>>({});
   const [coinTPPercent, setCoinTPPercent] = useState<Record<string, string>>({});
@@ -1702,6 +1703,9 @@ function computeStrategyIndex(
   decision: StrategyDecisionValue,
   reasons: Record<string, unknown>
 ): number | null {
+  // CANONICAL: Calculate index from backend buy_* reasons
+  // Only count boolean flags (ignore None values which mean "not applicable/not blocking")
+  // This matches the backend canonical rule logic
   const prefix = getReasonPrefix(decision);
   const relevant = Object.entries(reasons).filter(
     ([key, value]) => key.startsWith(prefix) && typeof value === 'boolean'
@@ -1709,6 +1713,8 @@ function computeStrategyIndex(
   if (!relevant.length) {
     return null;
   }
+  // Count how many are True (only False values block the decision)
+  // When all are True, index = 100% (matches backend canonical rule)
   const satisfied = relevant.filter(([, value]) => value === true).length;
   return Math.round((satisfied / relevant.length) * 100);
 }
@@ -1738,6 +1744,7 @@ function resolveDecisionIndexColor(value: number): string {
 }
 
   // Helper function to build signal criteria explanation tooltip
+  // CANONICAL: Uses backend strategyReasons as source of truth for green/red status
   function buildSignalCriteriaTooltip(
     preset: Preset,
     riskMode: RiskMode,
@@ -1750,54 +1757,114 @@ function resolveDecisionIndexColor(value: number): string {
     volume: number | undefined,
     avgVolume: number | undefined,
     symbol?: string,
-    currentStrategy?: StrategyDecision
+    currentStrategy?: StrategyDecision,
+    strategyVolumeRatio?: number | null,  // Optional: canonical volume ratio from strategy (same as Volume column)
+    volumeAvgPeriods?: number | null,  // Optional: number of periods used for avg_volume calculation
+    backendMinVolumeRatio?: number  // CANONICAL: Backend configured threshold from Signal Config (source of truth)
   ): string {
     if (!rules) {
       return `Estrategia no configurada`;
     }
 
-    // Volume minimum ratio constant (used throughout function)
-    const minVolumeRatio = rules.volumeMinRatio || 0.5;
+    // CANONICAL: Extract backend reasons - this is the source of truth for green/red status
+    const strategyReasons = currentStrategy?.reasons && typeof currentStrategy.reasons === 'object' && !Array.isArray(currentStrategy.reasons)
+      ? currentStrategy.reasons as Record<string, boolean | null | undefined>
+      : {};
+
+    // CANONICAL: Use backend min_volume_ratio if provided (Signal Config source of truth), otherwise fallback to rules
+    const minVolumeRatio = backendMinVolumeRatio !== undefined && backendMinVolumeRatio !== null
+      ? backendMinVolumeRatio
+      : (rules.volumeMinRatio || 0.5);
 
     const lines: string[] = [];
     const fullStrategyName = formatFullStrategyName(preset, riskMode);
     lines.push(`📊 Estrategia: ${fullStrategyName}`);
     lines.push('');
     
-    // BUY Criteria
+    // BUY Criteria - CANONICAL: Use backend reasons for status, show values for context
     lines.push('🟢 CRITERIOS BUY (todos deben cumplirse):');
     const buyBelow = rules.rsi?.buyBelow || 40;
-    const rsiBuyStatus = (rsi !== undefined && rsi !== null) ? (rsi < buyBelow ? '✓' : '✗') : '?';
-    lines.push(`  • RSI < ${buyBelow} ${(rsi !== undefined && rsi !== null) ? `(actual: ${rsi.toFixed(2)}${rsiBuyStatus})` : ''}`);
+    // CANONICAL: Use backend buy_rsi_ok for status, not local calculation
+    const buyRsiOk = strategyReasons.buy_rsi_ok;
+    const rsiBuyStatus = buyRsiOk === true ? '✓' : buyRsiOk === false ? '✗' : '?';
+    lines.push(`  • RSI < ${buyBelow} ${(rsi !== undefined && rsi !== null) ? `(actual: ${rsi.toFixed(2)}${rsiBuyStatus})` : rsiBuyStatus}`);
     
+    // CANONICAL: Use backend buy_ma_ok for status
+    const buyMaOk = strategyReasons.buy_ma_ok;
     if (rules.maChecks?.ma50 && ma50 !== undefined && ma50 !== null && ema10 !== undefined && ema10 !== null) {
-      const ma50Status = ma50 > ema10 ? '✓' : '✗';
+      const ma50Status = buyMaOk === true ? '✓' : buyMaOk === false ? '✗' : '?';
       lines.push(`  • MA50 > EMA10 ${ma50Status}`);
       lines.push(`    - MA50: $${formatNumber(ma50, symbol)}`);
       lines.push(`    - EMA10: $${formatNumber(ema10, symbol)}`);
     }
     
     if (rules.maChecks?.ma200 && ma200 !== undefined && ma200 !== null && currentPrice !== undefined && currentPrice !== null) {
-      const ma200Status = currentPrice > ma200 ? '✓' : '✗';
+      // MA200 check is part of buy_ma_ok in backend
+      const ma200Status = buyMaOk === true ? '✓' : buyMaOk === false ? '✗' : '?';
       lines.push(`  • Precio > MA200 ${ma200Status}`);
       lines.push(`    - Precio: $${formatNumber(currentPrice, symbol)}`);
       lines.push(`    - MA200: $${formatNumber(ma200, symbol)}`);
     }
     
-    // Volume criterion: require volume >= 2x average (market reaction)
-    // volume parameter is now current_volume (last period), not volume_24h
-    if (volume !== undefined && volume !== null && avgVolume !== undefined && avgVolume !== null && avgVolume > 0) {
-      const volumeRatio = volume / avgVolume;
-      const volumeStatus = volumeRatio >= minVolumeRatio ? '✓' : '✗';
-      lines.push(`  • Volume ≥ ${minVolumeRatio}x promedio ${volumeStatus}`);
-      lines.push(`    - Ratio actual: ${volumeRatio.toFixed(2)}x`);
-      lines.push(`    - Volume (último período): ${formatNumber(volume, undefined)}`);
-      lines.push(`    - Promedio (10 períodos): ${formatNumber(avgVolume, undefined)}`);
-    } else {
-      lines.push(`  • Volume ≥ ${minVolumeRatio}x promedio ? (datos no disponibles)`);
+    // Volume criterion: require volume >= minVolumeRatio x average (market reaction)
+    // CANONICAL: Use backend buy_volume_ok for status, show ratio for context
+    const buyVolumeOk = strategyReasons.buy_volume_ok;
+    let volumeRatio: number | undefined;
+    if (strategyVolumeRatio !== undefined && strategyVolumeRatio !== null && strategyVolumeRatio >= 0) {
+      // Use canonical strategy volume_ratio (same calculation as Volume column and strategy decision)
+      volumeRatio = strategyVolumeRatio;
+    } else if (volume !== undefined && volume !== null && avgVolume !== undefined && avgVolume !== null && avgVolume > 0) {
+      // Fallback: calculate from volume/avgVolume (should match strategy if same inputs)
+      volumeRatio = volume / avgVolume;
     }
     
-    if (!rules.maChecks?.ma50 && !rules.maChecks?.ma200) {
+    if (volumeRatio !== undefined && volumeRatio !== null) {
+      // CANONICAL: Use backend buy_volume_ok for status
+      const volumeStatus = buyVolumeOk === true ? '✓' : buyVolumeOk === false ? '✗' : '?';
+      lines.push(`  • Volume ≥ ${minVolumeRatio}x promedio ${volumeStatus}`);
+      lines.push(`    - Ratio actual: ${volumeRatio.toFixed(2)}x (mismo valor que columna Volume)`);
+      lines.push(`    - Volume (último período): ${formatNumber(volume, undefined)}`);
+      // Show period count if available, otherwise fallback to generic text
+      if (volumeAvgPeriods !== undefined && volumeAvgPeriods !== null && volumeAvgPeriods > 0) {
+        lines.push(`    - Promedio (${volumeAvgPeriods} períodos): ${formatNumber(avgVolume, undefined)}`);
+      } else {
+        lines.push(`    - Promedio: ${formatNumber(avgVolume, undefined)}`);
+      }
+    } else {
+      // CANONICAL: Use backend buy_volume_ok for status even when ratio unavailable
+      const volumeStatus = buyVolumeOk === true ? '✓' : buyVolumeOk === false ? '✗' : '?';
+      lines.push(`  • Volume ≥ ${minVolumeRatio}x promedio ${volumeStatus} (datos no disponibles)`);
+    }
+    
+    // CANONICAL: Show buy_target_ok and buy_price_ok from backend
+    const buyTargetOk = strategyReasons.buy_target_ok;
+    if (buyTargetOk !== undefined && buyTargetOk !== null) {
+      const targetStatus = buyTargetOk === true ? '✓' : '✗';
+      lines.push(`  • Precio dentro de buy target ${targetStatus}`);
+    }
+    
+    const buyPriceOk = strategyReasons.buy_price_ok;
+    if (buyPriceOk !== undefined && buyPriceOk !== null && buyPriceOk === false) {
+      lines.push(`  • Precio válido ✗`);
+    }
+    
+    // Check if ANY MA is required (ema10, ma50, or ma200)
+    // IMPORTANT: Only check if explicitly marked as required in config (maChecks.ema10=true)
+    const requiresAnyMA = rules.maChecks?.ema10 || rules.maChecks?.ma50 || rules.maChecks?.ma200;
+    
+    // If EMA10 is required (maChecks.ema10=true) but not shown above (when ma50 is false), show it here
+    // Only show EMA10 check if it's explicitly marked as required in the config
+    if (rules.maChecks?.ema10 === true && !rules.maChecks?.ma50 && ema10 !== undefined && ema10 !== null && currentPrice !== undefined && currentPrice !== null) {
+      // EMA10 check: Price > EMA10 (with tolerance for scalp strategies)
+      const ma10Status = buyMaOk === true ? '✓' : buyMaOk === false ? '✗' : '?';
+      lines.push(`  • Precio > EMA10 ${ma10Status}`);
+      lines.push(`    - Precio: $${formatNumber(currentPrice, symbol)}`);
+      lines.push(`    - EMA10: $${formatNumber(ema10, symbol)}`);
+    }
+    
+    // Only show "No se requieren MAs" if NO MAs are required at all
+    // This means all maChecks are false or undefined
+    if (!requiresAnyMA) {
       lines.push(`  • No se requieren MAs`);
     }
     
@@ -1827,88 +1894,100 @@ function resolveDecisionIndexColor(value: number): string {
       lines.push(`    - Diferencia: ${percentDiff.toFixed(2)}% ${ma50 < ema10 ? '(requiere ≥0.5%)' : ''}`);
     }
     
-    // Volume criterion: require volume >= 2x average for SELL (market reaction)
-    // volume parameter is now current_volume (last period), not volume_24h
-    if (volume !== undefined && volume !== null && avgVolume !== undefined && avgVolume !== null && avgVolume > 0) {
-      const volumeRatio = volume / avgVolume;
+    // Volume criterion: require volume >= minVolumeRatio x average for SELL (market reaction)
+    // CANONICAL: Use strategy volume_ratio if provided (same as Volume column), otherwise calculate
+    volumeRatio = undefined;
+    if (strategyVolumeRatio !== undefined && strategyVolumeRatio !== null && strategyVolumeRatio >= 0) {
+      // Use canonical strategy volume_ratio (same calculation as Volume column and strategy decision)
+      volumeRatio = strategyVolumeRatio;
+    } else if (volume !== undefined && volume !== null && avgVolume !== undefined && avgVolume !== null && avgVolume > 0) {
+      // Fallback: calculate from volume/avgVolume (should match strategy if same inputs)
+      volumeRatio = volume / avgVolume;
+    }
+    
+    if (volumeRatio !== undefined && volumeRatio !== null) {
       const volumeStatus = volumeRatio >= minVolumeRatio ? '✓' : '✗';
       lines.push(`  • Volume ≥ ${minVolumeRatio}x promedio ${volumeStatus}`);
-      lines.push(`    - Ratio actual: ${volumeRatio.toFixed(2)}x`);
+      lines.push(`    - Ratio actual: ${volumeRatio.toFixed(2)}x (mismo valor que columna Volume)`);
       lines.push(`    - Volume (último período): ${formatNumber(volume, undefined)}`);
-      lines.push(`    - Promedio (10 períodos): ${formatNumber(avgVolume, undefined)}`);
+      // Show period count if available, otherwise fallback to generic text
+      if (volumeAvgPeriods !== undefined && volumeAvgPeriods !== null && volumeAvgPeriods > 0) {
+        lines.push(`    - Promedio (${volumeAvgPeriods} períodos): ${formatNumber(avgVolume, undefined)}`);
+      } else {
+        lines.push(`    - Promedio: ${formatNumber(avgVolume, undefined)}`);
+      }
     } else {
       lines.push(`  • Volume ≥ ${minVolumeRatio}x promedio ? (datos no disponibles)`);
     }
     
     lines.push('');
     
-    // Current Status
-    let buyConditions = rsi !== undefined && rsi < buyBelow;
-    if (rules.maChecks?.ma50 && ma50 !== undefined && ema10 !== undefined) {
-      buyConditions = buyConditions && ma50 > ema10;
-    }
-    if (rules.maChecks?.ma200 && ma200 !== undefined && currentPrice) {
-      buyConditions = buyConditions && currentPrice > ma200;
-    }
+    // Current Status - CANONICAL: Use backend decision and reasons as source of truth
+    const backendDecision = currentStrategy?.decision;
+    lines.push('📌 ESTADO ACTUAL (backend):');
     
-    // Volume criterion: require volume >= 2x average
-    // volume parameter is now current_volume (last period), not volume_24h
-    if (volume !== undefined && avgVolume !== undefined && avgVolume > 0) {
-      const volumeRatio = volume / avgVolume;
-      buyConditions = buyConditions && volumeRatio >= minVolumeRatio;
-    }
-    
-    // Calculate SELL conditions with stricter logic
-    let sellConditions = false;
-    const rsiSell = (rsi !== undefined && rsi !== null) && rsi > sellAbove;
-    let maReversal = false;
-    let maReversalPercent = 0;
-    
-    if (rules.maChecks?.ma50 && ma50 !== undefined && ma50 !== null && ema10 !== undefined && ema10 !== null) {
-      const priceDiff = Math.abs(ma50 - ema10);
-      const avgPrice = (ma50 + ema10) / 2;
-      maReversalPercent = (priceDiff / avgPrice) * 100;
-      maReversal = ma50 < ema10 && maReversalPercent >= 0.5;
-    }
-    
-    // Volume criterion: require volume >= 2x average
-    // volume parameter is now current_volume (last period), not volume_24h
-    let volumeCheck = false;
-    if (volume !== undefined && volume !== null && avgVolume !== undefined && avgVolume !== null && avgVolume > 0) {
-      const volumeRatio = volume / avgVolume;
-      volumeCheck = volumeRatio >= minVolumeRatio;
-    } else {
-      // If volume data is not available, don't block signal (assume volume is OK)
-      volumeCheck = true;
-    }
-    
-    if (rules.maChecks?.ma50) {
-      // If MA checks are active, require BOTH RSI AND MA reversal AND volume
-      sellConditions = rsiSell && maReversal && volumeCheck;
-    } else {
-      // If no MA checks, require RSI AND volume
-      sellConditions = rsiSell && volumeCheck;
-    }
-    
-    lines.push('📌 ESTADO ACTUAL:');
-    if (buyConditions && !sellConditions) {
-      lines.push('  → Señal: BUY (todos los criterios BUY cumplidos, ninguno SELL activo)');
-    } else if (sellConditions) {
-      lines.push('  → Señal: SELL (todos los criterios SELL cumplidos)');
-      if (rules.maChecks?.ma50 && !maReversal && ma50 !== undefined && ma50 !== null && ema10 !== undefined && ema10 !== null && ma50 < ema10) {
-        lines.push(`  ⚠️ Nota: MA50 < EMA10 pero diferencia (${maReversalPercent.toFixed(2)}%) < 0.5% - muy pequeño, puede ser ruido`);
+    // CANONICAL: Use backend decision, not local calculation
+    if (backendDecision === 'BUY') {
+      lines.push('  → Señal: BUY (todos los criterios BUY cumplidos según backend)');
+      // Show which criteria are met
+      const metCriteria: string[] = [];
+      if (buyRsiOk === true) metCriteria.push('RSI');
+      if (buyMaOk === true) metCriteria.push('MA');
+      if (buyVolumeOk === true) metCriteria.push('Volume');
+      if (buyTargetOk === true) metCriteria.push('Target');
+      if (buyPriceOk === true) metCriteria.push('Price');
+      if (metCriteria.length > 0) {
+        lines.push(`  ✓ Criterios cumplidos: ${metCriteria.join(', ')}`);
+      }
+    } else if (backendDecision === 'SELL') {
+      lines.push('  → Señal: SELL (todos los criterios SELL cumplidos según backend)');
+      const sellRsiOk = strategyReasons.sell_rsi_ok;
+      const sellTrendOk = strategyReasons.sell_trend_ok;
+      const sellVolumeOk = strategyReasons.sell_volume_ok;
+      const sellCriteria: string[] = [];
+      if (sellRsiOk === true) sellCriteria.push('RSI');
+      if (sellTrendOk === true) sellCriteria.push('Trend');
+      if (sellVolumeOk === true) sellCriteria.push('Volume');
+      if (sellCriteria.length > 0) {
+        lines.push(`  ✓ Criterios cumplidos: ${sellCriteria.join(', ')}`);
       }
     } else {
-      lines.push('  → Señal: WAIT (no se cumplen todos los criterios BUY, no hay criterios SELL activos)');
-      if (rsiSell && rules.maChecks?.ma50 && !maReversal) {
-        lines.push(`  ℹ️ RSI > ${sellAbove} pero MA50 no confirma inversión (diferencia < 0.5%)`);
-      }
-      // volume parameter is now current_volume (last period), not volume_24h
-      if (volume !== undefined && volume !== null && avgVolume !== undefined && avgVolume !== null && avgVolume > 0) {
-        const volumeRatio = volume / avgVolume;
-        if (volumeRatio < minVolumeRatio) {
-          lines.push(`  ⚠️ Volume ratio (${volumeRatio.toFixed(2)}x) < ${minVolumeRatio}x - mercado sin suficiente reacción`);
+      lines.push('  → Señal: WAIT (no se cumplen todos los criterios BUY según backend)');
+      // Show which criteria are blocking - be specific about which MA
+      const blockingCriteria: string[] = [];
+      if (buyRsiOk === false) blockingCriteria.push('RSI');
+      if (buyMaOk === false) {
+        // Be specific about which MA is blocking - ONLY show if explicitly enabled in config
+        // CRITICAL: Only show EMA10 if it's explicitly enabled (ema10 === true)
+        // If ema10 is false or undefined, don't show it as blocking
+        const ema10Enabled = rules.maChecks?.ema10 === true;
+        const ma50Enabled = rules.maChecks?.ma50 === true;
+        const ma200Enabled = rules.maChecks?.ma200 === true;
+        
+        if (ema10Enabled && !ma50Enabled && !ma200Enabled) {
+          blockingCriteria.push('EMA10');
+        } else if (ma50Enabled) {
+          blockingCriteria.push('MA50');
+        } else if (ma200Enabled) {
+          blockingCriteria.push('MA200');
+        } else if (ema10Enabled || ma50Enabled || ma200Enabled) {
+          // At least one MA is enabled, but we can't determine which one is blocking
+          blockingCriteria.push('MA');
         }
+        // If no MAs are enabled (all false or undefined), don't add 'MA' to blocking criteria
+      }
+      if (buyVolumeOk === false) blockingCriteria.push('Volume');
+      if (buyTargetOk === false) blockingCriteria.push('Target');
+      if (buyPriceOk === false) blockingCriteria.push('Price');
+      if (blockingCriteria.length > 0) {
+        lines.push(`  ✗ Criterios bloqueantes: ${blockingCriteria.join(', ')}`);
+      } else {
+        lines.push('  ℹ️ Algunos criterios no están disponibles (None)');
+      }
+      
+      // Show volume ratio if available for context
+      if (volumeRatio !== undefined && volumeRatio !== null && volumeRatio < minVolumeRatio) {
+        lines.push(`  ⚠️ Volume ratio (${volumeRatio.toFixed(2)}x) < ${minVolumeRatio}x`);
       }
     }
     
@@ -4153,54 +4232,130 @@ function resolveDecisionIndexColor(value: number): string {
       }
       
       // Load preset configuration from backend (if available)
-      // Backend format: { presets: { swing: { rules: { Conservative: {...}, Aggressive: {...} } } } }
-      if (config?.presets) {
-        const backendPresetsConfig: PresetConfig = { ...PRESET_CONFIG };
-        
-        Object.entries(config.presets).forEach(([presetKey, presetData]) => {
-          const presetPayload = presetData as { rules?: Record<string, StrategyRules> } | undefined;
+      // Priority: strategy_rules (new format) > presets (legacy format)
+      // Backend format: { strategy_rules: { swing: { rules: { Conservative: {...}, Aggressive: {...} } } } }
+      // OR legacy: { presets: { swing: { rules: { Conservative: {...}, Aggressive: {...} } } } }
+      // CRITICAL FIX: Start with empty object, NOT defaults - backend is source of truth
+      const backendPresetsConfig: PresetConfig = {} as PresetConfig;
+      
+      // First, try to load from strategy_rules (new format, source of truth)
+      if (config?.strategy_rules) {
+        Object.entries(config.strategy_rules).forEach(([presetKey, presetData]) => {
+          const presetPayload = presetData as { rules?: Record<string, StrategyRules>; notificationProfile?: string } | undefined;
           // Convert backend key (lowercase) to frontend key (capitalized)
           const presetName = presetKey.charAt(0).toUpperCase() + presetKey.slice(1) as Preset;
           
-            if (presetPayload?.rules) {
+          if (presetPayload?.rules) {
+            // CRITICAL FIX: Use backend values directly, don't merge with defaults
+            // Deep copy rules to preserve nested objects like maChecks
+            const rulesCopy: Record<RiskMode, StrategyRules> = {} as Record<RiskMode, StrategyRules>;
+            
+            // Copy each risk mode rule with deep copy of nested objects
+            Object.entries(presetPayload.rules).forEach(([riskMode, rule]) => {
+              if (riskMode === 'Conservative' || riskMode === 'Aggressive') {
+                rulesCopy[riskMode as RiskMode] = {
+                  ...rule,
+                  // Deep copy maChecks to preserve exact backend values
+                  maChecks: rule.maChecks ? { ...rule.maChecks } : { ema10: false, ma50: false, ma200: false },
+                  // Deep copy rsi to preserve exact backend values
+                  rsi: rule.rsi ? { ...rule.rsi } : { buyBelow: 40, sellAbove: 70 },
+                  // Deep copy sl and tp
+                  sl: rule.sl ? { ...rule.sl } : {},
+                  tp: rule.tp ? { ...rule.tp } : {},
+                };
+                console.log(`📥 Backend ${presetName}-${riskMode} maChecks:`, JSON.stringify(rulesCopy[riskMode as RiskMode].maChecks, null, 2));
+              }
+            });
+            
+            backendPresetsConfig[presetName] = {
+              notificationProfile: (presetPayload.notificationProfile as 'swing' | 'intraday' | 'scalp') || 
+                (presetName === 'Swing' ? 'swing' : presetName === 'Intraday' ? 'intraday' : 'scalp'),
+              rules: rulesCopy
+            };
+          }
+        });
+        console.log('✅ Loaded preset configuration from strategy_rules (new format)');
+      }
+      // Fallback to presets (legacy format) - also check here if strategy_rules is empty
+      if (!config?.strategy_rules && config?.presets) {
+        console.log('⚠️ No strategy_rules found, loading from presets (legacy format)');
+        Object.entries(config.presets).forEach(([presetKey, presetData]) => {
+          const presetPayload = presetData as { rules?: Record<string, StrategyRules>; notificationProfile?: string } | undefined;
+          // Convert backend key (lowercase) to frontend key (capitalized)
+          const presetName = presetKey.charAt(0).toUpperCase() + presetKey.slice(1) as Preset;
+          
+          if (presetPayload?.rules) {
             // Backend has new format with rules structure
-              backendPresetsConfig[presetName] = {
-              ...backendPresetsConfig[presetName],
-                rules: {
-                  ...backendPresetsConfig[presetName]?.rules,
-                  ...presetPayload?.rules
-                }
-              };
+            // CRITICAL: Don't merge with defaults - use backend values directly
+            const rulesCopy: Record<RiskMode, StrategyRules> = {} as Record<RiskMode, StrategyRules>;
+            
+            // Copy rules from backend, ensuring proper typing
+            if (presetPayload.rules.Conservative) {
+              rulesCopy.Conservative = { ...presetPayload.rules.Conservative };
             }
-          });
+            if (presetPayload.rules.Aggressive) {
+              rulesCopy.Aggressive = { ...presetPayload.rules.Aggressive };
+            }
+            
+            backendPresetsConfig[presetName] = {
+              notificationProfile: (presetPayload.notificationProfile as 'swing' | 'intraday' | 'scalp' | undefined) || 
+                (presetName === 'Swing' ? 'swing' : presetName === 'Intraday' ? 'intraday' : 'scalp'),
+              rules: rulesCopy
+            };
+            // Debug: log maChecks from presets (legacy)
+            Object.entries(presetPayload.rules).forEach(([riskMode, rules]) => {
+              console.log(`📥 Presets (legacy) ${presetName}-${riskMode} maChecks:`, JSON.stringify(rules.maChecks, null, 2));
+            });
+          }
+        });
+        console.log('✅ Loaded preset configuration from presets (legacy format)');
+      }
+      
+      // Update presetsConfig with backend data - BACKEND IS SOURCE OF TRUTH
+      // CRITICAL FIX: Use backend values directly, fallback to defaults only for missing presets
+      setPresetsConfig(() => {
+        console.log('📥 Setting presetsConfig from backend (source of truth)');
+        console.log('📥 backendPresetsConfig:', JSON.stringify(backendPresetsConfig, null, 2));
         
-        // Update presetsConfig with backend data (merge with existing to preserve any local changes)
-        setPresetsConfig(prev => {
-          // Merge backend config with existing, giving priority to backend (source of truth)
-          const merged: PresetConfig = { ...prev };
-          Object.keys(backendPresetsConfig).forEach((presetName) => {
-            const preset = backendPresetsConfig[presetName as Preset];
-            if (preset?.rules) {
-              merged[presetName as Preset] = {
-                ...merged[presetName as Preset],
-                rules: {
-                  ...merged[presetName as Preset]?.rules,
-                  ...preset.rules
-                }
-              };
-            }
-          });
-          return merged;
+        // Start with PRESET_CONFIG as base for presets not in backend
+        const finalConfig: PresetConfig = { ...PRESET_CONFIG };
+        
+        // Override with backend values where they exist
+        Object.keys(backendPresetsConfig).forEach((presetName) => {
+          const preset = backendPresetsConfig[presetName as Preset];
+          if (preset?.rules) {
+            // Use backend preset directly - it already has deep copies of nested objects
+            finalConfig[presetName as Preset] = {
+              notificationProfile: preset.notificationProfile || 
+                (presetName === 'Swing' ? 'swing' : presetName === 'Intraday' ? 'intraday' : 'scalp'),
+              rules: preset.rules
+            };
+            
+            // Debug: log final maChecks after assignment
+            Object.entries(preset.rules).forEach(([riskMode, rules]) => {
+              console.log(`✅ Final ${presetName}-${riskMode} maChecks in state:`, JSON.stringify(rules.maChecks, null, 2));
+            });
+          }
         });
         
-        console.log('✅ Loaded preset configuration from backend');
-      }
+        console.log('📥 Final presetsConfig being set:', JSON.stringify(finalConfig, null, 2));
+        return finalConfig;
+      });
+      
+      // Mark initial load as complete after backend data is loaded
+      isInitialLoadRef.current = false;
+      console.log('✅ Backend config loaded - initial load complete');
     } catch (err) {
       logHandledError(
         'fetchTradingConfig',
         'Failed to fetch trading config; using cached values',
         err
       );
+      // Even if backend load fails, mark initial load as complete after a delay
+      setTimeout(() => {
+        isInitialLoadRef.current = false;
+        console.log('✅ Initial load marked complete (backend load failed)');
+      }, 3000);
     }
   }, []);
 
@@ -4284,9 +4439,22 @@ function resolveDecisionIndexColor(value: number): string {
   }, [coinPresets]);
 
   // Persist strategy preset configuration (custom rules) whenever it changes
+  // BUT: Don't save during initial load (when data comes from backend)
   useEffect(() => {
+    // Skip saving during initial load - backend data should be loaded first
+    if (isInitialLoadRef.current) {
+      console.log('⏭️ Skipping localStorage save during initial load');
+      // Mark initial load as complete after first render
+      setTimeout(() => {
+        isInitialLoadRef.current = false;
+        console.log('✅ Initial load complete - localStorage saves will now be enabled');
+      }, 2000); // Give backend 2 seconds to load
+      return;
+    }
+    
     try {
       localStorage.setItem('strategy_presets_config', JSON.stringify(presetsConfig));
+      console.log('💾 Auto-saved presetsConfig to localStorage (user change detected)');
     } catch (err) {
       console.warn('Failed to save strategy presets config to localStorage:', err);
     }
@@ -4323,6 +4491,20 @@ function resolveDecisionIndexColor(value: number): string {
   // New handler for coin-specific preset changes with strategy logic
   const handleCoinPresetChangeWithStrategy = async (symbol: string, preset: string) => {
     setCoinPresets(prev => ({ ...prev, [symbol]: preset }));
+    
+    // CRITICAL: Save the preset to the backend first
+    try {
+      await updateCoinConfig(symbol, { preset });
+      console.log(`✅ Saved preset ${preset} for ${symbol} to backend`);
+    } catch (err) {
+      logHandledError(
+        `updateCoinPreset:${symbol}`,
+        `Failed to save preset for ${symbol}`,
+        err,
+        'error'
+      );
+      // Continue with strategy logic even if save fails
+    }
     
     // Convert string preset to Preset type and RiskMode
     let presetType: Preset;
@@ -4722,22 +4904,6 @@ function resolveDecisionIndexColor(value: number): string {
       }
       hasRun = true;
 
-      // Load saved presets config from localStorage
-      const savedPresetsConfig = localStorage.getItem('strategy_presets_config');
-      if (savedPresetsConfig) {
-        try {
-          const parsed = JSON.parse(savedPresetsConfig);
-          setPresetsConfig(parsed);
-          console.log('✅ Loaded saved presets configuration');
-        } catch (e) {
-          logHandledError(
-            'loadSavedPresetsConfig',
-            'Failed to parse saved presets config; ignoring cached value',
-            e
-          );
-        }
-      }
-
       // Load cached data IMMEDIATELY for instant UI (optimistic display)
       const hadCache = loadCachedTopCoinsRef.current?.() || false;
       if (hadCache) {
@@ -4752,6 +4918,11 @@ function resolveDecisionIndexColor(value: number): string {
       const fetchExecutedOrdersFn = fetchExecutedOrdersRef.current || (() => Promise.resolve());
       const fetchDataSourceStatusFn = fetchDataSourceStatus;
       const fetchTradingConfigFn = fetchTradingConfig;
+      
+      // DON'T load from localStorage here - backend is source of truth
+      // Backend will load first, and if it has no data, we'll use PRESET_CONFIG defaults
+      // localStorage will only be used as a last resort if backend completely fails
+      console.log('⏭️ Skipping localStorage load - waiting for backend to load first');
       const fetchSignalsFn = fetchSignalsRef.current || (() => Promise.resolve());
       const handleQueueSuccessFn = handleQueueSuccess;
       const handleQueueErrorFn = handleQueueError;
@@ -7083,11 +7254,15 @@ function resolveDecisionIndexColor(value: number): string {
                             : 1.0;
                           
                           console.log(`💾 Saving configuration for ${selectedConfigPreset}-${selectedConfigRisk}:`, currentRiskRules);
+                          console.log(`💾 maChecks being saved:`, JSON.stringify(currentRiskRules.maChecks, null, 2));
                           
-                          // Save to localStorage
-                          localStorage.setItem('strategy_presets_config', JSON.stringify(presetsConfig));
+                          // Disable initial load flag if still active (user is explicitly saving)
+                          if (isInitialLoadRef.current) {
+                            isInitialLoadRef.current = false;
+                            console.log('✅ User save action - disabling initial load flag');
+                          }
                           
-                          // Save to backend: Convert presetsConfig to backend format and save
+                          // Save to backend FIRST (source of truth)
                           try {
                             // Convert frontend PresetConfig format to backend TradingConfig format
                             // Use strategy_rules as the canonical format (not presets)
@@ -7102,8 +7277,10 @@ function resolveDecisionIndexColor(value: number): string {
                               
                               // Convert to backend format: lowercase preset name with rules structure
                               const backendPresetKey = presetName.toLowerCase();
-                              // Store in strategy_rules (canonical format) instead of presets
+                              // CRITICAL FIX: Include notificationProfile when saving
                               (backendConfig.strategy_rules as Record<string, unknown>)[backendPresetKey] = {
+                                notificationProfile: preset.notificationProfile || 
+                                  (presetName === 'Swing' ? 'swing' : presetName === 'Intraday' ? 'intraday' : 'scalp'),
                                 rules: preset.rules
                               };
                             });
@@ -7111,9 +7288,17 @@ function resolveDecisionIndexColor(value: number): string {
                             // Save to backend
                             await saveTradingConfig(backendConfig);
                             console.log('✅ Configuration saved to backend');
+                            console.log('✅ Backend config saved:', JSON.stringify(backendConfig.strategy_rules, null, 2));
+                            
+                            // Update localStorage with the same values we just saved to backend
+                            // This ensures localStorage matches backend exactly
+                            localStorage.setItem('strategy_presets_config', JSON.stringify(presetsConfig));
+                            console.log('✅ Updated localStorage with saved values');
                           } catch (backendErr) {
                             console.error('⚠️ Failed to save configuration to backend:', backendErr);
-                            // Continue with local save even if backend save fails
+                            // Fallback: save to localStorage even if backend save fails
+                            localStorage.setItem('strategy_presets_config', JSON.stringify(presetsConfig));
+                            console.log('⚠️ Saved to localStorage only (backend save failed)');
                           }
                             
                             // Apply min_price_change_pct to all coins using this strategy
@@ -7614,6 +7799,7 @@ ${marginText}
                     </td>
                     <td className="px-4 py-3 text-center w-14">
                       <div 
+                        data-testid={`trading-toggle-${coin.instrument_name}`}
                         className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 transition-all w-12 justify-center ${
                           coinTradeStatus[coin.instrument_name]
                             ? 'bg-yellow-400 text-yellow-900 border border-yellow-500 font-bold'
@@ -7634,8 +7820,31 @@ ${marginText}
                           // Save to database
                           try {
                             console.log(`💾 Saving trade_enabled=${newValue} for ${coin.instrument_name} to database...`);
-                            await saveCoinSettings(coin.instrument_name, { trade_enabled: newValue });
-                            console.log(`✅ Successfully saved trade_enabled=${newValue} for ${coin.instrument_name}`);
+                            // CRITICAL: Use the backend response to update local state (single source of truth)
+                            // This ensures UI matches the canonical row that SignalMonitor reads
+                            const result = await saveCoinSettings(coin.instrument_name, { trade_enabled: newValue });
+                            
+                            // Update local state from backend response to ensure consistency
+                            if (result && typeof result === 'object' && 'trade_enabled' in result) {
+                              const backendValue = result.trade_enabled;
+                              if (typeof backendValue === 'boolean') {
+                                console.log(`✅ Backend confirmed trade_enabled=${backendValue} for ${coin.instrument_name} (id=${result.id})`);
+                                setCoinTradeStatus(prev => {
+                                  const updated = {
+                                    ...prev,
+                                    [coin.instrument_name]: backendValue
+                                  };
+                                  localStorage.setItem('watchlist_trade_status', JSON.stringify(updated));
+                                  return updated;
+                                });
+                              } else {
+                                // Fallback: if backendValue is not boolean, keep optimistic update
+                                console.log(`✅ Successfully saved trade_enabled=${newValue} for ${coin.instrument_name}`);
+                              }
+                            } else {
+                              // Fallback: if result doesn't have trade_enabled, keep optimistic update
+                              console.log(`✅ Successfully saved trade_enabled=${newValue} for ${coin.instrument_name}`);
+                            }
                             
                             // CRITICAL: After saving, verify the symbol is still visible
                             // Do NOT trigger a full refresh that might filter it out
@@ -8384,39 +8593,44 @@ ${marginText}
                         title={`Volume last updated: ${lastUpdateTimes[coin.instrument_name]?.signals ? formatTime(lastUpdateTimes[coin.instrument_name].signals) : 'Never'}`}>
                       {(() => {
                         const signal = signals[coin.instrument_name];
-                        // Use volume_ratio directly if available (pre-calculated by backend), otherwise calculate from volume/avg_volume
+                        // CANONICAL: Use strategy volume_ratio from coin object (same calculation used by strategy decision)
+                        // This ensures Volume column matches the tooltip and strategy evaluation
                         let ratio: number | undefined;
                         let volume: number | undefined;
                         let avgVolume: number | undefined;
                         
-                        // First, try to get volume_ratio from signals
-                        if (signal?.volume_ratio !== undefined && signal.volume_ratio > 0) {
-                          // Use pre-calculated ratio from backend
-                          ratio = signal.volume_ratio;
-                          volume = signal.current_volume || signal.volume_24h;
-                          avgVolume = signal.avg_volume;
-                        } else if (coin?.volume_ratio !== undefined && coin.volume_ratio > 0) {
-                          // Fallback: use volume_ratio from topCoins data
+                        // Priority 1: Use strategy volume_ratio from coin object (canonical source)
+                        if (coin?.volume_ratio !== undefined && coin.volume_ratio !== null && coin.volume_ratio >= 0) {
                           ratio = coin.volume_ratio;
                           volume = coin.current_volume || coin.volume_24h;
                           avgVolume = coin.avg_volume;
-                        } else if (signal?.current_volume !== undefined && signal?.avg_volume !== undefined && (signal.avg_volume ?? 0) > 0) {
-                          // Calculate ratio: current volume (last period) / average volume (last 10 periods)
+                        } 
+                        // Priority 2: Use volume_ratio from signals (if available and coin doesn't have it)
+                        else if (signal?.volume_ratio !== undefined && signal.volume_ratio > 0) {
+                          ratio = signal.volume_ratio;
+                          volume = signal.current_volume || signal.volume_24h;
+                          avgVolume = signal.avg_volume;
+                        } 
+                        // Priority 3: Calculate from signal data (current_volume / avg_volume)
+                        else if (signal?.current_volume !== undefined && signal?.avg_volume !== undefined && (signal.avg_volume ?? 0) > 0) {
                           volume = signal.current_volume;
                           avgVolume = signal.avg_volume;
                           ratio = volume / avgVolume;
-                        } else if (coin?.current_volume !== undefined && coin?.avg_volume !== undefined && (coin.avg_volume ?? 0) > 0) {
-                          // Fallback: calculate from coin data
+                        } 
+                        // Priority 4: Calculate from coin data (current_volume / avg_volume)
+                        else if (coin?.current_volume !== undefined && coin?.avg_volume !== undefined && (coin.avg_volume ?? 0) > 0) {
                           volume = coin.current_volume;
                           avgVolume = coin.avg_volume;
                           ratio = volume / avgVolume;
-                        } else if (signal?.volume_24h !== undefined && signal?.avg_volume !== undefined && (signal.avg_volume ?? 0) > 0) {
-                          // Fallback: use volume_24h if current_volume is not available (should not happen)
+                        } 
+                        // Priority 5: Fallback to volume_24h from signal (should not happen)
+                        else if (signal?.volume_24h !== undefined && signal?.avg_volume !== undefined && (signal.avg_volume ?? 0) > 0) {
                           volume = signal.volume_24h;
                           avgVolume = signal.avg_volume;
                           ratio = volume / avgVolume;
-                        } else if (coin?.volume_24h !== undefined && coin?.avg_volume !== undefined && (coin.avg_volume ?? 0) > 0) {
-                          // Final fallback: use volume_24h from coin data
+                        } 
+                        // Priority 6: Final fallback to volume_24h from coin (should not happen)
+                        else if (coin?.volume_24h !== undefined && coin?.avg_volume !== undefined && (coin.avg_volume ?? 0) > 0) {
                           volume = coin.volume_24h;
                           avgVolume = coin.avg_volume;
                           ratio = volume / avgVolume;
@@ -8468,7 +8682,11 @@ ${marginText}
                             <span 
                               className={`text-sm ${colorClass} ${fontWeight}`}
                               title={volume !== undefined && avgVolume !== undefined 
-                                ? `Volume (último período): ${formatNumber(volume, coin.instrument_name)} | Promedio (10 períodos): ${formatNumber(avgVolume, coin.instrument_name)} | Ratio: ${formattedRatio}x`
+                                ? (() => {
+                                    const periods = coin.volume_avg_periods ?? signal?.volume_avg_periods;
+                                    const periodsText = periods && periods > 0 ? `${periods} períodos` : 'promedio';
+                                    return `Volume (último período): ${formatNumber(volume, coin.instrument_name)} | Promedio (${periodsText}): ${formatNumber(avgVolume, coin.instrument_name)} | Ratio: ${formattedRatio}x`;
+                                  })()
                                 : `Volume ratio: ${formattedRatio}x`}
                             >
                               {formattedRatio}x
@@ -8528,18 +8746,22 @@ ${marginText}
                                   ? strategyState.reasons
                                   : {};
                               
+                              // CANONICAL: Trust backend decision completely - backend canonical rule ensures
+                              // that if all buy_* flags are True, then decision=BUY. Frontend must not override.
                               const backendDecision = strategyState?.decision;
-                              let signal: 'BUY' | 'WAIT' | 'SELL' =
+                              const signal: 'BUY' | 'WAIT' | 'SELL' =
                                 backendDecision === 'BUY' || backendDecision === 'SELL' || backendDecision === 'WAIT'
                                   ? backendDecision
                                   : 'WAIT';
                               
-                              if (signal !== 'WAIT' && hasBlockingStrategyReason(signal, strategyReasons)) {
-                                signal = 'WAIT';
-                              }
+                              // REMOVED: hasBlockingStrategyReason override - backend canonical rule is source of truth
+                              // The backend already ensures decision=BUY when all buy_* flags are True.
+                              // Frontend should trust the backend decision completely.
                               
-                              const strategyIndex = computeStrategyIndex(signal, strategyReasons);
-                              const showIndex = typeof strategyIndex === 'number';
+                              // CANONICAL: Use backend index directly (calculated from buy_* flags in backend)
+                              // Do not recompute index on frontend - backend is source of truth
+                              const strategyIndex = strategyState?.index;
+                              const showIndex = typeof strategyIndex === 'number' && strategyIndex !== null;
                               
                               if (process.env.NODE_ENV !== 'production') {
                                 console.debug('[WATCHLIST_STRATEGY]', {
@@ -8559,6 +8781,13 @@ ${marginText}
                               
                               const currentVolume = signalEntry?.current_volume ?? coin.current_volume;
                               const avgVolume = signalEntry?.avg_volume ?? coin.avg_volume;
+                              // CANONICAL: Use strategy volume_ratio from coin object (same as Volume column)
+                              const strategyVolumeRatio = coin.volume_ratio ?? signalEntry?.volume_ratio;
+                              // Get volume_avg_periods from coin object (number of periods used for avg_volume)
+                              const volumeAvgPeriods = coin.volume_avg_periods ?? signalEntry?.volume_avg_periods ?? null;
+                              // CANONICAL: Get min_volume_ratio from backend (Signal Config source of truth)
+                              // Note: min_volume_ratio comes from coin object (backend), not from TradingSignals type
+                              const backendMinVolumeRatio = (coin as TopCoin & { min_volume_ratio?: number }).min_volume_ratio ?? rules.volumeMinRatio ?? 0.5;
                               const signalTooltip = buildSignalCriteriaTooltip(
                                 presetType,
                                 riskMode,
@@ -8571,7 +8800,10 @@ ${marginText}
                                 currentVolume,
                                 avgVolume,
                                 coin.instrument_name,
-                                strategyState as StrategyDecision | undefined
+                                strategyState as StrategyDecision | undefined,
+                                strategyVolumeRatio,  // Pass canonical strategy volume_ratio
+                                volumeAvgPeriods,  // Pass volume average periods count
+                                backendMinVolumeRatio  // CANONICAL: Pass backend configured threshold
                               );
                         
                               const decisionIndexTitle =
@@ -8584,14 +8816,19 @@ ${marginText}
                                   : 'text-gray-400';
 
                               return (
-                                <div className="flex flex-col items-center gap-1">
-                                  <span className={colorClasses[signal]} title={signalTooltip}>
+                                <div className="flex flex-col items-center gap-1" data-testid={`signal-${coin.instrument_name}`}>
+                                  <span 
+                                    className={colorClasses[signal]} 
+                                    title={signalTooltip}
+                                    data-testid={`signal-chip-${coin.instrument_name}`}
+                                  >
                                     {signal}
                                   </span>
                                   {showIndex && typeof strategyIndex === 'number' && (
                                     <span
                                       className={`text-xs font-semibold ${decisionIndexClass}`}
                                       title={decisionIndexTitle}
+                                      data-testid={`index-${coin.instrument_name}`}
                                     >
                                       INDEX:{strategyIndex.toFixed(0)}%
                                     </span>
@@ -8791,8 +9028,31 @@ ${marginText}
                             const buyAlertEnabled = coinBuyAlertStatus[symbol] || false;
                             const sellAlertEnabled = coinSellAlertStatus[symbol] || false;
                             
-                            if (!buyAlertEnabled && !sellAlertEnabled) {
-                              alert(`⚠️ No alerts enabled\n\nPlease enable Buy Alert and/or Sell Alert for ${symbol} before testing.`);
+                            // Determine which side to test based on toggle states and current signal
+                            const strategyState = coin.strategy_state as StrategyDecision | undefined;
+                            const currentSignalSide = strategyState?.decision || null; // 'BUY', 'SELL', 'WAIT', or null
+                            
+                            let testSide: 'BUY' | 'SELL' | null = null;
+                            
+                            if (buyAlertEnabled && !sellAlertEnabled) {
+                              // Only BUY enabled → test BUY
+                              testSide = 'BUY';
+                            } else if (!buyAlertEnabled && sellAlertEnabled) {
+                              // Only SELL enabled → test SELL
+                              testSide = 'SELL';
+                            } else if (buyAlertEnabled && sellAlertEnabled) {
+                              // Both enabled → use current signal side
+                              if (currentSignalSide === 'BUY') {
+                                testSide = 'BUY';
+                              } else if (currentSignalSide === 'SELL') {
+                                testSide = 'SELL';
+                              } else {
+                                // Fallback: default to BUY if signal is WAIT or unavailable
+                                testSide = 'BUY';
+                              }
+                            } else {
+                              // Neither enabled → show message and return
+                              alert(`⚠️ Alerts deshabilitados\n\nEl campo 'Alerts' está en OFF para este símbolo.\n\nPor favor activa BUY o SELL para poder ejecutar una prueba.`);
                               return;
                             }
                             
@@ -8804,30 +9064,23 @@ ${marginText}
                               return;
                             }
                             
-                            const enabledAlerts = [];
-                            if (buyAlertEnabled) enabledAlerts.push('BUY');
-                            if (sellAlertEnabled) enabledAlerts.push('SELL');
-                            
-                            if (!window.confirm(`🧪 ¿Simular alerta(s) ${enabledAlerts.join(' y ')} para ${symbol}?\n\nEsto enviará notificaciones de Telegram y creará órdenes automáticamente si Trade=YES.\n\n💰 Amount: $${amountUSD.toFixed(2)} USD`)) {
+                            // Confirm test action
+                            const sideLabel = testSide === 'BUY' ? 'BUY' : 'SELL';
+                            const confirmMessage = `🧪 ¿Simular alerta ${sideLabel} para ${symbol}?\n\n` +
+                              `Esto enviará notificaciones de Telegram y creará órdenes automáticamente si Trade=YES.\n\n` +
+                              `Lado simulado: ${sideLabel}\n` +
+                              `💰 Amount: $${amountUSD.toFixed(2)} USD`;
+                            if (!window.confirm(confirmMessage)) {
                               return;
                             }
                             
                             try {
                               const results: Array<{ type: string; result: SimulateAlertResponse }> = [];
                               
-                              // Execute buy alert if enabled
-                              if (buyAlertEnabled) {
-                                console.log(`🧪 Simulando alerta BUY para ${symbol} con amount=${amountUSD}...`);
-                                const buyResult = await simulateAlert(symbol, 'BUY', true, amountUSD);
-                                results.push({ type: 'BUY', result: buyResult });
-                              }
-                              
-                              // Execute sell alert if enabled
-                              if (sellAlertEnabled) {
-                                console.log(`🧪 Simulando alerta SELL para ${symbol} con amount=${amountUSD}...`);
-                                const sellResult = await simulateAlert(symbol, 'SELL', true, amountUSD);
-                                results.push({ type: 'SELL', result: sellResult });
-                              }
+                              // Simulate the determined side
+                              console.log(`🧪 Simulando alerta ${testSide} para ${symbol} con amount=${amountUSD}...`);
+                              const testResult = await simulateAlert(symbol, testSide, true, amountUSD);
+                              results.push({ type: testSide, result: testResult });
                               
                               // Build summary message
                               let message = `✅ Simulación completada!\n\n`;
@@ -8836,9 +9089,23 @@ ${marginText}
                                 message += `   📊 Symbol: ${result.symbol}\n`;
                                 message += `   💵 Price: $${result.price.toFixed(4)}\n`;
                                 message += `   📢 Alert sent: ${result.alert_sent ? '✅' : '❌'}\n`;
-                                message += `   📦 Order created: ${result.order_created ? '✅' : '❌'}\n`;
-                                if (result.order_error) {
+                                
+                                // Show order status: created, in progress, or error
+                                if (result.order_created) {
+                                  message += `   📦 Order created: ✅\n`;
+                                } else if ((result as any).order_in_progress) {
+                                  message += `   📦 Order created: ⏳ (en proceso en background)\n`;
+                                  if ((result as any).note) {
+                                    message += `   ℹ️ ${(result as any).note}\n`;
+                                  }
+                                } else if (result.order_error) {
+                                  message += `   📦 Order created: ❌\n`;
                                   message += `   ⚠️ Error: ${result.order_error}\n`;
+                                } else {
+                                  message += `   📦 Order created: ❌\n`;
+                                  if ((result as any).note) {
+                                    message += `   ℹ️ ${(result as any).note}\n`;
+                                  }
                                 }
                               });
                               
@@ -8857,7 +9124,7 @@ ${marginText}
                             }
                           }}
                           className="px-2 py-1 rounded text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white"
-                          title="🧪 Test alerts (BUY and/or SELL based on enabled alerts)"
+                          title="Simular alerta (usa BUY o SELL según la configuración de alerts)"
                         >
                           🧪 TEST
                         </button>

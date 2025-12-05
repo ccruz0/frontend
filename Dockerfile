@@ -1,18 +1,49 @@
-FROM node:20-alpine
+# ---------- 1) Dependencies ----------
+
+FROM node:22-alpine AS deps
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+RUN apk add --no-cache libc6-compat
 
-# Install dependencies
-RUN npm ci
+COPY package.json package-lock.json ./
 
-# Copy source code
+RUN npm ci --ignore-scripts && npm cache clean --force
+
+# ---------- 2) Builder ----------
+
+FROM deps AS builder
+
+WORKDIR /app
+
 COPY . .
 
-# Expose port
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN npm run build
+
+# ---------- 3) Runner ----------
+
+FROM node:22-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN addgroup -S app && adduser -S app -G app
+
+COPY --from=builder /app/.next/standalone ./
+
+COPY --from=builder /app/.next/static ./.next/static
+
+COPY --from=builder /app/public ./public
+
 EXPOSE 3000
 
-# Command to run the application
-CMD ["npm", "run", "dev"]
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD wget -qO- http://localhost:3000/ || exit 1
+
+USER app
+
+CMD ["node", "server.js"]

@@ -1,0 +1,2143 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - heading "Trading Dashboard" [level=1] [ref=e4]
+    - generic [ref=e5]:
+      - button "Portfolio v0.45" [ref=e6] [cursor=pointer]:
+        - generic [ref=e7]: Portfolio
+        - generic [ref=e8]: v0.45
+      - button "Watchlist v0.45" [active] [ref=e9] [cursor=pointer]:
+        - generic [ref=e10]: Watchlist
+        - generic [ref=e11]: v0.45
+      - button "Open Orders v0.45" [ref=e12] [cursor=pointer]:
+        - generic [ref=e13]: Open Orders
+        - generic [ref=e14]: v0.45
+      - button "Expected Take Profit v0.45" [ref=e15] [cursor=pointer]:
+        - generic [ref=e16]: Expected Take Profit
+        - generic [ref=e17]: v0.45
+      - button "Executed Orders v0.45" [ref=e18] [cursor=pointer]:
+        - generic [ref=e19]: Executed Orders
+        - generic [ref=e20]: v0.45
+      - button "Monitoring v0.45" [ref=e21] [cursor=pointer]:
+        - generic [ref=e22]: Monitoring
+        - generic [ref=e23]: v0.45
+      - button "Version History v0.45" [ref=e24] [cursor=pointer]:
+        - generic [ref=e25]: Version History
+        - generic [ref=e26]: v0.45
+    - generic [ref=e27]:
+      - generic [ref=e28]:
+        - generic [ref=e29]:
+          - heading "Watchlist" [level=2] [ref=e30]
+          - generic [ref=e31]: 🕐 12/04/2025, 09:12:59 PM GMT+8
+          - generic [ref=e32]: 🟢 Bot Activo
+          - button "🟢 LIVE" [ref=e33] [cursor=pointer]
+          - generic [ref=e34]:
+            - generic [ref=e35]: "Data:"
+            - 'generic "crypto_com: Available (0.00s)" [ref=e36]': crypto_com
+            - 'generic "binance: Available (0.00s)" [ref=e37]': binance
+            - 'generic "kraken: Unavailable (undefineds)" [ref=e38]': kraken
+            - 'generic "coinpaprika: Unavailable (undefineds)" [ref=e39]': coinpaprika
+        - generic [ref=e40]:
+          - button "⚙️ Signal Config" [ref=e41] [cursor=pointer]
+          - button "+ Add Symbol" [ref=e42] [cursor=pointer]
+      - table [ref=e44]:
+        - rowgroup [ref=e45]:
+          - row "# Symbol Actions Last Price Last Updated Preset Trade Amount USD Margin RISK SL Price TP Price RSI ATR Res Up Res Down MA50 MA200 EMA10 MA10w Volume Signals Actions" [ref=e46]:
+            - columnheader "#" [ref=e47]
+            - columnheader "Symbol" [ref=e48]
+            - columnheader "Actions" [ref=e49]
+            - columnheader "Last Price" [ref=e50]
+            - columnheader "Last Updated" [ref=e51]
+            - columnheader "Preset" [ref=e52]
+            - columnheader "Trade" [ref=e53]
+            - columnheader "Amount USD" [ref=e54]
+            - columnheader "Margin" [ref=e55]
+            - columnheader "RISK" [ref=e56]
+            - columnheader "SL Price" [ref=e57]
+            - columnheader "TP Price" [ref=e58]
+            - columnheader "RSI" [ref=e59]
+            - columnheader "ATR" [ref=e60]
+            - columnheader "Res Up" [ref=e61]
+            - columnheader "Res Down" [ref=e62]
+            - columnheader "MA50" [ref=e63]
+            - columnheader "MA200" [ref=e64]
+            - columnheader "EMA10" [ref=e65]
+            - columnheader "MA10w" [ref=e66]
+            - columnheader "Volume" [ref=e67]
+            - columnheader "Signals" [ref=e68]
+            - columnheader "Actions" [ref=e69]
+        - rowgroup [ref=e70]:
+          - row "1 Mover ETH_USDT hacia arriba Mover ETH_USDT hacia abajo ETH_USDT BUY SELL $3,160.46 17s Intraday-Conservative NO NO Aggressive 2,755.49 $ 2,867.95 $ 41.48 27.10 $3,223.67 $3,097.25 $3,086.85 $2,993.57 $3,181.42 $3,658.91 0.89x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e71]:
+            - cell "1" [ref=e72]
+            - cell "Mover ETH_USDT hacia arriba Mover ETH_USDT hacia abajo ETH_USDT" [ref=e73]:
+              - generic [ref=e74]:
+                - generic [ref=e75]:
+                  - button "Mover ETH_USDT hacia arriba" [disabled] [ref=e76]: ▲
+                  - button "Mover ETH_USDT hacia abajo" [ref=e77] [cursor=pointer]: ▼
+                - link "ETH_USDT" [ref=e78] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/ETH/USDT
+            - cell "BUY SELL" [ref=e79]:
+              - generic [ref=e80]:
+                - button "BUY" [ref=e81] [cursor=pointer]
+                - button "SELL" [ref=e82] [cursor=pointer]
+            - cell "$3,160.46" [ref=e83]
+            - cell "17s" [ref=e84]
+            - cell "Intraday-Conservative" [ref=e85]:
+              - 'combobox "📊 Estrategia: intradia-conservadora RSI: buy<45 / sell>70 MAs: EMA10=$3,181.42 | MA50=$3,086.85 ✗ MA50>EMA10 SL≈ price - 1×ATR TP≈ price + 1.2×(price-SL) Notas: Cierra en el día · Evita overnight" [ref=e86]':
+                - option "Swing-Conservative"
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative" [selected]
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e87]:
+              - generic [ref=e88] [cursor=pointer]: "NO"
+            - cell [ref=e89]:
+              - textbox "$0.00" [ref=e90]
+            - cell "NO" [ref=e91]:
+              - generic [ref=e92] [cursor=pointer]: "NO"
+            - cell "Aggressive" [ref=e93]:
+              - 'generic "📊 Estrategia: intradia-agresiva RSI: buy<50 / sell>65 MAs: EMA10=$3,181.42 | MA50=$3,086.85 ✗ MA50>EMA10 SL≈ price - 0.8×ATR TP≈ price + 1×(price-SL) Notas: Más señales · Más ruido" [ref=e94] [cursor=pointer]': Aggressive
+            - cell "2,755.49 $" [ref=e95]:
+              - 'textbox "Price: $2,755.49 (from resistance levels)" [ref=e96]':
+                - /placeholder: 2,755.49
+                - text: 2,755.49
+              - text: $
+            - cell "2,867.95 $" [ref=e97]:
+              - 'textbox "Price: $2,867.95 (from resistance levels)" [ref=e98]':
+                - /placeholder: 2,867.95
+                - text: 2,867.95
+              - text: $
+            - cell "41.48" [ref=e99]
+            - cell "27.10" [ref=e100]
+            - cell "$3,223.67" [ref=e101]:
+              - generic [ref=e102]: $3,223.67
+            - cell "$3,097.25" [ref=e103]:
+              - generic [ref=e104]: $3,097.25
+            - cell "$3,086.85" [ref=e105]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($3,086.85) < EMA10 ($3,181.42). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e106]': $3,086.85
+            - cell "$2,993.57" [ref=e107]:
+              - 'generic "Precio ($3,160.46) > MA200 ($2,993.57). Tendencia alcista a largo plazo. (No usado en estrategia actual) Last updated: 9:12:59 PM" [ref=e108]': $2,993.57
+            - cell "$3,181.42" [ref=e109]:
+              - 'generic "🔴 VENDER: Precio ($3,160.46) < EMA10 ($3,181.42). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e110]': $3,181.42
+            - cell "$3,658.91" [ref=e111]:
+              - 'generic "MA10w: $3,658.91 | Precio: $3,160.46. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e112]': $3,658.91
+            - cell "0.89x" [ref=e113]:
+              - 'generic "Volume (último período): 1,542.50 | Promedio (promedio): 1,728.28 | Ratio: 0.89x" [ref=e114]': 0.89x
+            - cell "WAIT" [ref=e115]:
+              - 'generic "📊 Estrategia: intradia-conservadora 🟢 CRITERIOS BUY (todos deben cumplirse): • RSI < 45 (actual: 41.48?) • MA50 > EMA10 ? - MA50: $3,086.85 - EMA10: $3,181.42 • Volume ≥ 0.5x promedio ? - Ratio actual: 0.89x (mismo valor que columna Volume) - Volume (último período): 1,542.50 - Promedio: 1,728.28 🔴 CRITERIOS SELL (AMBOS deben cumplirse): • RSI > 70 (actual: 41.48✗) • MA50 < EMA10 (diferencia ≥0.5%) ✓ - MA50: $3,086.85 - EMA10: $3,181.42 - Diferencia: 3.02% (requiere ≥0.5%) • Volume ≥ 0.5x promedio ✓ - Ratio actual: 0.89x (mismo valor que columna Volume) - Volume (último período): 1,542.50 - Promedio: 1,728.28 📌 ESTADO ACTUAL (backend): → Señal: WAIT (no se cumplen todos los criterios BUY según backend) ℹ️ Algunos criterios no están disponibles (None)" [ref=e117]': WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e118]:
+              - generic [ref=e119]:
+                - button "ALERTS ✅" [ref=e120] [cursor=pointer]
+                - button "BUY ✅" [ref=e121] [cursor=pointer]
+                - button "SELL ✅" [ref=e122] [cursor=pointer]
+                - button "🧪 TEST" [ref=e123] [cursor=pointer]
+                - button "Delete" [ref=e124] [cursor=pointer]
+          - row "2 Mover DGB_USD hacia arriba Mover DGB_USD hacia abajo DGB_USD BUY SELL $0.0064090000 17s Swing-Aggressive NO NO Aggressive 0.0067159400 $ 0.0069900600 $ 35.04 0.0000660000 $0.0065371800 $0.0062808200 $0.0063927800 $0.0065831450 $0.0064392288 $0.0074087000 0.31x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e125]:
+            - cell "2" [ref=e126]
+            - cell "Mover DGB_USD hacia arriba Mover DGB_USD hacia abajo DGB_USD" [ref=e127]:
+              - generic [ref=e128]:
+                - generic [ref=e129]:
+                  - button "Mover DGB_USD hacia arriba" [ref=e130] [cursor=pointer]: ▲
+                  - button "Mover DGB_USD hacia abajo" [ref=e131] [cursor=pointer]: ▼
+                - link "DGB_USD" [ref=e132] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/DGB/USD
+            - cell "BUY SELL" [ref=e133]:
+              - generic [ref=e134]:
+                - button "BUY" [ref=e135] [cursor=pointer]
+                - button "SELL" [ref=e136] [cursor=pointer]
+            - cell "$0.0064090000" [ref=e137]
+            - cell "17s" [ref=e138]
+            - cell "Swing-Aggressive" [ref=e139]:
+              - 'combobox "📊 Estrategia: swing-agresiva RSI: buy<45 / sell>68 MAs: EMA10=$0.0064392288 | MA50=$0.0063927800 ✗ MA50>EMA10 | MA200=$0.0065831450 ✗ Price>MA200 SL≈ price - 1×ATR TP≈ price + 1.2×(price-SL) Notas: Entrada más temprana · SL más estrecho" [ref=e140]':
+                - option "Swing-Conservative"
+                - option "Swing-Aggressive" [selected]
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e141]:
+              - generic [ref=e142] [cursor=pointer]: "NO"
+            - cell [ref=e143]:
+              - textbox "$0.00" [ref=e144]
+            - cell "NO" [ref=e145]:
+              - generic [ref=e146] [cursor=pointer]: "NO"
+            - cell "Aggressive" [ref=e147]:
+              - 'generic "📊 Estrategia: swing-agresiva RSI: buy<45 / sell>68 MAs: EMA10=$0.0064392288 | MA50=$0.0063927800 ✗ MA50>EMA10 | MA200=$0.0065831450 ✗ Price>MA200 SL≈ price - 1×ATR TP≈ price + 1.2×(price-SL) Notas: Entrada más temprana · SL más estrecho" [ref=e148] [cursor=pointer]': Aggressive
+            - cell "0.0067159400 $" [ref=e149]:
+              - 'textbox "Price: $0.0067159400 (from resistance levels)" [ref=e150]':
+                - /placeholder: "0.0067159400"
+                - text: "0.0067159400"
+              - text: $
+            - cell "0.0069900600 $" [ref=e151]:
+              - 'textbox "Price: $0.0069900600 (from resistance levels)" [ref=e152]':
+                - /placeholder: "0.0069900600"
+                - text: "0.0069900600"
+              - text: $
+            - cell "35.04" [ref=e153]
+            - cell "0.0000660000" [ref=e154]
+            - cell "$0.0065371800" [ref=e155]:
+              - generic [ref=e156]: $0.0065371800
+            - cell "$0.0062808200" [ref=e157]:
+              - generic [ref=e158]: $0.0062808200
+            - cell "$0.0063927800" [ref=e159]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($0.0063927800) < EMA10 ($0.0064392288). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e160]': $0.0063927800
+            - cell "$0.0065831450" [ref=e161]:
+              - 'generic "❌ Criterio COMPRA bloqueado: Precio ($0.0064090000) < MA200 ($0.0065831450). Esta condición bloquea señal BUY. Si la señal es SELL, viene de otros criterios (RSI > sellAbove o MA50 < EMA10), NO de MA200. Last updated: 9:12:59 PM" [ref=e162]': $0.0065831450
+            - cell "$0.0064392288" [ref=e163]:
+              - 'generic "🔴 VENDER: Precio ($0.0064090000) < EMA10 ($0.0064392288). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e164]': $0.0064392288
+            - cell "$0.0074087000" [ref=e165]:
+              - 'generic "MA10w: $0.0074087000 | Precio: $0.0064090000. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e166]': $0.0074087000
+            - cell "0.31x" [ref=e167]:
+              - 'generic "Volume (último período): 616,745.50 | Promedio (promedio): 1,974,891.85 | Ratio: 0.31x" [ref=e168]': 0.31x
+            - cell "WAIT" [ref=e169]:
+              - 'generic "📊 Estrategia: swing-agresiva 🟢 CRITERIOS BUY (todos deben cumplirse): • RSI < 45 (actual: 35.04?) • MA50 > EMA10 ? - MA50: $0.0063927800 - EMA10: $0.0064392288 • Precio > MA200 ? - Precio: $0.0064090000 - MA200: $0.0065831450 • Volume ≥ 0.5x promedio ? - Ratio actual: 0.31x (mismo valor que columna Volume) - Volume (último período): 616,745.50 - Promedio: 1,974,891.85 🔴 CRITERIOS SELL (AMBOS deben cumplirse): • RSI > 68 (actual: 35.04✗) • MA50 < EMA10 (diferencia ≥0.5%) ✓ - MA50: $0.0063927800 - EMA10: $0.0064392288 - Diferencia: 0.72% (requiere ≥0.5%) • Volume ≥ 0.5x promedio ✗ - Ratio actual: 0.31x (mismo valor que columna Volume) - Volume (último período): 616,745.50 - Promedio: 1,974,891.85 📌 ESTADO ACTUAL (backend): → Señal: WAIT (no se cumplen todos los criterios BUY según backend) ℹ️ Algunos criterios no están disponibles (None) ⚠️ Volume ratio (0.31x) < 0.5x" [ref=e171]': WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e172]:
+              - generic [ref=e173]:
+                - button "ALERTS ✅" [ref=e174] [cursor=pointer]
+                - button "BUY ✅" [ref=e175] [cursor=pointer]
+                - button "SELL ✅" [ref=e176] [cursor=pointer]
+                - button "🧪 TEST" [ref=e177] [cursor=pointer]
+                - button "Delete" [ref=e178] [cursor=pointer]
+          - row "3 Mover ADA_USD hacia arriba Mover ADA_USD hacia abajo ADA_USD BUY SELL $0.446860 17s Swing-Conservative NO 10 NO Conservative 0.469130 $ 10 % 42.67 0.0042590000 $0.455797 $0.437923 $0.439067 $0.420768 $0.447494 $0.607349 1.1x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e179]:
+            - cell "3" [ref=e180]
+            - cell "Mover ADA_USD hacia arriba Mover ADA_USD hacia abajo ADA_USD" [ref=e181]:
+              - generic [ref=e182]:
+                - generic [ref=e183]:
+                  - button "Mover ADA_USD hacia arriba" [ref=e184] [cursor=pointer]: ▲
+                  - button "Mover ADA_USD hacia abajo" [ref=e185] [cursor=pointer]: ▼
+                - link "ADA_USD" [ref=e186] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/ADA/USD
+            - cell "BUY SELL" [ref=e187]:
+              - generic [ref=e188]:
+                - button "BUY" [ref=e189] [cursor=pointer]
+                - button "SELL" [ref=e190] [cursor=pointer]
+            - cell "$0.446860" [ref=e191]
+            - cell "17s" [ref=e192]
+            - cell "Swing-Conservative" [ref=e193]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$0.447494 | MA50=$0.439067 ✗ MA50>EMA10 | MA200=$0.420768 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e194]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e195]:
+              - generic [ref=e196] [cursor=pointer]: "NO"
+            - cell "10" [ref=e197]:
+              - textbox "$0.00" [ref=e198]: "10"
+            - cell "NO" [ref=e199]:
+              - generic [ref=e200] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e201]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$0.447494 | MA50=$0.439067 ✗ MA50>EMA10 | MA200=$0.420768 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e202] [cursor=pointer]': Conservative
+            - cell "0.469130 $" [ref=e203]:
+              - 'textbox "Price: $0.469130 (from resistance levels)" [ref=e204]':
+                - /placeholder: "0.469130"
+                - text: "0.469130"
+              - text: $
+            - cell "10 %" [ref=e205]:
+              - 'textbox "Override: 10% | Price: $0.491469" [ref=e206]':
+                - /placeholder: "0.491469"
+                - text: "10"
+              - text: "%"
+            - cell "42.67" [ref=e207]
+            - cell "0.0042590000" [ref=e208]
+            - cell "$0.455797" [ref=e209]:
+              - generic [ref=e210]: $0.455797
+            - cell "$0.437923" [ref=e211]:
+              - generic [ref=e212]: $0.437923
+            - cell "$0.439067" [ref=e213]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($0.439067) < EMA10 ($0.447494). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e214]': $0.439067
+            - cell "$0.420768" [ref=e215]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($0.446860) > MA200 ($0.420768). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e216]': $0.420768
+            - cell "$0.447494" [ref=e217]:
+              - 'generic "🔴 VENDER: Precio ($0.446860) < EMA10 ($0.447494). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e218]': $0.447494
+            - cell "$0.607349" [ref=e219]:
+              - 'generic "MA10w: $0.607349 | Precio: $0.446860. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e220]': $0.607349
+            - cell "1.1x" [ref=e221]:
+              - 'generic "Volume (último período): 35,778.00 | Promedio (promedio): 31,872.59 | Ratio: 1.1x" [ref=e222]': 1.1x
+            - cell "WAIT" [ref=e223]:
+              - generic "Estrategia no configurada" [ref=e225]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e226]:
+              - generic [ref=e227]:
+                - button "ALERTS ✅" [ref=e228] [cursor=pointer]
+                - button "BUY ✅" [ref=e229] [cursor=pointer]
+                - button "SELL ✅" [ref=e230] [cursor=pointer]
+                - button "🧪 TEST" [ref=e231] [cursor=pointer]
+                - button "Delete" [ref=e232] [cursor=pointer]
+          - row "4 Mover ALGO_USDT hacia arriba Mover ALGO_USDT hacia abajo ALGO_USDT BUY SELL $0.139840 17s Scalp-Aggressive NO 10 NO Aggressive 0.129485 $ 0.130590 $ 20.13 0.0009220000 $0.142637 $0.137043 $0.140273 $0.139996 $0.140697 $0.177677 0.35x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e233]:
+            - cell "4" [ref=e234]
+            - cell "Mover ALGO_USDT hacia arriba Mover ALGO_USDT hacia abajo ALGO_USDT" [ref=e235]:
+              - generic [ref=e236]:
+                - generic [ref=e237]:
+                  - button "Mover ALGO_USDT hacia arriba" [ref=e238] [cursor=pointer]: ▲
+                  - button "Mover ALGO_USDT hacia abajo" [ref=e239] [cursor=pointer]: ▼
+                - link "ALGO_USDT" [ref=e240] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/ALGO/USDT
+            - cell "BUY SELL" [ref=e241]:
+              - generic [ref=e242]:
+                - button "BUY" [ref=e243] [cursor=pointer]
+                - button "SELL" [ref=e244] [cursor=pointer]
+            - cell "$0.139840" [ref=e245]
+            - cell "17s" [ref=e246]
+            - cell "Scalp-Aggressive" [ref=e247]:
+              - 'combobox "📊 Estrategia: scalp-agresiva RSI: buy<55 / sell>65 MAs: no MA checks SL≈ -0.35% TP≈ +0.5% Notas: Entradas anticipadas · Muchas micro-salidas" [ref=e248]':
+                - option "Swing-Conservative"
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive" [selected]
+                - option "Custom"
+            - cell "NO" [ref=e249]:
+              - generic [ref=e250] [cursor=pointer]: "NO"
+            - cell "10" [ref=e251]:
+              - textbox "$0.00" [ref=e252]: "10"
+            - cell "NO" [ref=e253]:
+              - generic [ref=e254] [cursor=pointer]: "NO"
+            - cell "Aggressive" [ref=e255]:
+              - 'generic "📊 Estrategia: scalp-agresiva RSI: buy<55 / sell>65 MAs: no MA checks SL≈ -0.35% TP≈ +0.5% Notas: Entradas anticipadas · Muchas micro-salidas" [ref=e256] [cursor=pointer]': Aggressive
+            - cell "0.129485 $" [ref=e257]:
+              - 'textbox "Price: $0.129485 (from resistance levels)" [ref=e258]':
+                - /placeholder: "0.129485"
+                - text: "0.129485"
+              - text: $
+            - cell "0.130590 $" [ref=e259]:
+              - 'textbox "Price: $0.130590 (from resistance levels)" [ref=e260]':
+                - /placeholder: "0.130590"
+                - text: "0.130590"
+              - text: $
+            - cell "20.13" [ref=e261]
+            - cell "0.0009220000" [ref=e262]
+            - cell "$0.142637" [ref=e263]:
+              - generic [ref=e264]: $0.142637
+            - cell "$0.137043" [ref=e265]:
+              - generic [ref=e266]: $0.137043
+            - cell "$0.140273" [ref=e267]:
+              - 'generic "Precio ($0.139840) < MA50 ($0.140273). Tendencia bajista a medio plazo. (No usado en estrategia actual) Last updated: 21:12 GMT+8" [ref=e268]': $0.140273
+            - cell "$0.139996" [ref=e269]:
+              - 'generic "Precio ($0.139840) < MA200 ($0.139996). Tendencia bajista a largo plazo. (No usado en estrategia actual) Last updated: 9:12:59 PM" [ref=e270]': $0.139996
+            - cell "$0.140697" [ref=e271]:
+              - 'generic "🔴 VENDER: Precio ($0.139840) < EMA10 ($0.140697). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e272]': $0.140697
+            - cell "$0.177677" [ref=e273]:
+              - 'generic "MA10w: $0.177677 | Precio: $0.139840. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e274]': $0.177677
+            - cell "0.35x" [ref=e275]:
+              - 'generic "Volume (último período): 12,242.00 | Promedio (promedio): 34,724.41 | Ratio: 0.35x" [ref=e276]': 0.35x
+            - cell "WAIT" [ref=e277]:
+              - 'generic "📊 Estrategia: scalp-agresiva 🟢 CRITERIOS BUY (todos deben cumplirse): • RSI < 55 (actual: 20.13?) • Volume ≥ 0.3x promedio ? - Ratio actual: 0.35x (mismo valor que columna Volume) - Volume (último período): 12,242.00 - Promedio: 34,724.41 • No se requieren MAs 🔴 CRITERIOS SELL: • RSI > 65 (actual: 20.13✗) • Volume ≥ 0.3x promedio ✓ - Ratio actual: 0.35x (mismo valor que columna Volume) - Volume (último período): 12,242.00 - Promedio: 34,724.41 📌 ESTADO ACTUAL (backend): → Señal: WAIT (no se cumplen todos los criterios BUY según backend) ℹ️ Algunos criterios no están disponibles (None)" [ref=e279]': WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e280]:
+              - generic [ref=e281]:
+                - button "ALERTS ✅" [ref=e282] [cursor=pointer]
+                - button "BUY ✅" [ref=e283] [cursor=pointer]
+                - button "SELL ✅" [ref=e284] [cursor=pointer]
+                - button "🧪 TEST" [ref=e285] [cursor=pointer]
+                - button "Delete" [ref=e286] [cursor=pointer]
+          - row "5 Mover LDO_USD hacia arriba Mover LDO_USD hacia abajo LDO_USD BUY SELL $0.639800 17s Scalp-Aggressive NO 10 NO Conservative 0.570585 $ 0.591372 $ 33.40 0.0048640000 $0.652596 $0.627004 $0.631902 $0.638788 $0.643787 $0.868993 0.43x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e287]:
+            - cell "5" [ref=e288]
+            - cell "Mover LDO_USD hacia arriba Mover LDO_USD hacia abajo LDO_USD" [ref=e289]:
+              - generic [ref=e290]:
+                - generic [ref=e291]:
+                  - button "Mover LDO_USD hacia arriba" [ref=e292] [cursor=pointer]: ▲
+                  - button "Mover LDO_USD hacia abajo" [ref=e293] [cursor=pointer]: ▼
+                - link "LDO_USD" [ref=e294] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/LDO/USD
+            - cell "BUY SELL" [ref=e295]:
+              - generic [ref=e296]:
+                - button "BUY" [ref=e297] [cursor=pointer]
+                - button "SELL" [ref=e298] [cursor=pointer]
+            - cell "$0.639800" [ref=e299]
+            - cell "17s" [ref=e300]
+            - cell "Scalp-Aggressive" [ref=e301]:
+              - 'combobox "📊 Estrategia: scalp-agresiva RSI: buy<55 / sell>65 MAs: no MA checks SL≈ -0.35% TP≈ +0.5% Notas: Entradas anticipadas · Muchas micro-salidas" [ref=e302]':
+                - option "Swing-Conservative"
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive" [selected]
+                - option "Custom"
+            - cell "NO" [ref=e303]:
+              - generic [ref=e304] [cursor=pointer]: "NO"
+            - cell "10" [ref=e305]:
+              - textbox "$0.00" [ref=e306]: "10"
+            - cell "NO" [ref=e307]:
+              - generic [ref=e308] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e309]:
+              - 'generic "📊 Estrategia: scalp-conservadora RSI: buy<50 / sell>70 MAs: EMA10=$0.643787 SL≈ -0.5% TP≈ +0.8% Notas: Movimientos muy cortos · Slippage importa" [ref=e310] [cursor=pointer]': Conservative
+            - cell "0.570585 $" [ref=e311]:
+              - 'textbox "Price: $0.570585 (from resistance levels)" [ref=e312]':
+                - /placeholder: "0.570585"
+                - text: "0.570585"
+              - text: $
+            - cell "0.591372 $" [ref=e313]:
+              - 'textbox "Price: $0.591372 (from resistance levels)" [ref=e314]':
+                - /placeholder: "0.591372"
+                - text: "0.591372"
+              - text: $
+            - cell "33.40" [ref=e315]
+            - cell "0.0048640000" [ref=e316]
+            - cell "$0.652596" [ref=e317]:
+              - generic [ref=e318]: $0.652596
+            - cell "$0.627004" [ref=e319]:
+              - generic [ref=e320]: $0.627004
+            - cell "$0.631902" [ref=e321]:
+              - 'generic "Precio ($0.639800) > MA50 ($0.631902). Tendencia alcista a medio plazo. (No usado en estrategia actual) Last updated: 21:12 GMT+8" [ref=e322]': $0.631902
+            - cell "$0.638788" [ref=e323]:
+              - 'generic "Precio ($0.639800) > MA200 ($0.638788). Tendencia alcista a largo plazo. (No usado en estrategia actual) Last updated: 9:12:59 PM" [ref=e324]': $0.638788
+            - cell "$0.643787" [ref=e325]:
+              - 'generic "🔴 VENDER: Precio ($0.639800) < EMA10 ($0.643787). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e326]': $0.643787
+            - cell "$0.868993" [ref=e327]:
+              - 'generic "MA10w: $0.868993 | Precio: $0.639800. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e328]': $0.868993
+            - cell "0.43x" [ref=e329]:
+              - 'generic "Volume (último período): 44.70 | Promedio (promedio): 104.45 | Ratio: 0.43x" [ref=e330]': 0.43x
+            - cell "WAIT" [ref=e331]:
+              - 'generic "📊 Estrategia: scalp-agresiva 🟢 CRITERIOS BUY (todos deben cumplirse): • RSI < 55 (actual: 33.40?) • Volume ≥ 0.3x promedio ? - Ratio actual: 0.43x (mismo valor que columna Volume) - Volume (último período): 44.70 - Promedio: 104.45 • No se requieren MAs 🔴 CRITERIOS SELL: • RSI > 65 (actual: 33.40✗) • Volume ≥ 0.3x promedio ✓ - Ratio actual: 0.43x (mismo valor que columna Volume) - Volume (último período): 44.70 - Promedio: 104.45 📌 ESTADO ACTUAL (backend): → Señal: WAIT (no se cumplen todos los criterios BUY según backend) ℹ️ Algunos criterios no están disponibles (None)" [ref=e333]': WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e334]:
+              - generic [ref=e335]:
+                - button "ALERTS ✅" [ref=e336] [cursor=pointer]
+                - button "BUY ✅" [ref=e337] [cursor=pointer]
+                - button "SELL ✅" [ref=e338] [cursor=pointer]
+                - button "🧪 TEST" [ref=e339] [cursor=pointer]
+                - button "Delete" [ref=e340] [cursor=pointer]
+          - row "6 Mover ADA_USDT hacia arriba Mover ADA_USDT hacia abajo ADA_USDT BUY SELL $0.446840 17s Swing-Conservative NO 10 NO Conservative 0.415981 $ 0.432959 $ 42.61 0.0042590000 $0.455777 $0.437903 $0.439067 $0.420768 $0.447490 $0.607348 1.1x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e341]:
+            - cell "6" [ref=e342]
+            - cell "Mover ADA_USDT hacia arriba Mover ADA_USDT hacia abajo ADA_USDT" [ref=e343]:
+              - generic [ref=e344]:
+                - generic [ref=e345]:
+                  - button "Mover ADA_USDT hacia arriba" [ref=e346] [cursor=pointer]: ▲
+                  - button "Mover ADA_USDT hacia abajo" [ref=e347] [cursor=pointer]: ▼
+                - link "ADA_USDT" [ref=e348] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/ADA/USDT
+            - cell "BUY SELL" [ref=e349]:
+              - generic [ref=e350]:
+                - button "BUY" [ref=e351] [cursor=pointer]
+                - button "SELL" [ref=e352] [cursor=pointer]
+            - cell "$0.446840" [ref=e353]
+            - cell "17s" [ref=e354]
+            - cell "Swing-Conservative" [ref=e355]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$0.447490 | MA50=$0.439067 ✗ MA50>EMA10 | MA200=$0.420768 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e356]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e357]:
+              - generic [ref=e358] [cursor=pointer]: "NO"
+            - cell "10" [ref=e359]:
+              - textbox "$0.00" [ref=e360]: "10"
+            - cell "NO" [ref=e361]:
+              - generic [ref=e362] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e363]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$0.447490 | MA50=$0.439067 ✗ MA50>EMA10 | MA200=$0.420768 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e364] [cursor=pointer]': Conservative
+            - cell "0.415981 $" [ref=e365]:
+              - 'textbox "Price: $0.415981 (from resistance levels)" [ref=e366]':
+                - /placeholder: "0.415981"
+                - text: "0.415981"
+              - text: $
+            - cell "0.432959 $" [ref=e367]:
+              - 'textbox "Price: $0.432959 (from resistance levels)" [ref=e368]':
+                - /placeholder: "0.432959"
+                - text: "0.432959"
+              - text: $
+            - cell "42.61" [ref=e369]
+            - cell "0.0042590000" [ref=e370]
+            - cell "$0.455777" [ref=e371]:
+              - generic [ref=e372]: $0.455777
+            - cell "$0.437903" [ref=e373]:
+              - generic [ref=e374]: $0.437903
+            - cell "$0.439067" [ref=e375]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($0.439067) < EMA10 ($0.447490). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e376]': $0.439067
+            - cell "$0.420768" [ref=e377]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($0.446840) > MA200 ($0.420768). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e378]': $0.420768
+            - cell "$0.447490" [ref=e379]:
+              - 'generic "🔴 VENDER: Precio ($0.446840) < EMA10 ($0.447490). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e380]': $0.447490
+            - cell "$0.607348" [ref=e381]:
+              - 'generic "MA10w: $0.607348 | Precio: $0.446840. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e382]': $0.607348
+            - cell "1.1x" [ref=e383]:
+              - 'generic "Volume (último período): 35,805.70 | Promedio (promedio): 31,872.59 | Ratio: 1.1x" [ref=e384]': 1.1x
+            - cell "WAIT" [ref=e385]:
+              - 'generic "📊 Estrategia: swing-conservadora 🟢 CRITERIOS BUY (todos deben cumplirse): • RSI < 40 (actual: 42.61?) • MA50 > EMA10 ? - MA50: $0.439067 - EMA10: $0.447490 • Precio > MA200 ? - Precio: $0.446840 - MA200: $0.420768 • Volume ≥ 0.5x promedio ? - Ratio actual: 1.12x (mismo valor que columna Volume) - Volume (último período): 35,805.70 - Promedio: 31,872.59 🔴 CRITERIOS SELL (AMBOS deben cumplirse): • RSI > 70 (actual: 42.61✗) • MA50 < EMA10 (diferencia ≥0.5%) ✓ - MA50: $0.439067 - EMA10: $0.447490 - Diferencia: 1.90% (requiere ≥0.5%) • Volume ≥ 0.5x promedio ✓ - Ratio actual: 1.12x (mismo valor que columna Volume) - Volume (último período): 35,805.70 - Promedio: 31,872.59 📌 ESTADO ACTUAL (backend): → Señal: WAIT (no se cumplen todos los criterios BUY según backend) ℹ️ Algunos criterios no están disponibles (None)" [ref=e387]': WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e388]:
+              - generic [ref=e389]:
+                - button "ALERTS ✅" [ref=e390] [cursor=pointer]
+                - button "BUY ✅" [ref=e391] [cursor=pointer]
+                - button "SELL ✅" [ref=e392] [cursor=pointer]
+                - button "🧪 TEST" [ref=e393] [cursor=pointer]
+                - button "Delete" [ref=e394] [cursor=pointer]
+          - row "7 Mover DOGE_USDT hacia arriba Mover DOGE_USDT hacia abajo DOGE_USDT BUY SELL $0.149311 17s Swing-Conservative NO NO Conservative $ $ 29.56 0.0011160000 $0.152297 $0.146325 $0.148604 $0.147746 $0.149841 $0.188136 1.1x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e395]:
+            - cell "7" [ref=e396]
+            - cell "Mover DOGE_USDT hacia arriba Mover DOGE_USDT hacia abajo DOGE_USDT" [ref=e397]:
+              - generic [ref=e398]:
+                - generic [ref=e399]:
+                  - button "Mover DOGE_USDT hacia arriba" [ref=e400] [cursor=pointer]: ▲
+                  - button "Mover DOGE_USDT hacia abajo" [ref=e401] [cursor=pointer]: ▼
+                - link "DOGE_USDT" [ref=e402] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/DOGE/USDT
+            - cell "BUY SELL" [ref=e403]:
+              - generic [ref=e404]:
+                - button "BUY" [ref=e405] [cursor=pointer]
+                - button "SELL" [ref=e406] [cursor=pointer]
+            - cell "$0.149311" [ref=e407]
+            - cell "17s" [ref=e408]
+            - cell "Swing-Conservative" [ref=e409]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$0.149841 | MA50=$0.148604 ✗ MA50>EMA10 | MA200=$0.147746 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e410]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e411]:
+              - generic [ref=e412] [cursor=pointer]: "NO"
+            - cell [ref=e413]:
+              - textbox "$0.00" [ref=e414]
+            - cell "NO" [ref=e415]:
+              - generic [ref=e416] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e417]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$0.149841 | MA50=$0.148604 ✗ MA50>EMA10 | MA200=$0.147746 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e418] [cursor=pointer]': Conservative
+            - cell "$" [ref=e419]:
+              - 'textbox "Price: $0.00 (from resistance levels)" [ref=e420]':
+                - /placeholder: Calculating...
+              - text: $
+            - cell "$" [ref=e421]:
+              - 'textbox "Price: $0.00 (from resistance levels)" [ref=e422]':
+                - /placeholder: Calculating...
+              - text: $
+            - cell "29.56" [ref=e423]
+            - cell "0.0011160000" [ref=e424]
+            - cell "$0.152297" [ref=e425]:
+              - generic [ref=e426]: $0.152297
+            - cell "$0.146325" [ref=e427]:
+              - generic [ref=e428]: $0.146325
+            - cell "$0.148604" [ref=e429]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($0.148604) < EMA10 ($0.149841). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e430]': $0.148604
+            - cell "$0.147746" [ref=e431]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($0.149311) > MA200 ($0.147746). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e432]': $0.147746
+            - cell "$0.149841" [ref=e433]:
+              - 'generic "🔴 VENDER: Precio ($0.149311) < EMA10 ($0.149841). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e434]': $0.149841
+            - cell "$0.188136" [ref=e435]:
+              - 'generic "MA10w: $0.188136 | Precio: $0.149311. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e436]': $0.188136
+            - cell "1.1x" [ref=e437]:
+              - 'generic "Volume (último período): 267,784.00 | Promedio (promedio): 240,905.16 | Ratio: 1.1x" [ref=e438]': 1.1x
+            - cell "WAIT" [ref=e439]:
+              - generic "Estrategia no configurada" [ref=e441]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e442]:
+              - generic [ref=e443]:
+                - button "ALERTS ✅" [ref=e444] [cursor=pointer]
+                - button "BUY ✅" [ref=e445] [cursor=pointer]
+                - button "SELL ✅" [ref=e446] [cursor=pointer]
+                - button "🧪 TEST" [ref=e447] [cursor=pointer]
+                - button "Delete" [ref=e448] [cursor=pointer]
+          - row "8 Mover BCH_USDT hacia arriba Mover BCH_USDT hacia abajo BCH_USDT BUY SELL $578.04 17s Swing-Conservative NO 10 NO Conservative 513.23 $ 534.00 $ 32.37 5.55 $589.60 $566.48 $575.43 $544.17 $582.74 $529.45 0.19x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e449]:
+            - cell "8" [ref=e450]
+            - cell "Mover BCH_USDT hacia arriba Mover BCH_USDT hacia abajo BCH_USDT" [ref=e451]:
+              - generic [ref=e452]:
+                - generic [ref=e453]:
+                  - button "Mover BCH_USDT hacia arriba" [ref=e454] [cursor=pointer]: ▲
+                  - button "Mover BCH_USDT hacia abajo" [ref=e455] [cursor=pointer]: ▼
+                - link "BCH_USDT" [ref=e456] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/BCH/USDT
+            - cell "BUY SELL" [ref=e457]:
+              - generic [ref=e458]:
+                - button "BUY" [ref=e459] [cursor=pointer]
+                - button "SELL" [ref=e460] [cursor=pointer]
+            - cell "$578.04" [ref=e461]
+            - cell "17s" [ref=e462]
+            - cell "Swing-Conservative" [ref=e463]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$582.74 | MA50=$575.43 ✗ MA50>EMA10 | MA200=$544.17 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e464]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e465]:
+              - generic [ref=e466] [cursor=pointer]: "NO"
+            - cell "10" [ref=e467]:
+              - textbox "$0.00" [ref=e468]: "10"
+            - cell "NO" [ref=e469]:
+              - generic [ref=e470] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e471]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$582.74 | MA50=$575.43 ✗ MA50>EMA10 | MA200=$544.17 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e472] [cursor=pointer]': Conservative
+            - cell "513.23 $" [ref=e473]:
+              - 'textbox "Price: $513.23 (from resistance levels)" [ref=e474]':
+                - /placeholder: "513.23"
+                - text: "513.23"
+              - text: $
+            - cell "534.00 $" [ref=e475]:
+              - 'textbox "Price: $534.00 (from resistance levels)" [ref=e476]':
+                - /placeholder: "534.00"
+                - text: "534.00"
+              - text: $
+            - cell "32.37" [ref=e477]
+            - cell "5.55" [ref=e478]
+            - cell "$589.60" [ref=e479]:
+              - generic [ref=e480]: $589.60
+            - cell "$566.48" [ref=e481]:
+              - generic [ref=e482]: $566.48
+            - cell "$575.43" [ref=e483]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($575.43) < EMA10 ($582.74). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e484]': $575.43
+            - cell "$544.17" [ref=e485]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($578.04) > MA200 ($544.17). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e486]': $544.17
+            - cell "$582.74" [ref=e487]:
+              - 'generic "🔴 VENDER: Precio ($578.04) < EMA10 ($582.74). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e488]': $582.74
+            - cell "$529.45" [ref=e489]:
+              - 'generic "MA10w: $529.45 | Precio: $578.04. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e490]': $529.45
+            - cell "0.19x" [ref=e491]:
+              - 'generic "Volume (último período): 5.37 | Promedio (promedio): 28.01 | Ratio: 0.19x" [ref=e492]': 0.19x
+            - cell "WAIT" [ref=e493]:
+              - generic "Estrategia no configurada" [ref=e495]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e496]:
+              - generic [ref=e497]:
+                - button "ALERTS ✅" [ref=e498] [cursor=pointer]
+                - button "BUY ✅" [ref=e499] [cursor=pointer]
+                - button "SELL ✅" [ref=e500] [cursor=pointer]
+                - button "🧪 TEST" [ref=e501] [cursor=pointer]
+                - button "Delete" [ref=e502] [cursor=pointer]
+          - row "9 Mover XLM_USDT hacia arriba Mover XLM_USDT hacia abajo XLM_USDT BUY SELL $0.252460 17s Swing-Conservative NO 10 NO Conservative 0.229232 $ 0.238753 $ 27.12 0.0018880000 $0.257509 $0.247411 $0.254813 $0.250606 $0.254421 $0.305399 0.71x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e503]:
+            - cell "9" [ref=e504]
+            - cell "Mover XLM_USDT hacia arriba Mover XLM_USDT hacia abajo XLM_USDT" [ref=e505]:
+              - generic [ref=e506]:
+                - generic [ref=e507]:
+                  - button "Mover XLM_USDT hacia arriba" [ref=e508] [cursor=pointer]: ▲
+                  - button "Mover XLM_USDT hacia abajo" [ref=e509] [cursor=pointer]: ▼
+                - link "XLM_USDT" [ref=e510] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/XLM/USDT
+            - cell "BUY SELL" [ref=e511]:
+              - generic [ref=e512]:
+                - button "BUY" [ref=e513] [cursor=pointer]
+                - button "SELL" [ref=e514] [cursor=pointer]
+            - cell "$0.252460" [ref=e515]
+            - cell "17s" [ref=e516]
+            - cell "Swing-Conservative" [ref=e517]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$0.254421 | MA50=$0.254813 ✓ MA50>EMA10 | MA200=$0.250606 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e518]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e519]:
+              - generic [ref=e520] [cursor=pointer]: "NO"
+            - cell "10" [ref=e521]:
+              - textbox "$0.00" [ref=e522]: "10"
+            - cell "NO" [ref=e523]:
+              - generic [ref=e524] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e525]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$0.254421 | MA50=$0.254813 ✓ MA50>EMA10 | MA200=$0.250606 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e526] [cursor=pointer]': Conservative
+            - cell "0.229232 $" [ref=e527]:
+              - 'textbox "Price: $0.229232 (from resistance levels)" [ref=e528]':
+                - /placeholder: "0.229232"
+                - text: "0.229232"
+              - text: $
+            - cell "0.238753 $" [ref=e529]:
+              - 'textbox "Price: $0.238753 (from resistance levels)" [ref=e530]':
+                - /placeholder: "0.238753"
+                - text: "0.238753"
+              - text: $
+            - cell "27.12" [ref=e531]
+            - cell "0.0018880000" [ref=e532]
+            - cell "$0.257509" [ref=e533]:
+              - generic [ref=e534]: $0.257509
+            - cell "$0.247411" [ref=e535]:
+              - generic [ref=e536]: $0.247411
+            - cell "$0.254813" [ref=e537]:
+              - 'generic "✅ Criterio COMPRA cumplido: MA50 ($0.254813) > EMA10 ($0.254421). Condición necesaria para señal BUY. Last updated: 21:12 GMT+8" [ref=e538]': $0.254813
+            - cell "$0.250606" [ref=e539]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($0.252460) > MA200 ($0.250606). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e540]': $0.250606
+            - cell "$0.254421" [ref=e541]:
+              - 'generic "🔴 VENDER: Precio ($0.252460) < EMA10 ($0.254421). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e542]': $0.254421
+            - cell "$0.305399" [ref=e543]:
+              - 'generic "MA10w: $0.305399 | Precio: $0.252460. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e544]': $0.305399
+            - cell "0.71x" [ref=e545]:
+              - 'generic "Volume (último período): 9,557.00 | Promedio (promedio): 13,477.41 | Ratio: 0.71x" [ref=e546]': 0.71x
+            - cell "WAIT" [ref=e547]:
+              - generic "Estrategia no configurada" [ref=e549]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e550]:
+              - generic [ref=e551]:
+                - button "ALERTS ✅" [ref=e552] [cursor=pointer]
+                - button "BUY ✅" [ref=e553] [cursor=pointer]
+                - button "SELL ✅" [ref=e554] [cursor=pointer]
+                - button "🧪 TEST" [ref=e555] [cursor=pointer]
+                - button "Delete" [ref=e556] [cursor=pointer]
+          - row "10 Mover BNB_USDT hacia arriba Mover BNB_USDT hacia abajo BNB_USDT BUY SELL $905.47 17s Swing-Conservative NO NO Conservative 793.19 $ 854.52 $ 50.00 18.11 $923.58 $887.36 $905.47 $905.47 $905.47 $905.47 - WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e557]:
+            - cell "10" [ref=e558]
+            - cell "Mover BNB_USDT hacia arriba Mover BNB_USDT hacia abajo BNB_USDT" [ref=e559]:
+              - generic [ref=e560]:
+                - generic [ref=e561]:
+                  - button "Mover BNB_USDT hacia arriba" [ref=e562] [cursor=pointer]: ▲
+                  - button "Mover BNB_USDT hacia abajo" [ref=e563] [cursor=pointer]: ▼
+                - link "BNB_USDT" [ref=e564] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/BNB/USDT
+            - cell "BUY SELL" [ref=e565]:
+              - generic [ref=e566]:
+                - button "BUY" [ref=e567] [cursor=pointer]
+                - button "SELL" [ref=e568] [cursor=pointer]
+            - cell "$905.47" [ref=e569]
+            - cell "17s" [ref=e570]
+            - cell "Swing-Conservative" [ref=e571]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$905.47 | MA50=$905.47 ✗ MA50>EMA10 | MA200=$905.47 ✗ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e572]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e573]:
+              - generic [ref=e574] [cursor=pointer]: "NO"
+            - cell [ref=e575]:
+              - textbox "$0.00" [ref=e576]
+            - cell "NO" [ref=e577]:
+              - generic [ref=e578] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e579]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$905.47 | MA50=$905.47 ✗ MA50>EMA10 | MA200=$905.47 ✗ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e580] [cursor=pointer]': Conservative
+            - cell "793.19 $" [ref=e581]:
+              - 'textbox "Price: $793.19 (from resistance levels)" [ref=e582]':
+                - /placeholder: "793.19"
+                - text: "793.19"
+              - text: $
+            - cell "854.52 $" [ref=e583]:
+              - 'textbox "Price: $854.52 (from resistance levels)" [ref=e584]':
+                - /placeholder: "854.52"
+                - text: "854.52"
+              - text: $
+            - cell "50.00" [ref=e585]
+            - cell "18.11" [ref=e586]
+            - cell "$923.58" [ref=e587]:
+              - generic [ref=e588]: $923.58
+            - cell "$887.36" [ref=e589]:
+              - generic [ref=e590]: $887.36
+            - cell "$905.47" [ref=e591]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($905.47) < EMA10 ($905.47). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e592]': $905.47
+            - cell "$905.47" [ref=e593]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($905.47) = MA200 ($905.47). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e594]': $905.47
+            - cell "$905.47" [ref=e595]:
+              - 'generic "🟢 COMPRAR: Precio ($905.47) = EMA10 ($905.47). Tendencia alcista a corto plazo. Last updated: 9:12:59 PM" [ref=e596]': $905.47
+            - cell "$905.47" [ref=e597]:
+              - 'generic "MA10w: $905.47 | Precio: $905.47. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e598]': $905.47
+            - cell "-" [ref=e599]
+            - cell "WAIT" [ref=e600]:
+              - generic "Estrategia no configurada" [ref=e602]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e603]:
+              - generic [ref=e604]:
+                - button "ALERTS ✅" [ref=e605] [cursor=pointer]
+                - button "BUY ✅" [ref=e606] [cursor=pointer]
+                - button "SELL ✅" [ref=e607] [cursor=pointer]
+                - button "🧪 TEST" [ref=e608] [cursor=pointer]
+                - button "Delete" [ref=e609] [cursor=pointer]
+          - row "11 Mover BONK_USDT hacia arriba Mover BONK_USDT hacia abajo BONK_USDT BUY SELL $0.0000098550 17s Swing-Conservative NO 10 NO Conservative 0.0000085887 $ 0.0000089393 $ 31.38 0.00 $0.0000100521 $0.0000096579 $0.0000098316 $0.0000096130 $0.0000099058 $0.0000139092 0.09x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e610]:
+            - cell "11" [ref=e611]
+            - cell "Mover BONK_USDT hacia arriba Mover BONK_USDT hacia abajo BONK_USDT" [ref=e612]:
+              - generic [ref=e613]:
+                - generic [ref=e614]:
+                  - button "Mover BONK_USDT hacia arriba" [ref=e615] [cursor=pointer]: ▲
+                  - button "Mover BONK_USDT hacia abajo" [ref=e616] [cursor=pointer]: ▼
+                - link "BONK_USDT" [ref=e617] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/BONK/USDT
+            - cell "BUY SELL" [ref=e618]:
+              - generic [ref=e619]:
+                - button "BUY" [ref=e620] [cursor=pointer]
+                - button "SELL" [ref=e621] [cursor=pointer]
+            - cell "$0.0000098550" [ref=e622]
+            - cell "17s" [ref=e623]
+            - cell "Swing-Conservative" [ref=e624]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$0.0000099058 | MA50=$0.0000098316 ✗ MA50>EMA10 | MA200=$0.0000096130 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e625]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e626]:
+              - generic [ref=e627] [cursor=pointer]: "NO"
+            - cell "10" [ref=e628]:
+              - textbox "$0.00" [ref=e629]: "10"
+            - cell "NO" [ref=e630]:
+              - generic [ref=e631] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e632]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$0.0000099058 | MA50=$0.0000098316 ✗ MA50>EMA10 | MA200=$0.0000096130 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e633] [cursor=pointer]': Conservative
+            - cell "0.0000085887 $" [ref=e634]:
+              - 'textbox "Price: $0.0000085887 (from resistance levels)" [ref=e635]':
+                - /placeholder: "0.0000085887"
+                - text: "0.0000085887"
+              - text: $
+            - cell "0.0000089393 $" [ref=e636]:
+              - 'textbox "Price: $0.0000089393 (from resistance levels)" [ref=e637]':
+                - /placeholder: "0.0000089393"
+                - text: "0.0000089393"
+              - text: $
+            - cell "31.38" [ref=e638]
+            - cell "0.00" [ref=e639]
+            - cell "$0.0000100521" [ref=e640]:
+              - generic [ref=e641]: $0.0000100521
+            - cell "$0.0000096579" [ref=e642]:
+              - generic [ref=e643]: $0.0000096579
+            - cell "$0.0000098316" [ref=e644]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($0.0000098316) < EMA10 ($0.0000099058). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e645]': $0.0000098316
+            - cell "$0.0000096130" [ref=e646]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($0.0000098550) > MA200 ($0.0000096130). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e647]': $0.0000096130
+            - cell "$0.0000099058" [ref=e648]:
+              - 'generic "🔴 VENDER: Precio ($0.0000098550) < EMA10 ($0.0000099058). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e649]': $0.0000099058
+            - cell "$0.0000139092" [ref=e650]:
+              - 'generic "MA10w: $0.0000139092 | Precio: $0.0000098550. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e651]': $0.0000139092
+            - cell "0.09x" [ref=e652]:
+              - 'generic "Volume (último período): 390,000.00 | Promedio (promedio): 4,403,333.33 | Ratio: 0.09x" [ref=e653]': 0.09x
+            - cell "WAIT" [ref=e654]:
+              - generic "Estrategia no configurada" [ref=e656]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e657]:
+              - generic [ref=e658]:
+                - button "ALERTS ✅" [ref=e659] [cursor=pointer]
+                - button "BUY ✅" [ref=e660] [cursor=pointer]
+                - button "SELL ✅" [ref=e661] [cursor=pointer]
+                - button "🧪 TEST" [ref=e662] [cursor=pointer]
+                - button "Delete" [ref=e663] [cursor=pointer]
+          - row "12 Mover TRX_USDT hacia arriba Mover TRX_USDT hacia abajo TRX_USDT BUY SELL $0.281492 17s Swing-Conservative NO 10 NO Conservative 0.273074 $ 0.284219 $ 50.00 0.0056298472 $0.287122 $0.275863 $0.281492 $0.281492 $0.281492 $0.281492 - WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e664]:
+            - cell "12" [ref=e665]
+            - cell "Mover TRX_USDT hacia arriba Mover TRX_USDT hacia abajo TRX_USDT" [ref=e666]:
+              - generic [ref=e667]:
+                - generic [ref=e668]:
+                  - button "Mover TRX_USDT hacia arriba" [ref=e669] [cursor=pointer]: ▲
+                  - button "Mover TRX_USDT hacia abajo" [ref=e670] [cursor=pointer]: ▼
+                - link "TRX_USDT" [ref=e671] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/TRX/USDT
+            - cell "BUY SELL" [ref=e672]:
+              - generic [ref=e673]:
+                - button "BUY" [ref=e674] [cursor=pointer]
+                - button "SELL" [ref=e675] [cursor=pointer]
+            - cell "$0.281492" [ref=e676]
+            - cell "17s" [ref=e677]
+            - cell "Swing-Conservative" [ref=e678]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$0.281492 | MA50=$0.281492 ✗ MA50>EMA10 | MA200=$0.281492 ✗ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e679]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e680]:
+              - generic [ref=e681] [cursor=pointer]: "NO"
+            - cell "10" [ref=e682]:
+              - textbox "$0.00" [ref=e683]: "10"
+            - cell "NO" [ref=e684]:
+              - generic [ref=e685] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e686]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$0.281492 | MA50=$0.281492 ✗ MA50>EMA10 | MA200=$0.281492 ✗ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e687] [cursor=pointer]': Conservative
+            - cell "0.273074 $" [ref=e688]:
+              - 'textbox "Price: $0.273074 (from resistance levels)" [ref=e689]':
+                - /placeholder: "0.273074"
+                - text: "0.273074"
+              - text: $
+            - cell "0.284219 $" [ref=e690]:
+              - 'textbox "Price: $0.284219 (from resistance levels)" [ref=e691]':
+                - /placeholder: "0.284219"
+                - text: "0.284219"
+              - text: $
+            - cell "50.00" [ref=e692]
+            - cell "0.0056298472" [ref=e693]
+            - cell "$0.287122" [ref=e694]:
+              - generic [ref=e695]: $0.287122
+            - cell "$0.275863" [ref=e696]:
+              - generic [ref=e697]: $0.275863
+            - cell "$0.281492" [ref=e698]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($0.281492) < EMA10 ($0.281492). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e699]': $0.281492
+            - cell "$0.281492" [ref=e700]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($0.281492) = MA200 ($0.281492). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e701]': $0.281492
+            - cell "$0.281492" [ref=e702]:
+              - 'generic "🟢 COMPRAR: Precio ($0.281492) = EMA10 ($0.281492). Tendencia alcista a corto plazo. Last updated: 9:12:59 PM" [ref=e703]': $0.281492
+            - cell "$0.281492" [ref=e704]:
+              - 'generic "MA10w: $0.281492 | Precio: $0.281492. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e705]': $0.281492
+            - cell "-" [ref=e706]
+            - cell "WAIT" [ref=e707]:
+              - generic "Estrategia no configurada" [ref=e709]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e710]:
+              - generic [ref=e711]:
+                - button "ALERTS ✅" [ref=e712] [cursor=pointer]
+                - button "BUY ✅" [ref=e713] [cursor=pointer]
+                - button "SELL ✅" [ref=e714] [cursor=pointer]
+                - button "🧪 TEST" [ref=e715] [cursor=pointer]
+                - button "Delete" [ref=e716] [cursor=pointer]
+          - row "13 Mover UNI_USDT hacia arriba Mover UNI_USDT hacia abajo UNI_USDT BUY SELL $6.01 17s Swing-Conservative NO 10 NO Conservative 5.49 $ 5.74 $ 36.98 0.057900 $6.13 $5.89 $6.01 $6.01 $6.06 $6.70 0.02x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e717]:
+            - cell "13" [ref=e718]
+            - cell "Mover UNI_USDT hacia arriba Mover UNI_USDT hacia abajo UNI_USDT" [ref=e719]:
+              - generic [ref=e720]:
+                - generic [ref=e721]:
+                  - button "Mover UNI_USDT hacia arriba" [ref=e722] [cursor=pointer]: ▲
+                  - button "Mover UNI_USDT hacia abajo" [ref=e723] [cursor=pointer]: ▼
+                - link "UNI_USDT" [ref=e724] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/UNI/USDT
+            - cell "BUY SELL" [ref=e725]:
+              - generic [ref=e726]:
+                - button "BUY" [ref=e727] [cursor=pointer]
+                - button "SELL" [ref=e728] [cursor=pointer]
+            - cell "$6.01" [ref=e729]
+            - cell "17s" [ref=e730]
+            - cell "Swing-Conservative" [ref=e731]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$6.06 | MA50=$6.01 ✗ MA50>EMA10 | MA200=$6.01 ✗ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e732]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e733]:
+              - generic [ref=e734] [cursor=pointer]: "NO"
+            - cell "10" [ref=e735]:
+              - textbox "$0.00" [ref=e736]: "10"
+            - cell "NO" [ref=e737]:
+              - generic [ref=e738] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e739]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$6.06 | MA50=$6.01 ✗ MA50>EMA10 | MA200=$6.01 ✗ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e740] [cursor=pointer]': Conservative
+            - cell "5.49 $" [ref=e741]:
+              - 'textbox "Price: $5.49 (from resistance levels)" [ref=e742]':
+                - /placeholder: "5.49"
+                - text: "5.49"
+              - text: $
+            - cell "5.74 $" [ref=e743]:
+              - 'textbox "Price: $5.74 (from resistance levels)" [ref=e744]':
+                - /placeholder: "5.74"
+                - text: "5.74"
+              - text: $
+            - cell "36.98" [ref=e745]
+            - cell "0.057900" [ref=e746]
+            - cell "$6.13" [ref=e747]:
+              - generic [ref=e748]: $6.13
+            - cell "$5.89" [ref=e749]:
+              - generic [ref=e750]: $5.89
+            - cell "$6.01" [ref=e751]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($6.01) < EMA10 ($6.06). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e752]': $6.01
+            - cell "$6.01" [ref=e753]:
+              - 'generic "❌ Criterio COMPRA bloqueado: Precio ($6.01) < MA200 ($6.01). Esta condición bloquea señal BUY. Si la señal es SELL, viene de otros criterios (RSI > sellAbove o MA50 < EMA10), NO de MA200. Last updated: 9:12:59 PM" [ref=e754]': $6.01
+            - cell "$6.06" [ref=e755]:
+              - 'generic "🔴 VENDER: Precio ($6.01) < EMA10 ($6.06). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e756]': $6.06
+            - cell "$6.70" [ref=e757]:
+              - 'generic "MA10w: $6.70 | Precio: $6.01. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e758]': $6.70
+            - cell "0.02x" [ref=e759]:
+              - 'generic "Volume (último período): 8.80 | Promedio (promedio): 553.59 | Ratio: 0.02x" [ref=e760]': 0.02x
+            - cell "WAIT" [ref=e761]:
+              - generic "Estrategia no configurada" [ref=e763]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e764]:
+              - generic [ref=e765]:
+                - button "ALERTS ✅" [ref=e766] [cursor=pointer]
+                - button "BUY ✅" [ref=e767] [cursor=pointer]
+                - button "SELL ✅" [ref=e768] [cursor=pointer]
+                - button "🧪 TEST" [ref=e769] [cursor=pointer]
+                - button "Delete" [ref=e770] [cursor=pointer]
+          - row "14 Mover DOT_USDT hacia arriba Mover DOT_USDT hacia abajo DOT_USDT BUY SELL $2.32 17s Swing-Conservative NO 10 NO Conservative 1.97 $ 2.06 $ 24.67 0.016200 $2.37 $2.28 $2.30 $2.25 $2.33 $3.06 0.43x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e771]:
+            - cell "14" [ref=e772]
+            - cell "Mover DOT_USDT hacia arriba Mover DOT_USDT hacia abajo DOT_USDT" [ref=e773]:
+              - generic [ref=e774]:
+                - generic [ref=e775]:
+                  - button "Mover DOT_USDT hacia arriba" [ref=e776] [cursor=pointer]: ▲
+                  - button "Mover DOT_USDT hacia abajo" [ref=e777] [cursor=pointer]: ▼
+                - link "DOT_USDT" [ref=e778] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/DOT/USDT
+            - cell "BUY SELL" [ref=e779]:
+              - generic [ref=e780]:
+                - button "BUY" [ref=e781] [cursor=pointer]
+                - button "SELL" [ref=e782] [cursor=pointer]
+            - cell "$2.32" [ref=e783]
+            - cell "17s" [ref=e784]
+            - cell "Swing-Conservative" [ref=e785]:
+              - 'combobox "📊 Estrategia: scalp-conservadora RSI: buy<50 / sell>70 MAs: EMA10=$2.33 SL≈ -0.5% TP≈ +0.8% Notas: Movimientos muy cortos · Slippage importa" [ref=e786]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e787]:
+              - generic [ref=e788] [cursor=pointer]: "NO"
+            - cell "10" [ref=e789]:
+              - textbox "$0.00" [ref=e790]: "10"
+            - cell "NO" [ref=e791]:
+              - generic [ref=e792] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e793]:
+              - 'generic "📊 Estrategia: scalp-conservadora RSI: buy<50 / sell>70 MAs: EMA10=$2.33 SL≈ -0.5% TP≈ +0.8% Notas: Movimientos muy cortos · Slippage importa" [ref=e794] [cursor=pointer]': Conservative
+            - cell "1.97 $" [ref=e795]:
+              - 'textbox "Price: $1.97 (from resistance levels)" [ref=e796]':
+                - /placeholder: "1.97"
+                - text: "1.97"
+              - text: $
+            - cell "2.06 $" [ref=e797]:
+              - 'textbox "Price: $2.06 (from resistance levels)" [ref=e798]':
+                - /placeholder: "2.06"
+                - text: "2.06"
+              - text: $
+            - cell "24.67" [ref=e799]
+            - cell "0.016200" [ref=e800]
+            - cell "$2.37" [ref=e801]:
+              - generic [ref=e802]: $2.37
+            - cell "$2.28" [ref=e803]:
+              - generic [ref=e804]: $2.28
+            - cell "$2.30" [ref=e805]:
+              - 'generic "Precio ($2.32) > MA50 ($2.30). Tendencia alcista a medio plazo. (No usado en estrategia actual) Last updated: 21:12 GMT+8" [ref=e806]': $2.30
+            - cell "$2.25" [ref=e807]:
+              - 'generic "Precio ($2.32) > MA200 ($2.25). Tendencia alcista a largo plazo. (No usado en estrategia actual) Last updated: 9:12:59 PM" [ref=e808]': $2.25
+            - cell "$2.33" [ref=e809]:
+              - 'generic "🔴 VENDER: Precio ($2.32) < EMA10 ($2.33). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e810]': $2.33
+            - cell "$3.06" [ref=e811]:
+              - 'generic "MA10w: $3.06 | Precio: $2.32. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e812]': $3.06
+            - cell "0.43x" [ref=e813]:
+              - 'generic "Volume (último período): 1,595.02 | Promedio (promedio): 3,672.24 | Ratio: 0.43x" [ref=e814]': 0.43x
+            - cell "WAIT" [ref=e815]:
+              - generic "Estrategia no configurada" [ref=e817]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e818]:
+              - generic [ref=e819]:
+                - button "ALERTS ✅" [ref=e820] [cursor=pointer]
+                - button "BUY ✅" [ref=e821] [cursor=pointer]
+                - button "SELL ✅" [ref=e822] [cursor=pointer]
+                - button "🧪 TEST" [ref=e823] [cursor=pointer]
+                - button "Delete" [ref=e824] [cursor=pointer]
+          - row "15 Mover LINK_USDT hacia arriba Mover LINK_USDT hacia abajo LINK_USDT BUY SELL $14.37 17s Swing-Conservative NO 10 NO Conservative 11.88 $ 12.34 $ 37.59 0.169300 $14.65 $14.08 $14.10 $13.23 $14.48 $16.89 0.11x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e825]:
+            - cell "15" [ref=e826]
+            - cell "Mover LINK_USDT hacia arriba Mover LINK_USDT hacia abajo LINK_USDT" [ref=e827]:
+              - generic [ref=e828]:
+                - generic [ref=e829]:
+                  - button "Mover LINK_USDT hacia arriba" [ref=e830] [cursor=pointer]: ▲
+                  - button "Mover LINK_USDT hacia abajo" [ref=e831] [cursor=pointer]: ▼
+                - link "LINK_USDT" [ref=e832] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/LINK/USDT
+            - cell "BUY SELL" [ref=e833]:
+              - generic [ref=e834]:
+                - button "BUY" [ref=e835] [cursor=pointer]
+                - button "SELL" [ref=e836] [cursor=pointer]
+            - cell "$14.37" [ref=e837]
+            - cell "17s" [ref=e838]
+            - cell "Swing-Conservative" [ref=e839]:
+              - 'combobox "📊 Estrategia: scalp-conservadora RSI: buy<50 / sell>70 MAs: EMA10=$14.48 SL≈ -0.5% TP≈ +0.8% Notas: Movimientos muy cortos · Slippage importa" [ref=e840]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e841]:
+              - generic [ref=e842] [cursor=pointer]: "NO"
+            - cell "10" [ref=e843]:
+              - textbox "$0.00" [ref=e844]: "10"
+            - cell "NO" [ref=e845]:
+              - generic [ref=e846] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e847]:
+              - 'generic "📊 Estrategia: scalp-conservadora RSI: buy<50 / sell>70 MAs: EMA10=$14.48 SL≈ -0.5% TP≈ +0.8% Notas: Movimientos muy cortos · Slippage importa" [ref=e848] [cursor=pointer]': Conservative
+            - cell "11.88 $" [ref=e849]:
+              - 'textbox "Price: $11.88 (from resistance levels)" [ref=e850]':
+                - /placeholder: "11.88"
+                - text: "11.88"
+              - text: $
+            - cell "12.34 $" [ref=e851]:
+              - 'textbox "Price: $12.34 (from resistance levels)" [ref=e852]':
+                - /placeholder: "12.34"
+                - text: "12.34"
+              - text: $
+            - cell "37.59" [ref=e853]
+            - cell "0.169300" [ref=e854]
+            - cell "$14.65" [ref=e855]:
+              - generic [ref=e856]: $14.65
+            - cell "$14.08" [ref=e857]:
+              - generic [ref=e858]: $14.08
+            - cell "$14.10" [ref=e859]:
+              - 'generic "Precio ($14.37) > MA50 ($14.10). Tendencia alcista a medio plazo. (No usado en estrategia actual) Last updated: 21:12 GMT+8" [ref=e860]': $14.10
+            - cell "$13.23" [ref=e861]:
+              - 'generic "Precio ($14.37) > MA200 ($13.23). Tendencia alcista a largo plazo. (No usado en estrategia actual) Last updated: 9:12:59 PM" [ref=e862]': $13.23
+            - cell "$14.48" [ref=e863]:
+              - 'generic "🔴 VENDER: Precio ($14.37) < EMA10 ($14.48). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e864]': $14.48
+            - cell "$16.89" [ref=e865]:
+              - 'generic "MA10w: $16.89 | Precio: $14.37. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e866]': $16.89
+            - cell "0.11x" [ref=e867]:
+              - 'generic "Volume (último período): 60.90 | Promedio (promedio): 573.73 | Ratio: 0.11x" [ref=e868]': 0.11x
+            - cell "WAIT" [ref=e869]:
+              - generic "Estrategia no configurada" [ref=e871]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e872]:
+              - generic [ref=e873]:
+                - button "ALERTS ✅" [ref=e874] [cursor=pointer]
+                - button "BUY ✅" [ref=e875] [cursor=pointer]
+                - button "SELL ✅" [ref=e876] [cursor=pointer]
+                - button "🧪 TEST" [ref=e877] [cursor=pointer]
+                - button "Delete" [ref=e878] [cursor=pointer]
+          - row "16 Mover AVAX_USDT hacia arriba Mover AVAX_USDT hacia abajo AVAX_USDT BUY SELL $14.71 17s Swing-Conservative NO 10 NO Conservative 12.63 $ 13.07 $ 44.11 0.069300 $15.01 $14.42 $14.18 $14.20 $14.72 $19.85 0.56x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e879]:
+            - cell "16" [ref=e880]
+            - cell "Mover AVAX_USDT hacia arriba Mover AVAX_USDT hacia abajo AVAX_USDT" [ref=e881]:
+              - generic [ref=e882]:
+                - generic [ref=e883]:
+                  - button "Mover AVAX_USDT hacia arriba" [ref=e884] [cursor=pointer]: ▲
+                  - button "Mover AVAX_USDT hacia abajo" [ref=e885] [cursor=pointer]: ▼
+                - link "AVAX_USDT" [ref=e886] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/AVAX/USDT
+            - cell "BUY SELL" [ref=e887]:
+              - generic [ref=e888]:
+                - button "BUY" [ref=e889] [cursor=pointer]
+                - button "SELL" [ref=e890] [cursor=pointer]
+            - cell "$14.71" [ref=e891]
+            - cell "17s" [ref=e892]
+            - cell "Swing-Conservative" [ref=e893]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$14.72 | MA50=$14.18 ✗ MA50>EMA10 | MA200=$14.20 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e894]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e895]:
+              - generic [ref=e896] [cursor=pointer]: "NO"
+            - cell "10" [ref=e897]:
+              - textbox "$0.00" [ref=e898]: "10"
+            - cell "NO" [ref=e899]:
+              - generic [ref=e900] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e901]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$14.72 | MA50=$14.18 ✗ MA50>EMA10 | MA200=$14.20 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e902] [cursor=pointer]': Conservative
+            - cell "12.63 $" [ref=e903]:
+              - 'textbox "Price: $12.63 (from resistance levels)" [ref=e904]':
+                - /placeholder: "12.63"
+                - text: "12.63"
+              - text: $
+            - cell "13.07 $" [ref=e905]:
+              - 'textbox "Price: $13.07 (from resistance levels)" [ref=e906]':
+                - /placeholder: "13.07"
+                - text: "13.07"
+              - text: $
+            - cell "44.11" [ref=e907]
+            - cell "0.069300" [ref=e908]
+            - cell "$15.01" [ref=e909]:
+              - generic [ref=e910]: $15.01
+            - cell "$14.42" [ref=e911]:
+              - generic [ref=e912]: $14.42
+            - cell "$14.18" [ref=e913]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($14.18) < EMA10 ($14.72). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e914]': $14.18
+            - cell "$14.20" [ref=e915]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($14.71) > MA200 ($14.20). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e916]': $14.20
+            - cell "$14.72" [ref=e917]:
+              - 'generic "🔴 VENDER: Precio ($14.71) < EMA10 ($14.72). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e918]': $14.72
+            - cell "$19.85" [ref=e919]:
+              - 'generic "MA10w: $19.85 | Precio: $14.71. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e920]': $19.85
+            - cell "0.56x" [ref=e921]:
+              - 'generic "Volume (último período): 258.87 | Promedio (promedio): 460.12 | Ratio: 0.56x" [ref=e922]': 0.56x
+            - cell "WAIT" [ref=e923]:
+              - generic "Estrategia no configurada" [ref=e925]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e926]:
+              - generic [ref=e927]:
+                - button "ALERTS ✅" [ref=e928] [cursor=pointer]
+                - button "BUY ✅" [ref=e929] [cursor=pointer]
+                - button "SELL ✅" [ref=e930] [cursor=pointer]
+                - button "🧪 TEST" [ref=e931] [cursor=pointer]
+                - button "Delete" [ref=e932] [cursor=pointer]
+          - row "17 Mover LTC_USDT hacia arriba Mover LTC_USDT hacia abajo LTC_USDT BUY SELL $84.00 17s Swing-Conservative NO 10 NO Conservative 75.30 $ 78.26 $ 26.00 0.545600 $85.68 $82.32 $84.40 $83.53 $84.80 $97.19 0.32x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e933]:
+            - cell "17" [ref=e934]
+            - cell "Mover LTC_USDT hacia arriba Mover LTC_USDT hacia abajo LTC_USDT" [ref=e935]:
+              - generic [ref=e936]:
+                - generic [ref=e937]:
+                  - button "Mover LTC_USDT hacia arriba" [ref=e938] [cursor=pointer]: ▲
+                  - button "Mover LTC_USDT hacia abajo" [ref=e939] [cursor=pointer]: ▼
+                - link "LTC_USDT" [ref=e940] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/LTC/USDT
+            - cell "BUY SELL" [ref=e941]:
+              - generic [ref=e942]:
+                - button "BUY" [ref=e943] [cursor=pointer]
+                - button "SELL" [ref=e944] [cursor=pointer]
+            - cell "$84.00" [ref=e945]
+            - cell "17s" [ref=e946]
+            - cell "Swing-Conservative" [ref=e947]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$84.80 | MA50=$84.40 ✗ MA50>EMA10 | MA200=$83.53 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e948]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e949]:
+              - generic [ref=e950] [cursor=pointer]: "NO"
+            - cell "10" [ref=e951]:
+              - textbox "$0.00" [ref=e952]: "10"
+            - cell "NO" [ref=e953]:
+              - generic [ref=e954] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e955]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$84.80 | MA50=$84.40 ✗ MA50>EMA10 | MA200=$83.53 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e956] [cursor=pointer]': Conservative
+            - cell "75.30 $" [ref=e957]:
+              - 'textbox "Price: $75.30 (from resistance levels)" [ref=e958]':
+                - /placeholder: "75.30"
+                - text: "75.30"
+              - text: $
+            - cell "78.26 $" [ref=e959]:
+              - 'textbox "Price: $78.26 (from resistance levels)" [ref=e960]':
+                - /placeholder: "78.26"
+                - text: "78.26"
+              - text: $
+            - cell "26.00" [ref=e961]
+            - cell "0.545600" [ref=e962]
+            - cell "$85.68" [ref=e963]:
+              - generic [ref=e964]: $85.68
+            - cell "$82.32" [ref=e965]:
+              - generic [ref=e966]: $82.32
+            - cell "$84.40" [ref=e967]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($84.40) < EMA10 ($84.80). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e968]': $84.40
+            - cell "$83.53" [ref=e969]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($84.00) > MA200 ($83.53). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e970]': $83.53
+            - cell "$84.80" [ref=e971]:
+              - 'generic "🔴 VENDER: Precio ($84.00) < EMA10 ($84.80). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e972]': $84.80
+            - cell "$97.19" [ref=e973]:
+              - 'generic "MA10w: $97.19 | Precio: $84.00. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e974]': $97.19
+            - cell "0.32x" [ref=e975]:
+              - 'generic "Volume (último período): 141.85 | Promedio (promedio): 436.47 | Ratio: 0.32x" [ref=e976]': 0.32x
+            - cell "WAIT" [ref=e977]:
+              - generic "Estrategia no configurada" [ref=e979]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e980]:
+              - generic [ref=e981]:
+                - button "ALERTS ✅" [ref=e982] [cursor=pointer]
+                - button "BUY ✅" [ref=e983] [cursor=pointer]
+                - button "SELL ✅" [ref=e984] [cursor=pointer]
+                - button "🧪 TEST" [ref=e985] [cursor=pointer]
+                - button "Delete" [ref=e986] [cursor=pointer]
+          - row "18 Mover BTC_USDT hacia arriba Mover BTC_USDT hacia abajo BTC_USDT BUY SELL $92,596.01 17s Swing-Conservative NO NO Conservative $ $ 39.47 594.65 $94,447.93 $90,744.09 $92,447.33 $90,346.22 $93,083.23 $104,952.70 0.72x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e987]:
+            - cell "18" [ref=e988]
+            - cell "Mover BTC_USDT hacia arriba Mover BTC_USDT hacia abajo BTC_USDT" [ref=e989]:
+              - generic [ref=e990]:
+                - generic [ref=e991]:
+                  - button "Mover BTC_USDT hacia arriba" [ref=e992] [cursor=pointer]: ▲
+                  - button "Mover BTC_USDT hacia abajo" [ref=e993] [cursor=pointer]: ▼
+                - link "BTC_USDT" [ref=e994] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/BTC/USDT
+            - cell "BUY SELL" [ref=e995]:
+              - generic [ref=e996]:
+                - button "BUY" [ref=e997] [cursor=pointer]
+                - button "SELL" [ref=e998] [cursor=pointer]
+            - cell "$92,596.01" [ref=e999]
+            - cell "17s" [ref=e1000]
+            - cell "Swing-Conservative" [ref=e1001]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$93,083.23 | MA50=$92,447.33 ✗ MA50>EMA10 | MA200=$90,346.22 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1002]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e1003]:
+              - generic [ref=e1004] [cursor=pointer]: "NO"
+            - cell [ref=e1005]:
+              - textbox "$0.00" [ref=e1006]
+            - cell "NO" [ref=e1007]:
+              - generic [ref=e1008] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e1009]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$93,083.23 | MA50=$92,447.33 ✗ MA50>EMA10 | MA200=$90,346.22 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1010] [cursor=pointer]': Conservative
+            - cell "$" [ref=e1011]:
+              - 'textbox "Price: $0.00 (from resistance levels)" [ref=e1012]':
+                - /placeholder: Calculating...
+              - text: $
+            - cell "$" [ref=e1013]:
+              - 'textbox "Price: $0.00 (from resistance levels)" [ref=e1014]':
+                - /placeholder: Calculating...
+              - text: $
+            - cell "39.47" [ref=e1015]
+            - cell "594.65" [ref=e1016]
+            - cell "$94,447.93" [ref=e1017]:
+              - generic [ref=e1018]: $94,447.93
+            - cell "$90,744.09" [ref=e1019]:
+              - generic [ref=e1020]: $90,744.09
+            - cell "$92,447.33" [ref=e1021]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($92,447.33) < EMA10 ($93,083.23). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e1022]': $92,447.33
+            - cell "$90,346.22" [ref=e1023]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($92,596.01) > MA200 ($90,346.22). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e1024]': $90,346.22
+            - cell "$93,083.23" [ref=e1025]:
+              - 'generic "🔴 VENDER: Precio ($92,596.01) < EMA10 ($93,083.23). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e1026]': $93,083.23
+            - cell "$104,952.70" [ref=e1027]:
+              - 'generic "MA10w: $104,952.70 | Precio: $92,596.01. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e1028]': $104,952.70
+            - cell "0.72x" [ref=e1029]:
+              - 'generic "Volume (último período): 89.32 | Promedio (promedio): 124.34 | Ratio: 0.72x" [ref=e1030]': 0.72x
+            - cell "WAIT" [ref=e1031]:
+              - generic "Estrategia no configurada" [ref=e1033]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1034]:
+              - generic [ref=e1035]:
+                - button "ALERTS ✅" [ref=e1036] [cursor=pointer]
+                - button "BUY ✅" [ref=e1037] [cursor=pointer]
+                - button "SELL ✅" [ref=e1038] [cursor=pointer]
+                - button "🧪 TEST" [ref=e1039] [cursor=pointer]
+                - button "Delete" [ref=e1040] [cursor=pointer]
+          - row "19 Mover MATIC_USDT hacia arriba Mover MATIC_USDT hacia abajo MATIC_USDT BUY SELL $0.127291 17s Swing-Conservative NO 10 NO Conservative 0.117718 $ 0.126820 $ 50.00 0.0025458265 $0.129837 $0.124745 $0.127291 $0.127291 $0.127291 $0.127291 - WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1041]:
+            - cell "19" [ref=e1042]
+            - cell "Mover MATIC_USDT hacia arriba Mover MATIC_USDT hacia abajo MATIC_USDT" [ref=e1043]:
+              - generic [ref=e1044]:
+                - generic [ref=e1045]:
+                  - button "Mover MATIC_USDT hacia arriba" [ref=e1046] [cursor=pointer]: ▲
+                  - button "Mover MATIC_USDT hacia abajo" [ref=e1047] [cursor=pointer]: ▼
+                - link "MATIC_USDT" [ref=e1048] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/MATIC/USDT
+            - cell "BUY SELL" [ref=e1049]:
+              - generic [ref=e1050]:
+                - button "BUY" [ref=e1051] [cursor=pointer]
+                - button "SELL" [ref=e1052] [cursor=pointer]
+            - cell "$0.127291" [ref=e1053]
+            - cell "17s" [ref=e1054]
+            - cell "Swing-Conservative" [ref=e1055]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$0.127291 | MA50=$0.127291 ✗ MA50>EMA10 | MA200=$0.127291 ✗ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1056]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e1057]:
+              - generic [ref=e1058] [cursor=pointer]: "NO"
+            - cell "10" [ref=e1059]:
+              - textbox "$0.00" [ref=e1060]: "10"
+            - cell "NO" [ref=e1061]:
+              - generic [ref=e1062] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e1063]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$0.127291 | MA50=$0.127291 ✗ MA50>EMA10 | MA200=$0.127291 ✗ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1064] [cursor=pointer]': Conservative
+            - cell "0.117718 $" [ref=e1065]:
+              - 'textbox "Price: $0.117718 (from resistance levels)" [ref=e1066]':
+                - /placeholder: "0.117718"
+                - text: "0.117718"
+              - text: $
+            - cell "0.126820 $" [ref=e1067]:
+              - 'textbox "Price: $0.126820 (from resistance levels)" [ref=e1068]':
+                - /placeholder: "0.126820"
+                - text: "0.126820"
+              - text: $
+            - cell "50.00" [ref=e1069]
+            - cell "0.0025458265" [ref=e1070]
+            - cell "$0.129837" [ref=e1071]:
+              - generic [ref=e1072]: $0.129837
+            - cell "$0.124745" [ref=e1073]:
+              - generic [ref=e1074]: $0.124745
+            - cell "$0.127291" [ref=e1075]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($0.127291) < EMA10 ($0.127291). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e1076]': $0.127291
+            - cell "$0.127291" [ref=e1077]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($0.127291) = MA200 ($0.127291). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e1078]': $0.127291
+            - cell "$0.127291" [ref=e1079]:
+              - 'generic "🟢 COMPRAR: Precio ($0.127291) = EMA10 ($0.127291). Tendencia alcista a corto plazo. Last updated: 9:12:59 PM" [ref=e1080]': $0.127291
+            - cell "$0.127291" [ref=e1081]:
+              - 'generic "MA10w: $0.127291 | Precio: $0.127291. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e1082]': $0.127291
+            - cell "-" [ref=e1083]
+            - cell "WAIT" [ref=e1084]:
+              - generic "Estrategia no configurada" [ref=e1086]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1087]:
+              - generic [ref=e1088]:
+                - button "ALERTS ✅" [ref=e1089] [cursor=pointer]
+                - button "BUY ✅" [ref=e1090] [cursor=pointer]
+                - button "SELL ✅" [ref=e1091] [cursor=pointer]
+                - button "🧪 TEST" [ref=e1092] [cursor=pointer]
+                - button "Delete" [ref=e1093] [cursor=pointer]
+          - row "20 Mover ETC_USDT hacia arriba Mover ETC_USDT hacia abajo ETC_USDT BUY SELL $13.93 17s Swing-Conservative NO 10 NO Conservative 12.80 $ 13.22 $ 25.69 0.075200 $14.21 $13.66 $13.88 $13.70 $14.03 $15.97 0.08x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1094]:
+            - cell "20" [ref=e1095]
+            - cell "Mover ETC_USDT hacia arriba Mover ETC_USDT hacia abajo ETC_USDT" [ref=e1096]:
+              - generic [ref=e1097]:
+                - generic [ref=e1098]:
+                  - button "Mover ETC_USDT hacia arriba" [ref=e1099] [cursor=pointer]: ▲
+                  - button "Mover ETC_USDT hacia abajo" [ref=e1100] [cursor=pointer]: ▼
+                - link "ETC_USDT" [ref=e1101] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/ETC/USDT
+            - cell "BUY SELL" [ref=e1102]:
+              - generic [ref=e1103]:
+                - button "BUY" [ref=e1104] [cursor=pointer]
+                - button "SELL" [ref=e1105] [cursor=pointer]
+            - cell "$13.93" [ref=e1106]
+            - cell "17s" [ref=e1107]
+            - cell "Swing-Conservative" [ref=e1108]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$14.03 | MA50=$13.88 ✗ MA50>EMA10 | MA200=$13.70 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1109]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e1110]:
+              - generic [ref=e1111] [cursor=pointer]: "NO"
+            - cell "10" [ref=e1112]:
+              - textbox "$0.00" [ref=e1113]: "10"
+            - cell "NO" [ref=e1114]:
+              - generic [ref=e1115] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e1116]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$14.03 | MA50=$13.88 ✗ MA50>EMA10 | MA200=$13.70 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1117] [cursor=pointer]': Conservative
+            - cell "12.80 $" [ref=e1118]:
+              - 'textbox "Price: $12.80 (from resistance levels)" [ref=e1119]':
+                - /placeholder: "12.80"
+                - text: "12.80"
+              - text: $
+            - cell "13.22 $" [ref=e1120]:
+              - 'textbox "Price: $13.22 (from resistance levels)" [ref=e1121]':
+                - /placeholder: "13.22"
+                - text: "13.22"
+              - text: $
+            - cell "25.69" [ref=e1122]
+            - cell "0.075200" [ref=e1123]
+            - cell "$14.21" [ref=e1124]:
+              - generic [ref=e1125]: $14.21
+            - cell "$13.66" [ref=e1126]:
+              - generic [ref=e1127]: $13.66
+            - cell "$13.88" [ref=e1128]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($13.88) < EMA10 ($14.03). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e1129]': $13.88
+            - cell "$13.70" [ref=e1130]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($13.93) > MA200 ($13.70). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e1131]': $13.70
+            - cell "$14.03" [ref=e1132]:
+              - 'generic "🔴 VENDER: Precio ($13.93) < EMA10 ($14.03). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e1133]': $14.03
+            - cell "$15.97" [ref=e1134]:
+              - 'generic "MA10w: $15.97 | Precio: $13.93. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e1135]': $15.97
+            - cell "0.08x" [ref=e1136]:
+              - 'generic "Volume (último período): 2.16 | Promedio (promedio): 26.77 | Ratio: 0.08x" [ref=e1137]': 0.08x
+            - cell "WAIT" [ref=e1138]:
+              - generic "Estrategia no configurada" [ref=e1140]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1141]:
+              - generic [ref=e1142]:
+                - button "ALERTS ✅" [ref=e1143] [cursor=pointer]
+                - button "BUY ✅" [ref=e1144] [cursor=pointer]
+                - button "SELL ✅" [ref=e1145] [cursor=pointer]
+                - button "🧪 TEST" [ref=e1146] [cursor=pointer]
+                - button "Delete" [ref=e1147] [cursor=pointer]
+          - row "21 Mover SOL_USDT hacia arriba Mover SOL_USDT hacia abajo SOL_USDT BUY SELL $142.41 17s Swing-Conservative NO 10 YES Conservative 124.12 $ 128.09 $ 37.93 1.36 $145.26 $139.56 $141.19 $137.35 $143.22 $175.36 0.60x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1148]:
+            - cell "21" [ref=e1149]
+            - cell "Mover SOL_USDT hacia arriba Mover SOL_USDT hacia abajo SOL_USDT" [ref=e1150]:
+              - generic [ref=e1151]:
+                - generic [ref=e1152]:
+                  - button "Mover SOL_USDT hacia arriba" [ref=e1153] [cursor=pointer]: ▲
+                  - button "Mover SOL_USDT hacia abajo" [ref=e1154] [cursor=pointer]: ▼
+                - link "SOL_USDT" [ref=e1155] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/SOL/USDT
+            - cell "BUY SELL" [ref=e1156]:
+              - generic [ref=e1157]:
+                - button "BUY" [ref=e1158] [cursor=pointer]
+                - button "SELL" [ref=e1159] [cursor=pointer]
+            - cell "$142.41" [ref=e1160]
+            - cell "17s" [ref=e1161]
+            - cell "Swing-Conservative" [ref=e1162]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$143.22 | MA50=$141.19 ✗ MA50>EMA10 | MA200=$137.35 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1163]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e1164]:
+              - generic [ref=e1165] [cursor=pointer]: "NO"
+            - cell "10" [ref=e1166]:
+              - textbox "$0.00" [ref=e1167]: "10"
+            - cell "YES" [ref=e1168]:
+              - generic [ref=e1169] [cursor=pointer]: "YES"
+            - cell "Conservative" [ref=e1170]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$143.22 | MA50=$141.19 ✗ MA50>EMA10 | MA200=$137.35 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1171] [cursor=pointer]': Conservative
+            - cell "124.12 $" [ref=e1172]:
+              - 'textbox "Price: $124.12 (from resistance levels)" [ref=e1173]':
+                - /placeholder: "124.12"
+                - text: "124.12"
+              - text: $
+            - cell "128.09 $" [ref=e1174]:
+              - 'textbox "Price: $128.09 (from resistance levels)" [ref=e1175]':
+                - /placeholder: "128.09"
+                - text: "128.09"
+              - text: $
+            - cell "37.93" [ref=e1176]
+            - cell "1.36" [ref=e1177]
+            - cell "$145.26" [ref=e1178]:
+              - generic [ref=e1179]: $145.26
+            - cell "$139.56" [ref=e1180]:
+              - generic [ref=e1181]: $139.56
+            - cell "$141.19" [ref=e1182]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($141.19) < EMA10 ($143.22). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e1183]': $141.19
+            - cell "$137.35" [ref=e1184]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($142.41) > MA200 ($137.35). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e1185]': $137.35
+            - cell "$143.22" [ref=e1186]:
+              - 'generic "🔴 VENDER: Precio ($142.41) < EMA10 ($143.22). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e1187]': $143.22
+            - cell "$175.36" [ref=e1188]:
+              - 'generic "MA10w: $175.36 | Precio: $142.41. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e1189]': $175.36
+            - cell "0.60x" [ref=e1190]:
+              - 'generic "Volume (último período): 707.79 | Promedio (promedio): 1,176.48 | Ratio: 0.60x" [ref=e1191]': 0.60x
+            - cell "WAIT" [ref=e1192]:
+              - 'generic "📊 Estrategia: swing-conservadora 🟢 CRITERIOS BUY (todos deben cumplirse): • RSI < 40 (actual: 37.93?) • MA50 > EMA10 ? - MA50: $141.19 - EMA10: $143.22 • Precio > MA200 ? - Precio: $142.41 - MA200: $137.35 • Volume ≥ 0.5x promedio ? - Ratio actual: 0.60x (mismo valor que columna Volume) - Volume (último período): 707.79 - Promedio: 1,176.48 🔴 CRITERIOS SELL (AMBOS deben cumplirse): • RSI > 70 (actual: 37.93✗) • MA50 < EMA10 (diferencia ≥0.5%) ✓ - MA50: $141.19 - EMA10: $143.22 - Diferencia: 1.43% (requiere ≥0.5%) • Volume ≥ 0.5x promedio ✓ - Ratio actual: 0.60x (mismo valor que columna Volume) - Volume (último período): 707.79 - Promedio: 1,176.48 📌 ESTADO ACTUAL (backend): → Señal: WAIT (no se cumplen todos los criterios BUY según backend) ℹ️ Algunos criterios no están disponibles (None)" [ref=e1194]': WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1195]:
+              - generic [ref=e1196]:
+                - button "ALERTS ✅" [ref=e1197] [cursor=pointer]
+                - button "BUY ✅" [ref=e1198] [cursor=pointer]
+                - button "SELL ✅" [ref=e1199] [cursor=pointer]
+                - button "🧪 TEST" [ref=e1200] [cursor=pointer]
+                - button "Delete" [ref=e1201] [cursor=pointer]
+          - row "22 Mover FIL_USDT hacia arriba Mover FIL_USDT hacia abajo FIL_USDT BUY SELL $1.59 17s Swing-Conservative NO 10 NO Conservative 1.43 $ 1.49 $ 46.72 0.011300 $1.62 $1.56 $1.57 $1.58 $1.60 $1.86 0.03x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1202]:
+            - cell "22" [ref=e1203]
+            - cell "Mover FIL_USDT hacia arriba Mover FIL_USDT hacia abajo FIL_USDT" [ref=e1204]:
+              - generic [ref=e1205]:
+                - generic [ref=e1206]:
+                  - button "Mover FIL_USDT hacia arriba" [ref=e1207] [cursor=pointer]: ▲
+                  - button "Mover FIL_USDT hacia abajo" [ref=e1208] [cursor=pointer]: ▼
+                - link "FIL_USDT" [ref=e1209] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/FIL/USDT
+            - cell "BUY SELL" [ref=e1210]:
+              - generic [ref=e1211]:
+                - button "BUY" [ref=e1212] [cursor=pointer]
+                - button "SELL" [ref=e1213] [cursor=pointer]
+            - cell "$1.59" [ref=e1214]
+            - cell "17s" [ref=e1215]
+            - cell "Swing-Conservative" [ref=e1216]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$1.60 | MA50=$1.57 ✗ MA50>EMA10 | MA200=$1.58 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1217]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e1218]:
+              - generic [ref=e1219] [cursor=pointer]: "NO"
+            - cell "10" [ref=e1220]:
+              - textbox "$0.00" [ref=e1221]: "10"
+            - cell "NO" [ref=e1222]:
+              - generic [ref=e1223] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e1224]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$1.60 | MA50=$1.57 ✗ MA50>EMA10 | MA200=$1.58 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1225] [cursor=pointer]': Conservative
+            - cell "1.43 $" [ref=e1226]:
+              - 'textbox "Price: $1.43 (from resistance levels)" [ref=e1227]':
+                - /placeholder: "1.43"
+                - text: "1.43"
+              - text: $
+            - cell "1.49 $" [ref=e1228]:
+              - 'textbox "Price: $1.49 (from resistance levels)" [ref=e1229]':
+                - /placeholder: "1.49"
+                - text: "1.49"
+              - text: $
+            - cell "46.72" [ref=e1230]
+            - cell "0.011300" [ref=e1231]
+            - cell "$1.62" [ref=e1232]:
+              - generic [ref=e1233]: $1.62
+            - cell "$1.56" [ref=e1234]:
+              - generic [ref=e1235]: $1.56
+            - cell "$1.57" [ref=e1236]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($1.57) < EMA10 ($1.60). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e1237]': $1.57
+            - cell "$1.58" [ref=e1238]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($1.59) > MA200 ($1.58). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e1239]': $1.58
+            - cell "$1.60" [ref=e1240]:
+              - 'generic "🔴 VENDER: Precio ($1.59) < EMA10 ($1.60). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e1241]': $1.60
+            - cell "$1.86" [ref=e1242]:
+              - 'generic "MA10w: $1.86 | Precio: $1.59. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e1243]': $1.86
+            - cell "0.03x" [ref=e1244]:
+              - 'generic "Volume (último período): 1.52 | Promedio (promedio): 49.17 | Ratio: 0.03x" [ref=e1245]': 0.03x
+            - cell "WAIT" [ref=e1246]:
+              - generic "Estrategia no configurada" [ref=e1248]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1249]:
+              - generic [ref=e1250]:
+                - button "ALERTS ✅" [ref=e1251] [cursor=pointer]
+                - button "BUY ✅" [ref=e1252] [cursor=pointer]
+                - button "SELL ✅" [ref=e1253] [cursor=pointer]
+                - button "🧪 TEST" [ref=e1254] [cursor=pointer]
+                - button "Delete" [ref=e1255] [cursor=pointer]
+          - row "23 Mover XRP_USDT hacia arriba Mover XRP_USDT hacia abajo XRP_USDT BUY SELL $2.14 17s Swing-Conservative NO 1000 NO Conservative 1.99 $ 2.07 $ 20.44 0.015500 $2.18 $2.10 $2.17 $2.16 $2.16 $2.44 0.20x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1256]:
+            - cell "23" [ref=e1257]
+            - cell "Mover XRP_USDT hacia arriba Mover XRP_USDT hacia abajo XRP_USDT" [ref=e1258]:
+              - generic [ref=e1259]:
+                - generic [ref=e1260]:
+                  - button "Mover XRP_USDT hacia arriba" [ref=e1261] [cursor=pointer]: ▲
+                  - button "Mover XRP_USDT hacia abajo" [ref=e1262] [cursor=pointer]: ▼
+                - link "XRP_USDT" [ref=e1263] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/XRP/USDT
+            - cell "BUY SELL" [ref=e1264]:
+              - generic [ref=e1265]:
+                - button "BUY" [ref=e1266] [cursor=pointer]
+                - button "SELL" [ref=e1267] [cursor=pointer]
+            - cell "$2.14" [ref=e1268]
+            - cell "17s" [ref=e1269]
+            - cell "Swing-Conservative" [ref=e1270]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$2.16 | MA50=$2.17 ✓ MA50>EMA10 | MA200=$2.16 ✗ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1271]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e1272]:
+              - generic [ref=e1273] [cursor=pointer]: "NO"
+            - cell "1000" [ref=e1274]:
+              - textbox "$0.00" [ref=e1275]: "1000"
+            - cell "NO" [ref=e1276]:
+              - generic [ref=e1277] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e1278]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$2.16 | MA50=$2.17 ✓ MA50>EMA10 | MA200=$2.16 ✗ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1279] [cursor=pointer]': Conservative
+            - cell "1.99 $" [ref=e1280]:
+              - 'textbox "Price: $1.99 (from resistance levels)" [ref=e1281]':
+                - /placeholder: "1.99"
+                - text: "1.99"
+              - text: $
+            - cell "2.07 $" [ref=e1282]:
+              - 'textbox "Price: $2.07 (from resistance levels)" [ref=e1283]':
+                - /placeholder: "2.07"
+                - text: "2.07"
+              - text: $
+            - cell "20.44" [ref=e1284]
+            - cell "0.015500" [ref=e1285]
+            - cell "$2.18" [ref=e1286]:
+              - generic [ref=e1287]: $2.18
+            - cell "$2.10" [ref=e1288]:
+              - generic [ref=e1289]: $2.10
+            - cell "$2.17" [ref=e1290]:
+              - 'generic "✅ Criterio COMPRA cumplido: MA50 ($2.17) > EMA10 ($2.16). Condición necesaria para señal BUY. Last updated: 21:12 GMT+8" [ref=e1291]': $2.17
+            - cell "$2.16" [ref=e1292]:
+              - 'generic "❌ Criterio COMPRA bloqueado: Precio ($2.14) < MA200 ($2.16). Esta condición bloquea señal BUY. Si la señal es SELL, viene de otros criterios (RSI > sellAbove o MA50 < EMA10), NO de MA200. Last updated: 9:12:59 PM" [ref=e1293]': $2.16
+            - cell "$2.16" [ref=e1294]:
+              - 'generic "🔴 VENDER: Precio ($2.14) < EMA10 ($2.16). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e1295]': $2.16
+            - cell "$2.44" [ref=e1296]:
+              - 'generic "MA10w: $2.44 | Precio: $2.14. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e1297]': $2.44
+            - cell "0.20x" [ref=e1298]:
+              - 'generic "Volume (último período): 67,970.90 | Promedio (promedio): 340,942.75 | Ratio: 0.20x" [ref=e1299]': 0.20x
+            - cell "WAIT" [ref=e1300]:
+              - generic "Estrategia no configurada" [ref=e1302]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1303]:
+              - generic [ref=e1304]:
+                - button "ALERTS ✅" [ref=e1305] [cursor=pointer]
+                - button "BUY ✅" [ref=e1306] [cursor=pointer]
+                - button "SELL ✅" [ref=e1307] [cursor=pointer]
+                - button "🧪 TEST" [ref=e1308] [cursor=pointer]
+                - button "Delete" [ref=e1309] [cursor=pointer]
+          - row "24 Mover ATOM_USDT hacia arriba Mover ATOM_USDT hacia abajo ATOM_USDT BUY SELL $2.36 17s Swing-Conservative NO 10 NO Conservative 2.18 $ 2.27 $ 28.41 0.014300 $2.41 $2.31 $2.37 $2.41 $2.36 $3.14 0.21x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1310]:
+            - cell "24" [ref=e1311]
+            - cell "Mover ATOM_USDT hacia arriba Mover ATOM_USDT hacia abajo ATOM_USDT" [ref=e1312]:
+              - generic [ref=e1313]:
+                - generic [ref=e1314]:
+                  - button "Mover ATOM_USDT hacia arriba" [ref=e1315] [cursor=pointer]: ▲
+                  - button "Mover ATOM_USDT hacia abajo" [ref=e1316] [cursor=pointer]: ▼
+                - link "ATOM_USDT" [ref=e1317] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/ATOM/USDT
+            - cell "BUY SELL" [ref=e1318]:
+              - generic [ref=e1319]:
+                - button "BUY" [ref=e1320] [cursor=pointer]
+                - button "SELL" [ref=e1321] [cursor=pointer]
+            - cell "$2.36" [ref=e1322]
+            - cell "17s" [ref=e1323]
+            - cell "Swing-Conservative" [ref=e1324]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$2.36 | MA50=$2.37 ✓ MA50>EMA10 | MA200=$2.41 ✗ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1325]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e1326]:
+              - generic [ref=e1327] [cursor=pointer]: "NO"
+            - cell "10" [ref=e1328]:
+              - textbox "$0.00" [ref=e1329]: "10"
+            - cell "NO" [ref=e1330]:
+              - generic [ref=e1331] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e1332]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$2.36 | MA50=$2.37 ✓ MA50>EMA10 | MA200=$2.41 ✗ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1333] [cursor=pointer]': Conservative
+            - cell "2.18 $" [ref=e1334]:
+              - 'textbox "Price: $2.18 (from resistance levels)" [ref=e1335]':
+                - /placeholder: "2.18"
+                - text: "2.18"
+              - text: $
+            - cell "2.27 $" [ref=e1336]:
+              - 'textbox "Price: $2.27 (from resistance levels)" [ref=e1337]':
+                - /placeholder: "2.27"
+                - text: "2.27"
+              - text: $
+            - cell "28.41" [ref=e1338]
+            - cell "0.014300" [ref=e1339]
+            - cell "$2.41" [ref=e1340]:
+              - generic [ref=e1341]: $2.41
+            - cell "$2.31" [ref=e1342]:
+              - generic [ref=e1343]: $2.31
+            - cell "$2.37" [ref=e1344]:
+              - 'generic "✅ Criterio COMPRA cumplido: MA50 ($2.37) > EMA10 ($2.36). Condición necesaria para señal BUY. Last updated: 21:12 GMT+8" [ref=e1345]': $2.37
+            - cell "$2.41" [ref=e1346]:
+              - 'generic "❌ Criterio COMPRA bloqueado: Precio ($2.36) < MA200 ($2.41). Esta condición bloquea señal BUY. Si la señal es SELL, viene de otros criterios (RSI > sellAbove o MA50 < EMA10), NO de MA200. Last updated: 9:12:59 PM" [ref=e1347]': $2.41
+            - cell "$2.36" [ref=e1348]:
+              - 'generic "🔴 VENDER: Precio ($2.36) < EMA10 ($2.36). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e1349]': $2.36
+            - cell "$3.14" [ref=e1350]:
+              - 'generic "MA10w: $3.14 | Precio: $2.36. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e1351]': $3.14
+            - cell "0.21x" [ref=e1352]:
+              - 'generic "Volume (último período): 218.65 | Promedio (promedio): 1,018.96 | Ratio: 0.21x" [ref=e1353]': 0.21x
+            - cell "WAIT" [ref=e1354]:
+              - generic "Estrategia no configurada" [ref=e1356]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1357]:
+              - generic [ref=e1358]:
+                - button "ALERTS ✅" [ref=e1359] [cursor=pointer]
+                - button "BUY ✅" [ref=e1360] [cursor=pointer]
+                - button "SELL ✅" [ref=e1361] [cursor=pointer]
+                - button "🧪 TEST" [ref=e1362] [cursor=pointer]
+                - button "Delete" [ref=e1363] [cursor=pointer]
+          - row "25 Mover TON_USDT hacia arriba Mover TON_USDT hacia abajo TON_USDT BUY SELL $1.61 17s Scalp-Aggressive NO 10 NO Conservative 1.46 $ 1.51 $ 23.75 0.0089000000 $1.64 $1.58 $1.60 $1.58 $1.62 $2.12 10.7x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1364]:
+            - cell "25" [ref=e1365]
+            - cell "Mover TON_USDT hacia arriba Mover TON_USDT hacia abajo TON_USDT" [ref=e1366]:
+              - generic [ref=e1367]:
+                - generic [ref=e1368]:
+                  - button "Mover TON_USDT hacia arriba" [ref=e1369] [cursor=pointer]: ▲
+                  - button "Mover TON_USDT hacia abajo" [ref=e1370] [cursor=pointer]: ▼
+                - link "TON_USDT" [ref=e1371] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/TON/USDT
+            - cell "BUY SELL" [ref=e1372]:
+              - generic [ref=e1373]:
+                - button "BUY" [ref=e1374] [cursor=pointer]
+                - button "SELL" [ref=e1375] [cursor=pointer]
+            - cell "$1.61" [ref=e1376]
+            - cell "17s" [ref=e1377]
+            - cell "Scalp-Aggressive" [ref=e1378]:
+              - 'combobox "📊 Estrategia: scalp-agresiva RSI: buy<55 / sell>65 MAs: no MA checks SL≈ -0.35% TP≈ +0.5% Notas: Entradas anticipadas · Muchas micro-salidas" [ref=e1379]':
+                - option "Swing-Conservative"
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive" [selected]
+                - option "Custom"
+            - cell "NO" [ref=e1380]:
+              - generic [ref=e1381] [cursor=pointer]: "NO"
+            - cell "10" [ref=e1382]:
+              - textbox "$0.00" [ref=e1383]: "10"
+            - cell "NO" [ref=e1384]:
+              - generic [ref=e1385] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e1386]:
+              - 'generic "📊 Estrategia: scalp-conservadora RSI: buy<50 / sell>70 MAs: EMA10=$1.62 SL≈ -0.5% TP≈ +0.8% Notas: Movimientos muy cortos · Slippage importa" [ref=e1387] [cursor=pointer]': Conservative
+            - cell "1.46 $" [ref=e1388]:
+              - 'textbox "Price: $1.46 (from resistance levels)" [ref=e1389]':
+                - /placeholder: "1.46"
+                - text: "1.46"
+              - text: $
+            - cell "1.51 $" [ref=e1390]:
+              - 'textbox "Price: $1.51 (from resistance levels)" [ref=e1391]':
+                - /placeholder: "1.51"
+                - text: "1.51"
+              - text: $
+            - cell "23.75" [ref=e1392]
+            - cell "0.0089000000" [ref=e1393]
+            - cell "$1.64" [ref=e1394]:
+              - generic [ref=e1395]: $1.64
+            - cell "$1.58" [ref=e1396]:
+              - generic [ref=e1397]: $1.58
+            - cell "$1.60" [ref=e1398]:
+              - 'generic "Precio ($1.61) > MA50 ($1.60). Tendencia alcista a medio plazo. (No usado en estrategia actual) Last updated: 21:12 GMT+8" [ref=e1399]': $1.60
+            - cell "$1.58" [ref=e1400]:
+              - 'generic "Precio ($1.61) > MA200 ($1.58). Tendencia alcista a largo plazo. (No usado en estrategia actual) Last updated: 9:12:59 PM" [ref=e1401]': $1.58
+            - cell "$1.62" [ref=e1402]:
+              - 'generic "🔴 VENDER: Precio ($1.61) < EMA10 ($1.62). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e1403]': $1.62
+            - cell "$2.12" [ref=e1404]:
+              - 'generic "MA10w: $2.12 | Precio: $1.61. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e1405]': $2.12
+            - cell "10.7x" [ref=e1406]:
+              - 'generic "Volume (último período): 2,211.68 | Promedio (promedio): 206.18 | Ratio: 10.7x" [ref=e1407]': 10.7x
+            - cell "WAIT" [ref=e1408]:
+              - 'generic "📊 Estrategia: scalp-agresiva 🟢 CRITERIOS BUY (todos deben cumplirse): • RSI < 55 (actual: 23.75?) • Volume ≥ 0.3x promedio ? - Ratio actual: 10.73x (mismo valor que columna Volume) - Volume (último período): 2,211.68 - Promedio: 206.18 • No se requieren MAs 🔴 CRITERIOS SELL: • RSI > 65 (actual: 23.75✗) • Volume ≥ 0.3x promedio ✓ - Ratio actual: 10.73x (mismo valor que columna Volume) - Volume (último período): 2,211.68 - Promedio: 206.18 📌 ESTADO ACTUAL (backend): → Señal: WAIT (no se cumplen todos los criterios BUY según backend) ℹ️ Algunos criterios no están disponibles (None)" [ref=e1410]': WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1411]:
+              - generic [ref=e1412]:
+                - button "ALERTS ✅" [ref=e1413] [cursor=pointer]
+                - button "BUY ✅" [ref=e1414] [cursor=pointer]
+                - button "SELL ✅" [ref=e1415] [cursor=pointer]
+                - button "🧪 TEST" [ref=e1416] [cursor=pointer]
+                - button "Delete" [ref=e1417] [cursor=pointer]
+          - row "26 Mover AKT_USDT hacia arriba Mover AKT_USDT hacia abajo AKT_USDT BUY SELL $0.473300 17s Swing-Aggressive NO 300 NO Conservative 0.442682 $ 0.459478 $ 26.21 0.0025070000 $0.482766 $0.463834 $0.477928 $0.493346 $0.475894 $0.704341 0.00x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1418]:
+            - cell "26" [ref=e1419]
+            - cell "Mover AKT_USDT hacia arriba Mover AKT_USDT hacia abajo AKT_USDT" [ref=e1420]:
+              - generic [ref=e1421]:
+                - generic [ref=e1422]:
+                  - button "Mover AKT_USDT hacia arriba" [ref=e1423] [cursor=pointer]: ▲
+                  - button "Mover AKT_USDT hacia abajo" [ref=e1424] [cursor=pointer]: ▼
+                - link "AKT_USDT" [ref=e1425] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/AKT/USDT
+            - cell "BUY SELL" [ref=e1426]:
+              - generic [ref=e1427]:
+                - button "BUY" [ref=e1428] [cursor=pointer]
+                - button "SELL" [ref=e1429] [cursor=pointer]
+            - cell "$0.473300" [ref=e1430]
+            - cell "17s" [ref=e1431]
+            - cell "Swing-Aggressive" [ref=e1432]:
+              - 'combobox "📊 Estrategia: swing-agresiva RSI: buy<45 / sell>68 MAs: EMA10=$0.475894 | MA50=$0.477928 ✓ MA50>EMA10 | MA200=$0.493346 ✗ Price>MA200 SL≈ price - 1×ATR TP≈ price + 1.2×(price-SL) Notas: Entrada más temprana · SL más estrecho" [ref=e1433]':
+                - option "Swing-Conservative"
+                - option "Swing-Aggressive" [selected]
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e1434]:
+              - generic [ref=e1435] [cursor=pointer]: "NO"
+            - cell "300" [ref=e1436]:
+              - textbox "$0.00" [ref=e1437]: "300"
+            - cell "NO" [ref=e1438]:
+              - generic [ref=e1439] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e1440]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$0.475894 | MA50=$0.477928 ✓ MA50>EMA10 | MA200=$0.493346 ✗ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1441] [cursor=pointer]': Conservative
+            - cell "0.442682 $" [ref=e1442]:
+              - 'textbox "Price: $0.442682 (from resistance levels)" [ref=e1443]':
+                - /placeholder: "0.442682"
+                - text: "0.442682"
+              - text: $
+            - cell "0.459478 $" [ref=e1444]:
+              - 'textbox "Price: $0.459478 (from resistance levels)" [ref=e1445]':
+                - /placeholder: "0.459478"
+                - text: "0.459478"
+              - text: $
+            - cell "26.21" [ref=e1446]
+            - cell "0.0025070000" [ref=e1447]
+            - cell "$0.482766" [ref=e1448]:
+              - generic [ref=e1449]: $0.482766
+            - cell "$0.463834" [ref=e1450]:
+              - generic [ref=e1451]: $0.463834
+            - cell "$0.477928" [ref=e1452]:
+              - 'generic "✅ Criterio COMPRA cumplido: MA50 ($0.477928) > EMA10 ($0.475894). Condición necesaria para señal BUY. Last updated: 21:12 GMT+8" [ref=e1453]': $0.477928
+            - cell "$0.493346" [ref=e1454]:
+              - 'generic "❌ Criterio COMPRA bloqueado: Precio ($0.473300) < MA200 ($0.493346). Esta condición bloquea señal BUY. Si la señal es SELL, viene de otros criterios (RSI > sellAbove o MA50 < EMA10), NO de MA200. Last updated: 9:12:59 PM" [ref=e1455]': $0.493346
+            - cell "$0.475894" [ref=e1456]:
+              - 'generic "🔴 VENDER: Precio ($0.473300) < EMA10 ($0.475894). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e1457]': $0.475894
+            - cell "$0.704341" [ref=e1458]:
+              - 'generic "MA10w: $0.704341 | Precio: $0.473300. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e1459]': $0.704341
+            - cell "0.00x" [ref=e1460]:
+              - 'generic "Volume (último período): 0.00 | Promedio (promedio): 170.17 | Ratio: 0.00x" [ref=e1461]': 0.00x
+            - cell "WAIT" [ref=e1462]:
+              - 'generic "📊 Estrategia: swing-agresiva 🟢 CRITERIOS BUY (todos deben cumplirse): • RSI < 45 (actual: 26.21?) • MA50 > EMA10 ? - MA50: $0.477928 - EMA10: $0.475894 • Precio > MA200 ? - Precio: $0.473300 - MA200: $0.493346 • Volume ≥ 0.5x promedio ? - Ratio actual: 0.00x (mismo valor que columna Volume) - Volume (último período): 0.00 - Promedio: 170.17 🔴 CRITERIOS SELL (AMBOS deben cumplirse): • RSI > 68 (actual: 26.21✗) • MA50 < EMA10 (diferencia ≥0.5%) ✗ - MA50: $0.477928 - EMA10: $0.475894 - Diferencia: 0.43% • Volume ≥ 0.5x promedio ✗ - Ratio actual: 0.00x (mismo valor que columna Volume) - Volume (último período): 0.00 - Promedio: 170.17 📌 ESTADO ACTUAL (backend): → Señal: WAIT (no se cumplen todos los criterios BUY según backend) ℹ️ Algunos criterios no están disponibles (None) ⚠️ Volume ratio (0.00x) < 0.5x" [ref=e1464]': WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1465]:
+              - generic [ref=e1466]:
+                - button "ALERTS ✅" [ref=e1467] [cursor=pointer]
+                - button "BUY ✅" [ref=e1468] [cursor=pointer]
+                - button "SELL ✅" [ref=e1469] [cursor=pointer]
+                - button "🧪 TEST" [ref=e1470] [cursor=pointer]
+                - button "Delete" [ref=e1471] [cursor=pointer]
+          - row "27 Mover SUI_USDT hacia arriba Mover SUI_USDT hacia abajo SUI_USDT BUY SELL $1.66 17s Swing-Aggressive NO 10 NO Conservative 1.31 $ 1.37 $ 35.02 0.017700 $1.69 $1.63 $1.66 $1.53 $1.67 $2.35 0.48x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1472]:
+            - cell "27" [ref=e1473]
+            - cell "Mover SUI_USDT hacia arriba Mover SUI_USDT hacia abajo SUI_USDT" [ref=e1474]:
+              - generic [ref=e1475]:
+                - generic [ref=e1476]:
+                  - button "Mover SUI_USDT hacia arriba" [ref=e1477] [cursor=pointer]: ▲
+                  - button "Mover SUI_USDT hacia abajo" [ref=e1478] [cursor=pointer]: ▼
+                - link "SUI_USDT" [ref=e1479] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/SUI/USDT
+            - cell "BUY SELL" [ref=e1480]:
+              - generic [ref=e1481]:
+                - button "BUY" [ref=e1482] [cursor=pointer]
+                - button "SELL" [ref=e1483] [cursor=pointer]
+            - cell "$1.66" [ref=e1484]
+            - cell "17s" [ref=e1485]
+            - cell "Swing-Aggressive" [ref=e1486]:
+              - 'combobox "📊 Estrategia: swing-agresiva RSI: buy<45 / sell>68 MAs: EMA10=$1.67 | MA50=$1.66 ✗ MA50>EMA10 | MA200=$1.53 ✓ Price>MA200 SL≈ price - 1×ATR TP≈ price + 1.2×(price-SL) Notas: Entrada más temprana · SL más estrecho" [ref=e1487]':
+                - option "Swing-Conservative"
+                - option "Swing-Aggressive" [selected]
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e1488]:
+              - generic [ref=e1489] [cursor=pointer]: "NO"
+            - cell "10" [ref=e1490]:
+              - textbox "$0.00" [ref=e1491]: "10"
+            - cell "NO" [ref=e1492]:
+              - generic [ref=e1493] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e1494]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$1.67 | MA50=$1.66 ✗ MA50>EMA10 | MA200=$1.53 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1495] [cursor=pointer]': Conservative
+            - cell "1.31 $" [ref=e1496]:
+              - 'textbox "Price: $1.31 (from resistance levels)" [ref=e1497]':
+                - /placeholder: "1.31"
+                - text: "1.31"
+              - text: $
+            - cell "1.37 $" [ref=e1498]:
+              - 'textbox "Price: $1.37 (from resistance levels)" [ref=e1499]':
+                - /placeholder: "1.37"
+                - text: "1.37"
+              - text: $
+            - cell "35.02" [ref=e1500]
+            - cell "0.017700" [ref=e1501]
+            - cell "$1.69" [ref=e1502]:
+              - generic [ref=e1503]: $1.69
+            - cell "$1.63" [ref=e1504]:
+              - generic [ref=e1505]: $1.63
+            - cell "$1.66" [ref=e1506]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($1.66) < EMA10 ($1.67). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e1507]': $1.66
+            - cell "$1.53" [ref=e1508]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($1.66) > MA200 ($1.53). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e1509]': $1.53
+            - cell "$1.67" [ref=e1510]:
+              - 'generic "🔴 VENDER: Precio ($1.66) < EMA10 ($1.67). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e1511]': $1.67
+            - cell "$2.35" [ref=e1512]:
+              - 'generic "MA10w: $2.35 | Precio: $1.66. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e1513]': $2.35
+            - cell "0.48x" [ref=e1514]:
+              - 'generic "Volume (último período): 1,561.00 | Promedio (promedio): 3,219.35 | Ratio: 0.48x" [ref=e1515]': 0.48x
+            - cell "WAIT" [ref=e1516]:
+              - 'generic "📊 Estrategia: swing-agresiva 🟢 CRITERIOS BUY (todos deben cumplirse): • RSI < 45 (actual: 35.02?) • MA50 > EMA10 ? - MA50: $1.66 - EMA10: $1.67 • Precio > MA200 ? - Precio: $1.66 - MA200: $1.53 • Volume ≥ 0.5x promedio ? - Ratio actual: 0.48x (mismo valor que columna Volume) - Volume (último período): 1,561.00 - Promedio: 3,219.35 🔴 CRITERIOS SELL (AMBOS deben cumplirse): • RSI > 68 (actual: 35.02✗) • MA50 < EMA10 (diferencia ≥0.5%) ✓ - MA50: $1.66 - EMA10: $1.67 - Diferencia: 0.60% (requiere ≥0.5%) • Volume ≥ 0.5x promedio ✗ - Ratio actual: 0.48x (mismo valor que columna Volume) - Volume (último período): 1,561.00 - Promedio: 3,219.35 📌 ESTADO ACTUAL (backend): → Señal: WAIT (no se cumplen todos los criterios BUY según backend) ℹ️ Algunos criterios no están disponibles (None) ⚠️ Volume ratio (0.48x) < 0.5x" [ref=e1518]': WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1519]:
+              - generic [ref=e1520]:
+                - button "ALERTS ✅" [ref=e1521] [cursor=pointer]
+                - button "BUY ✅" [ref=e1522] [cursor=pointer]
+                - button "SELL ✅" [ref=e1523] [cursor=pointer]
+                - button "🧪 TEST" [ref=e1524] [cursor=pointer]
+                - button "Delete" [ref=e1525] [cursor=pointer]
+          - row "28 Mover NEAR_USDT hacia arriba Mover NEAR_USDT hacia abajo NEAR_USDT BUY SELL $1.86 17s Swing-Aggressive NO 10 NO Conservative 1.58 $ 1.64 $ 54.32 0.018800 $1.90 $1.82 $1.82 $1.83 $1.87 $2.34 0.00x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1526]:
+            - cell "28" [ref=e1527]
+            - cell "Mover NEAR_USDT hacia arriba Mover NEAR_USDT hacia abajo NEAR_USDT" [ref=e1528]:
+              - generic [ref=e1529]:
+                - generic [ref=e1530]:
+                  - button "Mover NEAR_USDT hacia arriba" [ref=e1531] [cursor=pointer]: ▲
+                  - button "Mover NEAR_USDT hacia abajo" [ref=e1532] [cursor=pointer]: ▼
+                - link "NEAR_USDT" [ref=e1533] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/NEAR/USDT
+            - cell "BUY SELL" [ref=e1534]:
+              - generic [ref=e1535]:
+                - button "BUY" [ref=e1536] [cursor=pointer]
+                - button "SELL" [ref=e1537] [cursor=pointer]
+            - cell "$1.86" [ref=e1538]
+            - cell "17s" [ref=e1539]
+            - cell "Swing-Aggressive" [ref=e1540]:
+              - 'combobox "📊 Estrategia: swing-agresiva RSI: buy<45 / sell>68 MAs: EMA10=$1.87 | MA50=$1.82 ✗ MA50>EMA10 | MA200=$1.83 ✓ Price>MA200 SL≈ price - 1×ATR TP≈ price + 1.2×(price-SL) Notas: Entrada más temprana · SL más estrecho" [ref=e1541]':
+                - option "Swing-Conservative"
+                - option "Swing-Aggressive" [selected]
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e1542]:
+              - generic [ref=e1543] [cursor=pointer]: "NO"
+            - cell "10" [ref=e1544]:
+              - textbox "$0.00" [ref=e1545]: "10"
+            - cell "NO" [ref=e1546]:
+              - generic [ref=e1547] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e1548]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$1.87 | MA50=$1.82 ✗ MA50>EMA10 | MA200=$1.83 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1549] [cursor=pointer]': Conservative
+            - cell "1.58 $" [ref=e1550]:
+              - 'textbox "Price: $1.58 (from resistance levels)" [ref=e1551]':
+                - /placeholder: "1.58"
+                - text: "1.58"
+              - text: $
+            - cell "1.64 $" [ref=e1552]:
+              - 'textbox "Price: $1.64 (from resistance levels)" [ref=e1553]':
+                - /placeholder: "1.64"
+                - text: "1.64"
+              - text: $
+            - cell "54.32" [ref=e1554]
+            - cell "0.018800" [ref=e1555]
+            - cell "$1.90" [ref=e1556]:
+              - generic [ref=e1557]: $1.90
+            - cell "$1.82" [ref=e1558]:
+              - generic [ref=e1559]: $1.82
+            - cell "$1.82" [ref=e1560]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($1.82) < EMA10 ($1.87). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e1561]': $1.82
+            - cell "$1.83" [ref=e1562]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($1.86) > MA200 ($1.83). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e1563]': $1.83
+            - cell "$1.87" [ref=e1564]:
+              - 'generic "🔴 VENDER: Precio ($1.86) < EMA10 ($1.87). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e1565]': $1.87
+            - cell "$2.34" [ref=e1566]:
+              - 'generic "MA10w: $2.34 | Precio: $1.86. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e1567]': $2.34
+            - cell "0.00x" [ref=e1568]:
+              - 'generic "Volume (último período): 0.00 | Promedio (promedio): 1,925.46 | Ratio: 0.00x" [ref=e1569]': 0.00x
+            - cell "WAIT" [ref=e1570]:
+              - 'generic "📊 Estrategia: swing-agresiva 🟢 CRITERIOS BUY (todos deben cumplirse): • RSI < 45 (actual: 54.32?) • MA50 > EMA10 ? - MA50: $1.82 - EMA10: $1.87 • Precio > MA200 ? - Precio: $1.86 - MA200: $1.83 • Volume ≥ 0.5x promedio ? - Ratio actual: 0.00x (mismo valor que columna Volume) - Volume (último período): 0.00 - Promedio: 1,925.46 🔴 CRITERIOS SELL (AMBOS deben cumplirse): • RSI > 68 (actual: 54.32✗) • MA50 < EMA10 (diferencia ≥0.5%) ✓ - MA50: $1.82 - EMA10: $1.87 - Diferencia: 2.71% (requiere ≥0.5%) • Volume ≥ 0.5x promedio ✗ - Ratio actual: 0.00x (mismo valor que columna Volume) - Volume (último período): 0.00 - Promedio: 1,925.46 📌 ESTADO ACTUAL (backend): → Señal: WAIT (no se cumplen todos los criterios BUY según backend) ℹ️ Algunos criterios no están disponibles (None) ⚠️ Volume ratio (0.00x) < 0.5x" [ref=e1572]': WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1573]:
+              - generic [ref=e1574]:
+                - button "ALERTS ✅" [ref=e1575] [cursor=pointer]
+                - button "BUY ✅" [ref=e1576] [cursor=pointer]
+                - button "SELL ✅" [ref=e1577] [cursor=pointer]
+                - button "🧪 TEST" [ref=e1578] [cursor=pointer]
+                - button "Delete" [ref=e1579] [cursor=pointer]
+          - row "29 Mover APT_USDT hacia arriba Mover APT_USDT hacia abajo APT_USDT BUY SELL $1.98 17s Swing-Conservative NO 10 NO Conservative 1.80 $ 1.87 $ 26.79 0.014300 $2.02 $1.94 $1.99 $2.06 $1.99 $3.33 0.80x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1580]:
+            - cell "29" [ref=e1581]
+            - cell "Mover APT_USDT hacia arriba Mover APT_USDT hacia abajo APT_USDT" [ref=e1582]:
+              - generic [ref=e1583]:
+                - generic [ref=e1584]:
+                  - button "Mover APT_USDT hacia arriba" [ref=e1585] [cursor=pointer]: ▲
+                  - button "Mover APT_USDT hacia abajo" [ref=e1586] [cursor=pointer]: ▼
+                - link "APT_USDT" [ref=e1587] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/APT/USDT
+            - cell "BUY SELL" [ref=e1588]:
+              - generic [ref=e1589]:
+                - button "BUY" [ref=e1590] [cursor=pointer]
+                - button "SELL" [ref=e1591] [cursor=pointer]
+            - cell "$1.98" [ref=e1592]
+            - cell "17s" [ref=e1593]
+            - cell "Swing-Conservative" [ref=e1594]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$1.99 | MA50=$1.99 ✗ MA50>EMA10 | MA200=$2.06 ✗ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1595]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e1596]:
+              - generic [ref=e1597] [cursor=pointer]: "NO"
+            - cell "10" [ref=e1598]:
+              - textbox "$0.00" [ref=e1599]: "10"
+            - cell "NO" [ref=e1600]:
+              - generic [ref=e1601] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e1602]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$1.99 | MA50=$1.99 ✗ MA50>EMA10 | MA200=$2.06 ✗ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1603] [cursor=pointer]': Conservative
+            - cell "1.80 $" [ref=e1604]:
+              - 'textbox "Price: $1.80 (from resistance levels)" [ref=e1605]':
+                - /placeholder: "1.80"
+                - text: "1.80"
+              - text: $
+            - cell "1.87 $" [ref=e1606]:
+              - 'textbox "Price: $1.87 (from resistance levels)" [ref=e1607]':
+                - /placeholder: "1.87"
+                - text: "1.87"
+              - text: $
+            - cell "26.79" [ref=e1608]
+            - cell "0.014300" [ref=e1609]
+            - cell "$2.02" [ref=e1610]:
+              - generic [ref=e1611]: $2.02
+            - cell "$1.94" [ref=e1612]:
+              - generic [ref=e1613]: $1.94
+            - cell "$1.99" [ref=e1614]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($1.99) < EMA10 ($1.99). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e1615]': $1.99
+            - cell "$2.06" [ref=e1616]:
+              - 'generic "❌ Criterio COMPRA bloqueado: Precio ($1.98) < MA200 ($2.06). Esta condición bloquea señal BUY. Si la señal es SELL, viene de otros criterios (RSI > sellAbove o MA50 < EMA10), NO de MA200. Last updated: 9:12:59 PM" [ref=e1617]': $2.06
+            - cell "$1.99" [ref=e1618]:
+              - 'generic "🔴 VENDER: Precio ($1.98) < EMA10 ($1.99). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e1619]': $1.99
+            - cell "$3.33" [ref=e1620]:
+              - 'generic "MA10w: $3.33 | Precio: $1.98. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e1621]': $3.33
+            - cell "0.80x" [ref=e1622]:
+              - 'generic "Volume (último período): 101.20 | Promedio (promedio): 126.61 | Ratio: 0.80x" [ref=e1623]': 0.80x
+            - cell "WAIT" [ref=e1624]:
+              - generic "Estrategia no configurada" [ref=e1626]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1627]:
+              - generic [ref=e1628]:
+                - button "ALERTS ✅" [ref=e1629] [cursor=pointer]
+                - button "BUY ✅" [ref=e1630] [cursor=pointer]
+                - button "SELL ✅" [ref=e1631] [cursor=pointer]
+                - button "🧪 TEST" [ref=e1632] [cursor=pointer]
+                - button "Delete" [ref=e1633] [cursor=pointer]
+          - row "30 Mover AAVE_USDT hacia arriba Mover AAVE_USDT hacia abajo AAVE_USDT BUY SELL $193.04 17s Swing-Conservative NO 10 NO Conservative 163.44 $ 170.11 $ 28.82 1.82 $196.90 $189.18 $191.46 $182.82 $194.07 $220.23 0.28x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1634]:
+            - cell "30" [ref=e1635]
+            - cell "Mover AAVE_USDT hacia arriba Mover AAVE_USDT hacia abajo AAVE_USDT" [ref=e1636]:
+              - generic [ref=e1637]:
+                - generic [ref=e1638]:
+                  - button "Mover AAVE_USDT hacia arriba" [ref=e1639] [cursor=pointer]: ▲
+                  - button "Mover AAVE_USDT hacia abajo" [ref=e1640] [cursor=pointer]: ▼
+                - link "AAVE_USDT" [ref=e1641] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/AAVE/USDT
+            - cell "BUY SELL" [ref=e1642]:
+              - generic [ref=e1643]:
+                - button "BUY" [ref=e1644] [cursor=pointer]
+                - button "SELL" [ref=e1645] [cursor=pointer]
+            - cell "$193.04" [ref=e1646]
+            - cell "17s" [ref=e1647]
+            - cell "Swing-Conservative" [ref=e1648]:
+              - 'combobox "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$194.07 | MA50=$191.46 ✗ MA50>EMA10 | MA200=$182.82 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1649]':
+                - option "Swing-Conservative" [selected]
+                - option "Swing-Aggressive"
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e1650]:
+              - generic [ref=e1651] [cursor=pointer]: "NO"
+            - cell "10" [ref=e1652]:
+              - textbox "$0.00" [ref=e1653]: "10"
+            - cell "NO" [ref=e1654]:
+              - generic [ref=e1655] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e1656]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$194.07 | MA50=$191.46 ✗ MA50>EMA10 | MA200=$182.82 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1657] [cursor=pointer]': Conservative
+            - cell "163.44 $" [ref=e1658]:
+              - 'textbox "Price: $163.44 (from resistance levels)" [ref=e1659]':
+                - /placeholder: "163.44"
+                - text: "163.44"
+              - text: $
+            - cell "170.11 $" [ref=e1660]:
+              - 'textbox "Price: $170.11 (from resistance levels)" [ref=e1661]':
+                - /placeholder: "170.11"
+                - text: "170.11"
+              - text: $
+            - cell "28.82" [ref=e1662]
+            - cell "1.82" [ref=e1663]
+            - cell "$196.90" [ref=e1664]:
+              - generic [ref=e1665]: $196.90
+            - cell "$189.18" [ref=e1666]:
+              - generic [ref=e1667]: $189.18
+            - cell "$191.46" [ref=e1668]:
+              - 'generic "❌ Criterio COMPRA NO cumplido: MA50 ($191.46) < EMA10 ($194.07). Esta condición bloquea señal BUY, sugiere SELL. Last updated: 21:12 GMT+8" [ref=e1669]': $191.46
+            - cell "$182.82" [ref=e1670]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($193.04) > MA200 ($182.82). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e1671]': $182.82
+            - cell "$194.07" [ref=e1672]:
+              - 'generic "🔴 VENDER: Precio ($193.04) < EMA10 ($194.07). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e1673]': $194.07
+            - cell "$220.23" [ref=e1674]:
+              - 'generic "MA10w: $220.23 | Precio: $193.04. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e1675]': $220.23
+            - cell "0.28x" [ref=e1676]:
+              - 'generic "Volume (último período): 5.39 | Promedio (promedio): 19.36 | Ratio: 0.28x" [ref=e1677]': 0.28x
+            - cell "WAIT" [ref=e1678]:
+              - generic "Estrategia no configurada" [ref=e1680]: WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1681]:
+              - generic [ref=e1682]:
+                - button "ALERTS ✅" [ref=e1683] [cursor=pointer]
+                - button "BUY ✅" [ref=e1684] [cursor=pointer]
+                - button "SELL ✅" [ref=e1685] [cursor=pointer]
+                - button "🧪 TEST" [ref=e1686] [cursor=pointer]
+                - button "Delete" [ref=e1687] [cursor=pointer]
+          - row "31 Mover CRO_USDT hacia arriba Mover CRO_USDT hacia abajo CRO_USDT BUY SELL $0.108920 17s Swing-Aggressive NO 10 NO Conservative 0.098735 $ 0.102765 $ 36.55 0.0007770000 $0.111098 $0.106742 $0.109726 $0.108299 $0.109329 $0.144089 0.49x WAIT ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1688]:
+            - cell "31" [ref=e1689]
+            - cell "Mover CRO_USDT hacia arriba Mover CRO_USDT hacia abajo CRO_USDT" [ref=e1690]:
+              - generic [ref=e1691]:
+                - generic [ref=e1692]:
+                  - button "Mover CRO_USDT hacia arriba" [ref=e1693] [cursor=pointer]: ▲
+                  - button "Mover CRO_USDT hacia abajo" [disabled] [ref=e1694]: ▼
+                - link "CRO_USDT" [ref=e1695] [cursor=pointer]:
+                  - /url: https://crypto.com/exchange/trade/CRO/USDT
+            - cell "BUY SELL" [ref=e1696]:
+              - generic [ref=e1697]:
+                - button "BUY" [ref=e1698] [cursor=pointer]
+                - button "SELL" [ref=e1699] [cursor=pointer]
+            - cell "$0.108920" [ref=e1700]
+            - cell "17s" [ref=e1701]
+            - cell "Swing-Aggressive" [ref=e1702]:
+              - 'combobox "📊 Estrategia: swing-agresiva RSI: buy<45 / sell>68 MAs: EMA10=$0.109329 | MA50=$0.109726 ✓ MA50>EMA10 | MA200=$0.108299 ✓ Price>MA200 SL≈ price - 1×ATR TP≈ price + 1.2×(price-SL) Notas: Entrada más temprana · SL más estrecho" [ref=e1703]':
+                - option "Swing-Conservative"
+                - option "Swing-Aggressive" [selected]
+                - option "Intraday-Conservative"
+                - option "Intraday-Aggressive"
+                - option "Scalp-Conservative"
+                - option "Scalp-Aggressive"
+                - option "Custom"
+            - cell "NO" [ref=e1704]:
+              - generic [ref=e1705] [cursor=pointer]: "NO"
+            - cell "10" [ref=e1706]:
+              - textbox "$0.00" [ref=e1707]: "10"
+            - cell "NO" [ref=e1708]:
+              - generic [ref=e1709] [cursor=pointer]: "NO"
+            - cell "Conservative" [ref=e1710]:
+              - 'generic "📊 Estrategia: swing-conservadora RSI: buy<40 / sell>70 MAs: EMA10=$0.109329 | MA50=$0.109726 ✓ MA50>EMA10 | MA200=$0.108299 ✓ Price>MA200 SL≈ price - 1.5×ATR TP≈ price + 1.5×(price-SL) Notas: Operaciones multi-día · Confirmación MA50/MA200" [ref=e1711] [cursor=pointer]': Conservative
+            - cell "0.098735 $" [ref=e1712]:
+              - 'textbox "Price: $0.098735 (from resistance levels)" [ref=e1713]':
+                - /placeholder: "0.098735"
+                - text: "0.098735"
+              - text: $
+            - cell "0.102765 $" [ref=e1714]:
+              - 'textbox "Price: $0.102765 (from resistance levels)" [ref=e1715]':
+                - /placeholder: "0.102765"
+                - text: "0.102765"
+              - text: $
+            - cell "36.55" [ref=e1716]
+            - cell "0.0007770000" [ref=e1717]
+            - cell "$0.111098" [ref=e1718]:
+              - generic [ref=e1719]: $0.111098
+            - cell "$0.106742" [ref=e1720]:
+              - generic [ref=e1721]: $0.106742
+            - cell "$0.109726" [ref=e1722]:
+              - 'generic "✅ Criterio COMPRA cumplido: MA50 ($0.109726) > EMA10 ($0.109329). Condición necesaria para señal BUY. Last updated: 21:12 GMT+8" [ref=e1723]': $0.109726
+            - cell "$0.108299" [ref=e1724]:
+              - 'generic "✅ Criterio COMPRA cumplido: Precio ($0.108920) > MA200 ($0.108299). Condición necesaria para señal BUY. Este criterio NO es para vender - si está verde, NO es razón para SELL. Last updated: 9:12:59 PM" [ref=e1725]': $0.108299
+            - cell "$0.109329" [ref=e1726]:
+              - 'generic "🔴 VENDER: Precio ($0.108920) < EMA10 ($0.109329). Tendencia bajista a corto plazo. Last updated: 9:12:59 PM" [ref=e1727]': $0.109329
+            - cell "$0.144089" [ref=e1728]:
+              - 'generic "MA10w: $0.144089 | Precio: $0.108920. Este indicador NO se usa en la estrategia actual (solo se usan EMA10, MA50, MA200 según preset). Mostrado solo como referencia informativa. Last updated: 9:12:59 PM" [ref=e1729]': $0.144089
+            - cell "0.49x" [ref=e1730]:
+              - 'generic "Volume (último período): 222,327.00 | Promedio (promedio): 454,829.40 | Ratio: 0.49x" [ref=e1731]': 0.49x
+            - cell "WAIT" [ref=e1732]:
+              - 'generic "📊 Estrategia: swing-agresiva 🟢 CRITERIOS BUY (todos deben cumplirse): • RSI < 45 (actual: 36.55?) • MA50 > EMA10 ? - MA50: $0.109726 - EMA10: $0.109329 • Precio > MA200 ? - Precio: $0.108920 - MA200: $0.108299 • Volume ≥ 0.5x promedio ? - Ratio actual: 0.49x (mismo valor que columna Volume) - Volume (último período): 222,327.00 - Promedio: 454,829.40 🔴 CRITERIOS SELL (AMBOS deben cumplirse): • RSI > 68 (actual: 36.55✗) • MA50 < EMA10 (diferencia ≥0.5%) ✗ - MA50: $0.109726 - EMA10: $0.109329 - Diferencia: 0.36% • Volume ≥ 0.5x promedio ✗ - Ratio actual: 0.49x (mismo valor que columna Volume) - Volume (último período): 222,327.00 - Promedio: 454,829.40 📌 ESTADO ACTUAL (backend): → Señal: WAIT (no se cumplen todos los criterios BUY según backend) ℹ️ Algunos criterios no están disponibles (None) ⚠️ Volume ratio (0.49x) < 0.5x" [ref=e1734]': WAIT
+            - cell "ALERTS ✅ BUY ✅ SELL ✅ 🧪 TEST Delete" [ref=e1735]:
+              - generic [ref=e1736]:
+                - button "ALERTS ✅" [ref=e1737] [cursor=pointer]
+                - button "BUY ✅" [ref=e1738] [cursor=pointer]
+                - button "SELL ✅" [ref=e1739] [cursor=pointer]
+                - button "🧪 TEST" [ref=e1740] [cursor=pointer]
+                - button "Delete" [ref=e1741] [cursor=pointer]
+  - alert [ref=e1742]
+```

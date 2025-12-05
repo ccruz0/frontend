@@ -1,0 +1,27 @@
+[
+  {
+    "type": "log",
+    "text": "✅ Data source status fetched from backend",
+    "timestamp": 1764844363189
+  },
+  {
+    "type": "log",
+    "text": "✅ Trading config fetched from backend",
+    "timestamp": 1764844363193
+  },
+  {
+    "type": "log",
+    "text": "✅ Portfolio snapshot loaded (background refresh started)",
+    "timestamp": 1764844363676
+  },
+  {
+    "type": "log",
+    "text": "✅ Open orders snapshot loaded (background refresh started)",
+    "timestamp": 1764844364437
+  },
+  {
+    "type": "log",
+    "text": "✅ Executed orders fetched from backend",
+    "timestamp": 1764844371848
+  }
+]

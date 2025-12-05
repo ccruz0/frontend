@@ -1,0 +1,12 @@
+[
+  {
+    "type": "log",
+    "text": "✅ Data source status fetched from backend",
+    "timestamp": 1764844118994
+  },
+  {
+    "type": "log",
+    "text": "✅ Trading config fetched from backend",
+    "timestamp": 1764844120196
+  }
+]

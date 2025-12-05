@@ -1,0 +1,240 @@
+{
+  "config": {
+    "configFile": "/Users/carloscruz/automated-trading-platform/frontend/playwright.config.ts",
+    "rootDir": "/Users/carloscruz/automated-trading-platform/frontend/tests/e2e",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 2
+    },
+    "preserveOutput": "always",
+    "reporter": [
+      [
+        "html",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "test-results/results.json"
+        }
+      ],
+      [
+        "junit",
+        {
+          "outputFile": "test-results/junit.xml"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "/Users/carloscruz/automated-trading-platform/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 2
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/carloscruz/automated-trading-platform/frontend/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.57.0",
+    "workers": 4,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "dashboard-doge-preset-persistence.spec.ts",
+      "file": "dashboard-doge-preset-persistence.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "DOGE Preset Persistence",
+          "file": "dashboard-doge-preset-persistence.spec.ts",
+          "line": 6,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should persist DOGE strategy selection after hard refresh",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "timedOut",
+                      "duration": 30731,
+                      "error": {
+                        "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m",
+                        "stack": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                      },
+                      "errors": [
+                        {
+                          "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                        },
+                        {
+                          "location": {
+                            "file": "/Users/carloscruz/automated-trading-platform/frontend/tests/e2e/dashboard-doge-preset-persistence.spec.ts",
+                            "column": 28,
+                            "line": 56
+                          },
+                          "message": "Error: locator.selectOption: Test timeout of 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('tr:has-text(\"DOGE_USDT\")').first().locator('select').first()\u001b[22m\n\u001b[2m    - locator resolved to <select class=\"text-xs border border-gray-300 rounded px-2 py-1 bg-white w-20 relative z-10\" title=\"📊 Estrategia: swing-conservadora↵RSI: buy<40 / sell>70↵MAs: EMA10=$0.149841 | MA50=$0.148604 ✗ MA50>EMA10 | MA200=$0.147746 ✓ Price>MA200↵SL≈ price - 1.5×ATR↵TP≈ price + 1.5×(price-SL)↵Notas: Operaciones multi-día · Confirmación MA50/MA200\">…</select>\u001b[22m\n\u001b[2m  - attempting select option action\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m      - did not find some options\u001b[22m\n\u001b[2m    - retrying select option action\u001b[22m\n\u001b[2m    - waiting 20ms\u001b[22m\n\u001b[2m    2 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m      - did not find some options\u001b[22m\n\u001b[2m    - retrying select option action\u001b[22m\n\u001b[2m      - waiting 100ms\u001b[22m\n\u001b[2m    38 × waiting for element to be visible and enabled\u001b[22m\n\u001b[2m       - did not find some options\u001b[22m\n\u001b[2m     - retrying select option action\u001b[22m\n\u001b[2m       - waiting 500ms\u001b[22m\n\n\n  54 |     // Select a different strategy (if not already selected)\n  55 |     const targetPreset = currentValue === 'intraday' ? 'scalp' : 'intraday';\n> 56 |     await strategyDropdown.selectOption(targetPreset);\n     |                            ^\n  57 |     console.log(`[TEST] Selected preset: ${targetPreset}`);\n  58 |\n  59 |     // Wait for PUT request to complete\n    at /Users/carloscruz/automated-trading-platform/frontend/tests/e2e/dashboard-doge-preset-persistence.spec.ts:56:28"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "[TEST] Current preset for DOGE_USDT: swing-conservative\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-04T13:12:47.850Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/carloscruz/automated-trading-platform/frontend/test-results/dashboard-doge-preset-pers-6cb06-election-after-hard-refresh-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/carloscruz/automated-trading-platform/frontend/test-results/dashboard-doge-preset-pers-6cb06-election-after-hard-refresh-chromium/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/carloscruz/automated-trading-platform/frontend/test-results/dashboard-doge-preset-pers-6cb06-election-after-hard-refresh-chromium/error-context.md"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/carloscruz/automated-trading-platform/frontend/test-results/dashboard-doge-preset-pers-6cb06-election-after-hard-refresh-chromium/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "fd5418995c55629f3cbc-7d1ceb0c4b965cd6667a",
+              "file": "dashboard-doge-preset-persistence.spec.ts",
+              "line": 23,
+              "column": 7
+            },
+            {
+              "title": "should show \"Strategy not configured\" only when preset is truly missing",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "timedOut",
+                      "duration": 30917,
+                      "error": {
+                        "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m",
+                        "stack": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                      },
+                      "errors": [
+                        {
+                          "message": "\u001b[31mTest timeout of 30000ms exceeded.\u001b[39m"
+                        },
+                        {
+                          "location": {
+                            "file": "/Users/carloscruz/automated-trading-platform/frontend/tests/e2e/dashboard-doge-preset-persistence.spec.ts",
+                            "column": 16,
+                            "line": 147
+                          },
+                          "message": "Error: page.waitForLoadState: Test timeout of 30000ms exceeded.\n=========================== logs ===========================\n  \"load\" event fired\n============================================================\n\n  145 |     // Navigate to Watchlist tab\n  146 |     await page.click('text=Watchlist');\n> 147 |     await page.waitForLoadState('networkidle');\n      |                ^\n  148 |\n  149 |     // Find DOGE row\n  150 |     const dogeRow = await page.locator(`tr:has-text(\"${TEST_SYMBOL}\")`).first();\n    at /Users/carloscruz/automated-trading-platform/frontend/tests/e2e/dashboard-doge-preset-persistence.spec.ts:147:16"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-12-04T13:12:47.849Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/carloscruz/automated-trading-platform/frontend/test-results/dashboard-doge-preset-pers-6c525-hen-preset-is-truly-missing-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/carloscruz/automated-trading-platform/frontend/test-results/dashboard-doge-preset-pers-6c525-hen-preset-is-truly-missing-chromium/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/carloscruz/automated-trading-platform/frontend/test-results/dashboard-doge-preset-pers-6c525-hen-preset-is-truly-missing-chromium/error-context.md"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/carloscruz/automated-trading-platform/frontend/test-results/dashboard-doge-preset-pers-6c525-hen-preset-is-truly-missing-chromium/trace.zip"
+                        }
+                      ]
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "fd5418995c55629f3cbc-cb1c016a1ee0d860507b",
+              "file": "dashboard-doge-preset-persistence.spec.ts",
+              "line": 144,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2025-12-04T13:12:46.717Z",
+    "duration": 34748.612,
+    "expected": 0,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  }
+}

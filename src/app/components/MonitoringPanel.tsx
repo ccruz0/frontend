@@ -31,16 +31,17 @@ function WorkflowRow({
   message: string | undefined;
   onRun: (id: string) => Promise<void>;
 }) {
+  // Check if workflow can be run manually (must have a non-empty run_endpoint)
+  const canRun = Boolean(workflow.run_endpoint && workflow.run_endpoint.trim().length > 0);
+  
   const handleRun = async () => {
-    if (isRunning || !workflow.run_endpoint) return;
+    if (isRunning || !canRun) return;
     try {
       await onRun(workflow.id);
     } catch (err) {
       // Error already handled in parent
     }
   };
-
-  const canRun = workflow.run_endpoint !== null && workflow.run_endpoint !== undefined;
   const statusColor = workflow.last_status === 'success' ? 'text-green-600' : 
                      workflow.last_status === 'error' ? 'text-red-600' : 
                      workflow.last_status === 'running' ? 'text-blue-600' : 'text-gray-600';

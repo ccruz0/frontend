@@ -1076,6 +1076,14 @@ function DashboardPageContent() {
       setIsUpdating(false);
     }
   }, []);
+  // Helper function to check if an order status is cancelled
+  // Must be defined before useMemo hooks that use it to avoid TDZ (Temporal Dead Zone) errors
+  const isCancelledStatus = (status: string | null | undefined): boolean => {
+    if (!status) return false;
+    const normalized = status.toUpperCase();
+    return normalized === 'CANCELLED' || normalized === 'CANCELED';
+  };
+
   const coinMembershipSignature = useMemo(
     () => {
       // Defensive check: ensure topCoins is an array and not undefined/null
@@ -1296,13 +1304,6 @@ function DashboardPageContent() {
     
     return { pnl: 0, pnlPercent: 0, isRealized: false };
   }, [topCoins]);
-  
-  // Helper function to check if an order status is cancelled
-  const isCancelledStatus = (status: string | null | undefined): boolean => {
-    if (!status) return false;
-    const normalized = status.toUpperCase();
-    return normalized === 'CANCELLED' || normalized === 'CANCELED';
-  };
 
   const filteredExecutedOrders = useMemo(() => {
     // Defensive check: ensure executedOrders is an array
@@ -4289,8 +4290,8 @@ function resolveDecisionIndexColor(value: number): string {
       
       // First, try to load from strategy_rules (new format, source of truth)
       if (config?.strategy_rules) {
-        // [VOLUME_DEBUG] Log raw backend response
-        console.log('[VOLUME_DEBUG_GET] Raw backend strategy_rules:', JSON.stringify(config.strategy_rules, null, 2));
+        // [CONFIG] Log raw backend response
+        console.log('[CONFIG] Raw backend strategy_rules received:', JSON.stringify(config.strategy_rules, null, 2));
         
         Object.entries(config.strategy_rules).forEach(([presetKey, presetData]) => {
           const presetPayload = presetData as { rules?: Record<string, StrategyRules>; notificationProfile?: string } | undefined;
@@ -4305,8 +4306,14 @@ function resolveDecisionIndexColor(value: number): string {
             // Copy each risk mode rule with deep copy of nested objects
             Object.entries(presetPayload.rules).forEach(([riskMode, rule]) => {
               if (riskMode === 'Conservative' || riskMode === 'Aggressive') {
-                // [VOLUME_DEBUG] Log each rule being loaded
-                console.log(`[VOLUME_DEBUG_GET] Loading ${presetName}-${riskMode}: volumeMinRatio=${rule.volumeMinRatio} (type: ${typeof rule.volumeMinRatio})`);
+                // [CONFIG] Log each rule being loaded
+                console.log('[CONFIG] Loading rule from backend:', {
+                  preset: presetName,
+                  risk: riskMode,
+                  volumeMinRatio: rule.volumeMinRatio,
+                  type: typeof rule.volumeMinRatio,
+                  fullRule: rule
+                });
                 
                 rulesCopy[riskMode as RiskMode] = {
                   ...rule,
@@ -4399,12 +4406,14 @@ function resolveDecisionIndexColor(value: number): string {
             const backendRules = backendPreset.rules?.[riskMode];
             const defaultRules = PRESET_CONFIG[presetType].rules[riskMode];
             
-            // [VOLUME_DEBUG] Log merge operation with detailed info
+            // [CONFIG] Log merge operation with detailed info
             const backendVol = backendRules?.volumeMinRatio;
             const defaultVol = defaultRules.volumeMinRatio;
             const finalVol = backendVol !== undefined && backendVol !== null ? backendVol : defaultVol;
             
-            console.log(`[VOLUME_DEBUG_FRONTEND_MERGE] Merging ${presetType}-${riskMode}:`, {
+            console.log('[CONFIG] Loading volumeMinRatio on page load:', {
+              preset: presetType,
+              risk: riskMode,
               defaultVolumeMinRatio: defaultVol,
               backendVolumeMinRatio: backendVol,
               backendVolumeMinRatioType: typeof backendVol,
@@ -4424,9 +4433,14 @@ function resolveDecisionIndexColor(value: number): string {
               merged[presetType].rules[riskMode] = { ...defaultRules };
             }
             
-            // [VOLUME_DEBUG] Verify final merged value
+            // [CONFIG] Verify final merged value
             const finalMergedVol = merged[presetType].rules[riskMode].volumeMinRatio;
-            console.log(`[VOLUME_DEBUG_FRONTEND_MERGE] Final merged ${presetType}-${riskMode} volumeMinRatio:`, finalMergedVol, `(type: ${typeof finalMergedVol})`);
+            console.log('[CONFIG] ✅ Final loaded volumeMinRatio:', {
+              preset: presetType,
+              risk: riskMode,
+              volumeMinRatio: finalMergedVol,
+              type: typeof finalMergedVol
+            });
           }
         }
         
@@ -7063,11 +7077,11 @@ function resolveDecisionIndexColor(value: number): string {
                           to avoid string/number mismatches that would prevent the dropdown from showing the correct value.
                         - volumeMinRatio is a number coming from backend strategy_rules.
                         - We must not use `|| 0.5` here, only `?? 0.5`, because 0 is a valid value.
+                        - FIX: Added id and name attributes for proper form field association and browser autofill support.
                       */}
                       <div>
                         <h5 className="font-semibold mb-3 text-purple-700">📊 Volume Requirement</h5>
                         <div>
-                          <label className="block text-sm font-medium mb-2">Minimum Volume Ratio (x promedio)</label>
                           {(() => {
                             // Get current volumeMinRatio with proper fallback to PRESET_CONFIG defaults
                             const currentVolumeRatio = currentRules?.volumeMinRatio ?? 
@@ -7076,6 +7090,10 @@ function resolveDecisionIndexColor(value: number): string {
                             // Convert to string for select component (options use string values)
                             // If value doesn't match any option, use the numeric value as string (for custom values)
                             const selectValue = String(currentVolumeRatio);
+                            
+                            // Generate unique ID for this field (based on preset and risk mode)
+                            const fieldId = `volume-min-ratio-${selectedConfigPreset.toLowerCase()}-${selectedConfigRisk.toLowerCase()}`;
+                            const fieldName = `volumeMinRatio-${selectedConfigPreset}-${selectedConfigRisk}`;
                             
                             // Define all available options
                             const volumeOptions = [
@@ -7094,17 +7112,34 @@ function resolveDecisionIndexColor(value: number): string {
                             
                             return (
                               <div className="relative z-50">
+                                <label 
+                                  htmlFor={fieldId}
+                                  className="block text-sm font-medium mb-2"
+                                >
+                                  Minimum Volume Ratio (x promedio)
+                                </label>
                                 <select
+                                  id={fieldId}
+                                  name={fieldName}
                                   title="Select minimum volume ratio"
                                   aria-label="Select minimum volume ratio"
                                   value={selectValue}
                                   onChange={(e) => {
                                     // Convert selected string to number before saving to avoid type mismatches
                                     const newRatio = parseFloat(e.target.value);
-                                    if (isNaN(newRatio)) return;
+                                    if (isNaN(newRatio)) {
+                                      console.warn('[CONFIG] Invalid volume ratio value:', e.target.value);
+                                      return;
+                                    }
                                     
-                                    // [VOLUME_DEBUG] Log the change
-                                    console.log(`[VOLUME_DEBUG_ONCHANGE] User selected ${newRatio} for ${selectedConfigPreset}-${selectedConfigRisk}`);
+                                    // [CONFIG] Log the change with clear prefix
+                                    console.log('[CONFIG] Min volume changed:', {
+                                      preset: selectedConfigPreset,
+                                      risk: selectedConfigRisk,
+                                      oldValue: currentVolumeRatio,
+                                      newValue: newRatio,
+                                      valueType: typeof newRatio
+                                    });
                                     
                                     setPresetsConfig(prev => {
                                       const existingPreset = prev[selectedConfigPreset] ?? PRESET_CONFIG[selectedConfigPreset];
@@ -7125,11 +7160,25 @@ function resolveDecisionIndexColor(value: number): string {
                                         },
                                       };
                                       
-                                      // [VOLUME_DEBUG] Verify the value was set correctly
+                                      // [CONFIG] Verify the value was set correctly
                                       const verifyVol = updated[selectedConfigPreset].rules[selectedConfigRisk].volumeMinRatio;
-                                      console.log(`[VOLUME_DEBUG_ONCHANGE] After setState, ${selectedConfigPreset}-${selectedConfigRisk} volumeMinRatio:`, verifyVol, `(type: ${typeof verifyVol})`);
+                                      console.log('[CONFIG] State updated successfully:', {
+                                        preset: selectedConfigPreset,
+                                        risk: selectedConfigRisk,
+                                        volumeMinRatio: verifyVol,
+                                        type: typeof verifyVol
+                                      });
                                       
                                       return updated;
+                                    });
+                                  }}
+                                  onFocus={() => {
+                                    // [CONFIG] Log when dropdown is opened/focused
+                                    console.log('[CONFIG] Volume dropdown focused:', {
+                                      preset: selectedConfigPreset,
+                                      risk: selectedConfigRisk,
+                                      currentValue: currentVolumeRatio,
+                                      selectValue: selectValue
                                     });
                                   }}
                                   className="w-full border border-purple-300 rounded px-3 py-2 pr-10 bg-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 z-50"
@@ -7448,10 +7497,16 @@ function resolveDecisionIndexColor(value: number): string {
                               // Convert to backend format: lowercase preset name with rules structure
                               const backendPresetKey = presetName.toLowerCase();
                               
-                              // [VOLUME_DEBUG] Log volumeMinRatio values before sending
+                              // [CONFIG] Log volumeMinRatio values before sending
                               Object.entries(preset.rules).forEach(([riskMode, rules]) => {
                                 const volRatio = (rules as StrategyRules).volumeMinRatio;
-                                console.log(`[VOLUME_DEBUG_PUT] Preparing ${presetName}-${riskMode}: volumeMinRatio=${volRatio} (type: ${typeof volRatio})`);
+                                console.log('[CONFIG] Preparing to save:', {
+                                  preset: presetName,
+                                  risk: riskMode,
+                                  volumeMinRatio: volRatio,
+                                  type: typeof volRatio,
+                                  allRules: rules
+                                });
                               });
                               
                               // CRITICAL FIX: Include notificationProfile when saving
@@ -7462,23 +7517,155 @@ function resolveDecisionIndexColor(value: number): string {
                               };
                             });
                             
-                            // [VOLUME_DEBUG] Log full payload before sending
-                            console.log('[VOLUME_DEBUG_PUT] Full payload being sent to backend:', JSON.stringify(backendConfig.strategy_rules, null, 2));
+                            // [CONFIG] Log full payload before sending
+                            console.log('[CONFIG] Saving config payload:', JSON.stringify(backendConfig.strategy_rules, null, 2));
                             
                             // Save to backend
-                            await saveTradingConfig(backendConfig);
-                            console.log('✅ Configuration saved to backend');
-                            console.log('✅ Backend config saved:', JSON.stringify(backendConfig.strategy_rules, null, 2));
+                            const saveResult = await saveTradingConfig(backendConfig);
+                            console.log('[CONFIG] ✅ Configuration saved to backend successfully');
+                            console.log('[CONFIG] ✅ Saved config:', JSON.stringify(backendConfig.strategy_rules, null, 2));
                             
-                            // Update localStorage with the same values we just saved to backend
-                            // This ensures localStorage matches backend exactly
-                            localStorage.setItem('strategy_presets_config', JSON.stringify(presetsConfig));
-                            console.log('✅ Updated localStorage with saved values');
+                            // Convert saved config from PUT response to frontend PresetConfig format
+                            // FIX: Use saveResult.config directly instead of reloading - avoids stale closure and extra network call
+                            let savedPresetsConfig: PresetConfig | null = null;
+                            
+                            // Use config from PUT response if available (most efficient and avoids stale closure)
+                            if (saveResult.config?.strategy_rules) {
+                              // Verify volumeMinRatio was saved correctly
+                              Object.entries(saveResult.config.strategy_rules).forEach(([presetKey, presetData]: [string, unknown]) => {
+                                if (presetData && typeof presetData === 'object' && 'rules' in presetData && presetData.rules) {
+                                  Object.entries(presetData.rules as Record<string, unknown>).forEach(([riskMode, rules]: [string, unknown]) => {
+                                    const volRatio = rules?.volumeMinRatio;
+                                    console.log(`[CONFIG] ✅ Verified saved ${presetKey}-${riskMode} volumeMinRatio:`, volRatio);
+                                  });
+                                }
+                              });
+                              
+                              // Convert backend config to frontend PresetConfig format
+                              savedPresetsConfig = {} as PresetConfig;
+                              Object.entries(saveResult.config.strategy_rules).forEach(([presetKey, presetData]: [string, unknown]) => {
+                                const presetName = presetKey.charAt(0).toUpperCase() + presetKey.slice(1) as Preset;
+                                if (presetData && typeof presetData === 'object' && 'rules' in presetData && presetData.rules) {
+                                  const rulesCopy: Record<RiskMode, StrategyRules> = {} as Record<RiskMode, StrategyRules>;
+                                  Object.entries(presetData.rules as Record<string, unknown>).forEach(([riskMode, rule]: [string, unknown]) => {
+                                    if (riskMode === 'Conservative' || riskMode === 'Aggressive') {
+                                      const ruleObj = rule as StrategyRules;
+                                      rulesCopy[riskMode as RiskMode] = {
+                                        ...ruleObj,
+                                        maChecks: ruleObj.maChecks ? { ...ruleObj.maChecks } : { ema10: false, ma50: false, ma200: false },
+                                        rsi: ruleObj.rsi ? { ...ruleObj.rsi } : { buyBelow: 40, sellAbove: 70 },
+                                        sl: ruleObj.sl ? { ...ruleObj.sl } : {},
+                                        tp: ruleObj.tp ? { ...ruleObj.tp } : {},
+                                      };
+                                    }
+                                  });
+                                  savedPresetsConfig![presetName] = {
+                                    notificationProfile: (presetData.notificationProfile as 'swing' | 'intraday' | 'scalp') || 
+                                      (presetName === 'Swing' ? 'swing' : presetName === 'Intraday' ? 'intraday' : 'scalp'),
+                                    rules: rulesCopy
+                                  };
+                                }
+                              });
+                            }
+                            
+                            // Fallback: If PUT response doesn't have config, reload from backend
+                            // This should rarely happen, but provides a safety net
+                            if (!savedPresetsConfig) {
+                              try {
+                                console.log('[CONFIG] ⚠️ PUT response missing config, reloading from backend...');
+                                const reloadedConfig = await getTradingConfig();
+                                if (reloadedConfig?.strategy_rules) {
+                                  savedPresetsConfig = {} as PresetConfig;
+                                  Object.entries(reloadedConfig.strategy_rules).forEach(([presetKey, presetData]: [string, unknown]) => {
+                                    const presetName = presetKey.charAt(0).toUpperCase() + presetKey.slice(1) as Preset;
+                                    if (presetData && typeof presetData === 'object' && 'rules' in presetData && presetData.rules) {
+                                      const rulesCopy: Record<RiskMode, StrategyRules> = {} as Record<RiskMode, StrategyRules>;
+                                      Object.entries(presetData.rules as Record<string, unknown>).forEach(([riskMode, rule]: [string, unknown]) => {
+                                        if (riskMode === 'Conservative' || riskMode === 'Aggressive') {
+                                          rulesCopy[riskMode as RiskMode] = {
+                                            ...rule,
+                                            maChecks: rule.maChecks ? { ...rule.maChecks } : { ema10: false, ma50: false, ma200: false },
+                                            rsi: rule.rsi ? { ...rule.rsi } : { buyBelow: 40, sellAbove: 70 },
+                                            sl: rule.sl ? { ...rule.sl } : {},
+                                            tp: rule.tp ? { ...rule.tp } : {},
+                                          };
+                                        }
+                                      });
+                                      savedPresetsConfig![presetName] = {
+                                        notificationProfile: (presetData.notificationProfile as 'swing' | 'intraday' | 'scalp') || 
+                                          (presetName === 'Swing' ? 'swing' : presetName === 'Intraday' ? 'intraday' : 'scalp'),
+                                        rules: rulesCopy
+                                      };
+                                    }
+                                  });
+                                }
+                              } catch (reloadErr) {
+                                console.warn('[CONFIG] ⚠️ Failed to reload config after save:', reloadErr);
+                              }
+                            }
+                            
+                            // Final attempt: If we still don't have savedPresetsConfig, try fetching directly
+                            // This avoids using stale closure variable if all previous attempts failed
+                            if (!savedPresetsConfig) {
+                              try {
+                                console.log('[CONFIG] ⚠️ Both PUT response and reload failed, making final attempt to fetch config...');
+                                const finalConfig = await getTradingConfig();
+                                if (finalConfig?.strategy_rules) {
+                                  savedPresetsConfig = {} as PresetConfig;
+                                  Object.entries(finalConfig.strategy_rules).forEach(([presetKey, presetData]: [string, unknown]) => {
+                                    const presetName = presetKey.charAt(0).toUpperCase() + presetKey.slice(1) as Preset;
+                                    if (presetData && typeof presetData === 'object' && 'rules' in presetData && presetData.rules) {
+                                      const rulesCopy: Record<RiskMode, StrategyRules> = {} as Record<RiskMode, StrategyRules>;
+                                      Object.entries(presetData.rules as Record<string, unknown>).forEach(([riskMode, rule]: [string, unknown]) => {
+                                        if (riskMode === 'Conservative' || riskMode === 'Aggressive') {
+                                          const ruleObj = rule as StrategyRules;
+                                          rulesCopy[riskMode as RiskMode] = {
+                                            ...ruleObj,
+                                            maChecks: ruleObj.maChecks ? { ...ruleObj.maChecks } : { ema10: false, ma50: false, ma200: false },
+                                            rsi: ruleObj.rsi ? { ...ruleObj.rsi } : { buyBelow: 40, sellAbove: 70 },
+                                            sl: ruleObj.sl ? { ...ruleObj.sl } : {},
+                                            tp: ruleObj.tp ? { ...ruleObj.tp } : {},
+                                          };
+                                        }
+                                      });
+                                      savedPresetsConfig![presetName] = {
+                                        notificationProfile: (presetData.notificationProfile as 'swing' | 'intraday' | 'scalp') || 
+                                          (presetName === 'Swing' ? 'swing' : presetName === 'Intraday' ? 'intraday' : 'scalp'),
+                                        rules: rulesCopy
+                                      };
+                                    }
+                                  });
+                                  console.log('[CONFIG] ✅ Final fetch attempt succeeded');
+                                }
+                              } catch (finalErr) {
+                                console.warn('[CONFIG] ⚠️ Final fetch attempt also failed:', finalErr);
+                              }
+                            }
+                            
+                            // Update presetsConfig with saved values to ensure UI matches backend
+                            // Note: fetchTradingConfig() updates React state but doesn't return the config
+                            // We've already fetched the config above for localStorage, so this is just for UI update
+                            await fetchTradingConfig();
+                            
+                            // Update localStorage with the saved config (source of truth from backend)
+                            // FIX: Use savedPresetsConfig from PUT response/reload/final fetch instead of stale presetsConfig closure variable
+                            // Only use stale presetsConfig as absolute last resort if all fetch attempts failed
+                            if (savedPresetsConfig) {
+                              localStorage.setItem('strategy_presets_config', JSON.stringify(savedPresetsConfig));
+                              console.log('[CONFIG] ✅ Updated localStorage with saved values (from backend)');
+                            } else {
+                              // Last resort: use current presetsConfig (may be stale, but better than nothing)
+                              // This should rarely happen - only if all 3 fetch attempts (PUT response, reload, final fetch) failed
+                              console.warn('[CONFIG] ⚠️ All config fetch attempts failed, using current state (may be stale)');
+                              localStorage.setItem('strategy_presets_config', JSON.stringify(presetsConfig));
+                              console.log('[CONFIG] ⚠️ Updated localStorage with current state (fallback - may be stale)');
+                            }
                           } catch (backendErr) {
                             console.error('⚠️ Failed to save configuration to backend:', backendErr);
                             // Fallback: save to localStorage even if backend save fails
+                            // Note: presetsConfig may be stale due to closure, but it's the best we have if backend save failed
                             localStorage.setItem('strategy_presets_config', JSON.stringify(presetsConfig));
-                            console.log('⚠️ Saved to localStorage only (backend save failed)');
+                            console.log('⚠️ Saved to localStorage only (backend save failed) - using current state');
                           }
                             
                             // Apply min_price_change_pct to all coins using this strategy
@@ -9282,18 +9469,20 @@ ${marginText}
                                 // Show order status: created, in progress, or error
                                 if (result.order_created) {
                                   message += `   📦 Order created: ✅\n`;
-                                } else if ((result as any).order_in_progress) {
+                                } else if ('order_in_progress' in result && (result as { order_in_progress?: boolean }).order_in_progress) {
                                   message += `   📦 Order created: ⏳ (en proceso en background)\n`;
-                                  if ((result as any).note) {
-                                    message += `   ℹ️ ${(result as any).note}\n`;
+                                  const resultWithNote = result as { note?: string };
+                                  if (resultWithNote.note) {
+                                    message += `   ℹ️ ${resultWithNote.note}\n`;
                                   }
                                 } else if (result.order_error) {
                                   message += `   📦 Order created: ❌\n`;
                                   message += `   ⚠️ Error: ${result.order_error}\n`;
                                 } else {
                                   message += `   📦 Order created: ❌\n`;
-                                  if ((result as any).note) {
-                                    message += `   ℹ️ ${(result as any).note}\n`;
+                                  const resultWithNote = result as { note?: string };
+                                  if (resultWithNote.note) {
+                                    message += `   ℹ️ ${resultWithNote.note}\n`;
                                   }
                                 }
                               });

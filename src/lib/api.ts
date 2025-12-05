@@ -18,7 +18,6 @@ export interface WatchlistItem {
   buy_alert_enabled?: boolean;  // Enable BUY alerts specifically
   sell_alert_enabled?: boolean;  // Enable SELL alerts specifically
   sl_tp_mode?: string;
-  preset?: string;  // Strategy preset: 'swing', 'intraday', 'scalp', 'swing-conservative', 'swing-aggressive', etc.
   min_price_change_pct?: number | null;
   alert_cooldown_minutes?: number | null;
   sl_percentage?: number | null;
@@ -29,6 +28,10 @@ export interface WatchlistItem {
   price?: number;
   rsi?: number;
   signals?: TradingSignals;
+  // Backend fields (may be present in API responses)
+  is_deleted?: boolean;
+  updated_at?: string;
+  created_at?: string;
 }
 
 export interface WatchlistInput {
@@ -183,8 +186,8 @@ export interface PortfolioResponse {
 export interface StrategyDecision {
   decision: 'BUY' | 'SELL' | 'WAIT';
   summary?: string;
-  index?: number | null;  // Percentage of buy_* flags that are True (0-100), calculated by backend
   reasons?: Record<string, boolean | null | undefined>;
+  index?: number | null;
 }
 
 export interface TopCoin {
@@ -209,9 +212,9 @@ export interface TopCoin {
   atr?: number;
   avg_volume?: number;
   volume_ratio?: number;
+  min_volume_ratio?: number;  // Minimum volume ratio threshold from strategy config
   current_volume?: number;
   volume_avg_periods?: number;
-  min_volume_ratio?: number;  // CANONICAL: Backend configured threshold from Signal Config
   // Resistance levels
   res_up?: number;
   res_down?: number;
@@ -609,24 +612,8 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
     
     const apiUrl = typeof window !== 'undefined' ? getApiUrl() : DEFAULT_API_URL;
     const fullUrl = `${apiUrl}${endpoint}`;
-    
-    // DEBUG: Log dashboard/watchlist requests for 405 debugging
-    const method = options?.method || 'GET';
-    if ((method === 'PUT' || method === 'POST' || method === 'PATCH') && 
-        (endpoint.includes('/dashboard') || endpoint.includes('/watchlist'))) {
-      // Get caller function name from stack trace
-      const stack = new Error().stack;
-      const callerMatch = stack?.match(/at (\w+)/g);
-      const caller = callerMatch && callerMatch.length > 2 ? callerMatch[2].replace('at ', '') : 'unknown';
-      
-      console.log(`[DEBUG_FETCH_DASHBOARD] ${method} ${fullUrl}`, {
-        endpoint,
-        fullUrl,
-        method,
-        caller,
-        timestamp: new Date().toISOString(),
-      });
-    }
+    // Debug logs removed to reduce console noise - uncomment if needed for debugging
+    // console.log('🌐 fetchAPI: Making request to:', fullUrl);
     
         // Create an AbortController for timeout
         // Signals, top-coins-data, dashboard/state, and orders/history endpoints can take longer due to multi-source price fetching or database queries
@@ -709,45 +696,7 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
     console.log(`✅ Fetch completado para ${endpoint} en ${fetchElapsed}ms`);
     clearTimeout(timeoutId);
     
-    // DEBUG: Log response status for dashboard/watchlist requests
-    if ((method === 'PUT' || method === 'POST' || method === 'PATCH') && 
-        (endpoint.includes('/dashboard') || endpoint.includes('/watchlist'))) {
-      const stack = new Error().stack;
-      const callerMatch = stack?.match(/at (\w+)/g);
-      const caller = callerMatch && callerMatch.length > 2 ? callerMatch[2].replace('at ', '') : 'unknown';
-      
-      console.log(`[DEBUG_FETCH_DASHBOARD] ${method} ${fullUrl} -> ${response.status}`, {
-        endpoint,
-        fullUrl,
-        method,
-        status: response.status,
-        statusText: response.statusText,
-        caller,
-        elapsed: `${fetchElapsed}ms`,
-      });
-    }
-    
     if (!response.ok) {
-      // CRITICAL: Check for 405 Method Not Allowed - indicates invalid endpoint
-      if (response.status === 405) {
-        const stack = new Error().stack;
-        const callerMatch = stack?.match(/at (\w+)/g);
-        const caller = callerMatch && callerMatch.length > 2 ? callerMatch[2].replace('at ', '') : 'unknown';
-        
-        console.error(`[FATAL] Invalid endpoint called: ${fullUrl}`);
-        console.error(`[FATAL] Method: ${method}, Caller: ${caller}`);
-        console.error(`[FATAL] This endpoint does not exist or does not support the requested HTTP method.`);
-        console.error(`[FATAL] Please check the backend routes and update the frontend call.`);
-        const error = new Error(`Method Not Allowed (405): Invalid endpoint ${endpoint}`) as Error & {
-          status?: number;
-          retryAfterMs?: number;
-          detail?: string;
-        };
-        error.status = 405;
-        error.detail = `Invalid endpoint: ${endpoint} - This endpoint does not exist or does not support the requested HTTP method.`;
-        throw error;
-      }
-      
       // Try to parse the error response body to get the detailed error message
       let errorDetail = `HTTP error! status: ${response.status}`;
       try {
@@ -802,11 +751,6 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
     // Record success for circuit breaker
     if (endpoint.includes('/signals')) {
       recordSignalsSuccess();
-    }
-    
-    // Debug logging for successful writes (PUT/POST/DELETE)
-    if (options?.method && ['PUT', 'POST', 'DELETE'].includes(options.method)) {
-      console.log(`[DEBUG_SAVE] endpoint=${endpoint} method=${options.method} status=success`);
     }
     
     return json as T;
@@ -923,20 +867,7 @@ export async function updateDashboardItem(id: number, item: Partial<WatchlistIte
   return data;
 }
 
-export async function updateDashboardItemBySymbol(symbol: string, item: Partial<WatchlistItem>): Promise<WatchlistItem & { message?: string }> {
-  const normalizedSymbol = symbol.toUpperCase();
-  const data = await fetchAPI<WatchlistItem & { message?: string }>(`/dashboard/symbol/${encodeURIComponent(normalizedSymbol)}`, {
-    method: 'PUT',
-    body: JSON.stringify(item),
-  });
-  console.log(`[DEBUG_SAVE] symbol=${normalizedSymbol} endpoint=/dashboard/symbol/${normalizedSymbol} status=success`);
-  if (data.message) {
-    console.log(`✅ Backend: ${data.message}`);
-  }
-  return data;
-}
-
-export async function saveCoinSettings(symbol: string, settings: Partial<CoinSettings>): Promise<WatchlistItem & { message?: string } | void> {
+export async function saveCoinSettings(symbol: string, settings: Partial<CoinSettings>): Promise<WatchlistItem & { message?: string }> {
   try {
     console.log(`Saving coin settings for ${symbol}:`, settings);
     const { trade_amount_usd, ...otherSettings } = settings;
@@ -963,34 +894,71 @@ export async function saveCoinSettings(symbol: string, settings: Partial<CoinSet
     }
     
     const normalizedSymbol = symbol ? symbol.toUpperCase() : '';
-    const existingItem = items.find(item => (item.symbol || '').toUpperCase() === normalizedSymbol);
+    
+    // Find all items matching the symbol (may have duplicates)
+    const matchingItems = items.filter(item => (item.symbol || '').toUpperCase() === normalizedSymbol);
+    
+    // Use canonical selector logic (same as backend's select_preferred_watchlist_item)
+    // Priority: 1) Not deleted, 2) alert_enabled=true, 3) Newer timestamp, 4) Higher ID
+    const selectCanonicalItem = (items: WatchlistItem[]): WatchlistItem | undefined => {
+      if (items.length === 0) return undefined;
+      if (items.length === 1) return items[0];
+      
+      // Filter out deleted items first
+      const nonDeleted = items.filter(item => !item.is_deleted);
+      const candidates = nonDeleted.length > 0 ? nonDeleted : items;
+      
+      // Sort by priority: alert_enabled (true first), then by timestamp (newer first), then by ID (higher first)
+      const sorted = [...candidates].sort((a, b) => {
+        // Priority 1: alert_enabled (true = 0, false = 1)
+        const aAlert = a.alert_enabled ? 0 : 1;
+        const bAlert = b.alert_enabled ? 0 : 1;
+        if (aAlert !== bAlert) return aAlert - bAlert;
+        
+        // Priority 2: timestamp (newer = higher priority, so negate)
+        const aTime = a.updated_at || a.created_at || '';
+        const bTime = b.updated_at || b.created_at || '';
+        const aTimestamp = aTime ? new Date(aTime).getTime() : 0;
+        const bTimestamp = bTime ? new Date(bTime).getTime() : 0;
+        if (aTimestamp !== bTimestamp) return bTimestamp - aTimestamp; // Descending (newer first)
+        
+        // Priority 3: ID (higher = better, so negate)
+        return (b.id || 0) - (a.id || 0); // Descending (higher ID first)
+      });
+      
+      return sorted[0];
+    };
+    
+    const existingItem = selectCanonicalItem(matchingItems);
     
     if (existingItem) {
-      console.log(`Found existing item for ${symbol}, updating via canonical selector (id=${existingItem.id})`);
+      console.log(`Found existing item for ${symbol}, updating with ID:`, existingItem.id);
       try {
-      // CRITICAL: Use updateDashboardItemBySymbol to ensure we update the same row that SignalMonitor reads
-      // This uses the canonical selector to find the correct row, even if duplicates exist
-      const result = await updateDashboardItemBySymbol(normalizedSymbol, normalizedSettings);
-      // Debug logging is already done in updateDashboardItemBySymbol
-      console.log(`Updated item for ${symbol} via canonical selector:`, result);
+      // Update existing item - merge with existing data
+      const result = await updateDashboardItem(existingItem.id, {
+        symbol,
+        exchange: existingItem.exchange || 'CRYPTO_COM',
+        buy_target: existingItem.buy_target,
+        take_profit: existingItem.take_profit,
+        stop_loss: existingItem.stop_loss,
+          ...normalizedSettings
+      });
+      console.log(`Updated item for ${symbol}:`, result);
       if (result.message) {
         console.log(`✅ Backend confirmation: ${result.message}`);
       }
-      return result; // Return result so frontend can update local state from backend response
+      return result;
       } catch (error) {
         // Provide more specific error message
         const errorMsg = error instanceof Error ? error.message : String(error);
-        if (errorMsg.includes('405') || (error instanceof Error && error.status === 405)) {
-          console.error(`[FATAL] saveCoinSettings called invalid endpoint for ${normalizedSymbol}. This should not happen.`);
-          throw new Error(`Invalid endpoint (405): The endpoint for updating ${normalizedSymbol} does not exist. This is a bug.`);
-        } else if (errorMsg.includes('404') || errorMsg.includes('not found')) {
-          throw new Error(`Watchlist item for ${normalizedSymbol} not found. It may have been deleted.`);
+        if (errorMsg.includes('404') || errorMsg.includes('not found')) {
+          throw new Error(`Watchlist item for ${symbol} not found. It may have been deleted.`);
         } else if (errorMsg.includes('502') || errorMsg.includes('Bad Gateway')) {
           throw new Error(`Backend service unavailable (502). Please check if the backend is running.`);
         } else if (errorMsg.includes('500')) {
           throw new Error(`Backend error (500): ${errorMsg}`);
         } else {
-          throw new Error(`Failed to update ${normalizedSymbol}: ${errorMsg}`);
+          throw new Error(`Failed to update ${symbol}: ${errorMsg}`);
         }
       }
     } else {
@@ -1014,7 +982,7 @@ export async function saveCoinSettings(symbol: string, settings: Partial<CoinSet
       };
       const result = await addToDashboard(newItem);
       console.log(`Created item for ${symbol}:`, result);
-      return result; // Return result for consistency
+      return result;
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         if (errorMsg.includes('502') || errorMsg.includes('Bad Gateway')) {
@@ -1431,10 +1399,10 @@ export interface TradingSignals {
   volume: number;
   avg_volume: number;
   volume_ratio?: number;
+  min_volume_ratio?: number;  // Minimum volume ratio threshold from strategy config
   volume_24h?: number;
   current_volume?: number;
   volume_avg_periods?: number;
-  min_volume_ratio?: number;  // CANONICAL: Backend configured threshold from Signal Config
   res_up: number;
   res_down: number;
   signals: {
@@ -1656,9 +1624,9 @@ export async function getTradingConfig(): Promise<TradingConfig | null> {
   }
 }
 
-export async function saveTradingConfig(config: TradingConfig): Promise<{ ok: boolean }> {
+export async function saveTradingConfig(config: TradingConfig): Promise<{ ok: boolean; config?: TradingConfig }> {
   try {
-    const data = await fetchAPI<{ ok: boolean }>('/config', {
+    const data = await fetchAPI<{ ok: boolean; config?: TradingConfig }>('/config', {
       method: 'PUT',
       body: JSON.stringify(config)
     });
@@ -1678,20 +1646,9 @@ export type CoinParams = Record<string, number | string | boolean | null>;
 
 export async function getCoinParams(symbol: string): Promise<CoinParams | null> {
   try {
-    // FIXED: Use /dashboard/symbol/{symbol} (GET) instead of invalid /params/{symbol}
-    // This endpoint returns the watchlist item which contains all coin parameters
-    const normalizedSymbol = symbol.toUpperCase();
-    const data = await fetchAPI<WatchlistItem>(`/dashboard/symbol/${encodeURIComponent(normalizedSymbol)}`);
-    // Convert WatchlistItem to CoinParams format
-    return {
-      preset: data.sl_tp_mode || 'conservative',
-      // Add other params as needed
-    } as CoinParams;
+    const data = await fetchAPI<CoinParams>(`/params/${symbol}`);
+    return data as CoinParams;
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    if (errorMsg.includes('405') || (error instanceof Error && error.status === 405)) {
-      console.error(`[FATAL] getCoinParams called invalid endpoint for ${symbol}. This should not happen after the fix.`);
-    }
     logRequestIssue(
       `getCoinParams:${symbol}`,
       'Handled coin params fetch failure (returning null)',
@@ -1709,20 +1666,12 @@ export interface CoinConfigUpdate {
 
 export async function updateCoinConfig(symbol: string, config: CoinConfigUpdate): Promise<{ ok: boolean }> {
   try {
-    // FIXED: Use /dashboard/symbol/{symbol} instead of invalid /coins/{symbol}
-    // This endpoint supports PUT and updates watchlist items by symbol
-    const normalizedSymbol = symbol.toUpperCase();
-    const data = await fetchAPI<WatchlistItem & { message?: string }>(`/dashboard/symbol/${encodeURIComponent(normalizedSymbol)}`, {
+    const data = await fetchAPI<{ ok: boolean }>(`/coins/${symbol}`, {
       method: 'PUT',
       body: JSON.stringify(config)
     });
-    console.log(`[DEBUG_SAVE] symbol=${normalizedSymbol} endpoint=/dashboard/symbol/${normalizedSymbol} status=success`);
-    return { ok: true };
+    return data;
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    if (errorMsg.includes('405') || (error instanceof Error && error.status === 405)) {
-      console.error(`[FATAL] updateCoinConfig called invalid endpoint for ${symbol}. This should not happen after the fix.`);
-    }
     logRequestIssue(
       `updateCoinConfig:${symbol}`,
       'Handled coin config update failure',
@@ -1746,7 +1695,6 @@ export async function updateWatchlistAlert(
   sell_alert_enabled?: boolean | null;
 }> {
   try {
-    const normalizedSymbol = symbol.toUpperCase();
     const payload: Record<string, boolean> = {
       alert_enabled: alertEnabled,
     };
@@ -1762,14 +1710,13 @@ export async function updateWatchlistAlert(
       alert_enabled?: boolean;
       buy_alert_enabled?: boolean | null;
       sell_alert_enabled?: boolean | null;
-    }>(`/watchlist/${normalizedSymbol}/alert`, {
+    }>(`/watchlist/${symbol}/alert`, {
       method: 'PUT',
       body: JSON.stringify(payload),
     });
-    console.log(`[DEBUG_SAVE] symbol=${normalizedSymbol} endpoint=/watchlist/${normalizedSymbol}/alert status=success`);
     return {
       ok: data.ok ?? true,
-      symbol: data.symbol ?? normalizedSymbol,
+      symbol: data.symbol ?? symbol,
       alert_enabled: data.alert_enabled ?? alertEnabled,
       buy_alert_enabled:
         data.buy_alert_enabled ??
@@ -1781,12 +1728,8 @@ export async function updateWatchlistAlert(
         alertEnabled,
     };
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    if (errorMsg.includes('405') || (error instanceof Error && error.status === 405)) {
-      console.error(`[FATAL] updateWatchlistAlert called invalid endpoint for ${normalizedSymbol}. This should not happen.`);
-    }
     logRequestIssue(
-      `updateWatchlistAlert:${normalizedSymbol}`,
+      `updateWatchlistAlert:${symbol}`,
       'Handled alert update failure',
       error,
       'warn'
@@ -1797,7 +1740,6 @@ export async function updateWatchlistAlert(
 
 export async function updateBuyAlert(symbol: string, buyAlertEnabled: boolean): Promise<{ ok: boolean; symbol: string; buy_alert_enabled: boolean; sell_alert_enabled: boolean; message?: string }> {
   try {
-    const normalizedSymbol = symbol.toUpperCase();
     const data = await fetchAPI<{
       ok?: boolean;
       symbol?: string;
@@ -1805,26 +1747,20 @@ export async function updateBuyAlert(symbol: string, buyAlertEnabled: boolean): 
       sell_alert_enabled?: boolean;
       alert_enabled?: boolean;
       message?: string;
-    }>(`/watchlist/${normalizedSymbol}/buy-alert`, {
+    }>(`/watchlist/${symbol}/buy-alert`, {
       method: 'PUT',
       body: JSON.stringify({ buy_alert_enabled: buyAlertEnabled })
     });
-    console.log(`[DEBUG_SAVE] symbol=${normalizedSymbol} endpoint=/watchlist/${normalizedSymbol}/buy-alert status=success`);
     return {
       ok: data.ok ?? true,
-      symbol: data.symbol ?? normalizedSymbol,
+      symbol: data.symbol ?? symbol,
       buy_alert_enabled: data.buy_alert_enabled ?? buyAlertEnabled,
       sell_alert_enabled: data.sell_alert_enabled ?? data.alert_enabled ?? false,
       message: data.message
     };
   } catch (error) {
-    const normalizedSymbol = symbol.toUpperCase();
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    if (errorMsg.includes('405') || (error instanceof Error && error.status === 405)) {
-      console.error(`[FATAL] updateBuyAlert called invalid endpoint for ${normalizedSymbol}. This should not happen.`);
-    }
     logRequestIssue(
-      `updateBuyAlert:${normalizedSymbol}`,
+      `updateBuyAlert:${symbol}`,
       'Handled buy alert update failure',
       error,
       'warn'
@@ -1835,7 +1771,6 @@ export async function updateBuyAlert(symbol: string, buyAlertEnabled: boolean): 
 
 export async function updateSellAlert(symbol: string, sellAlertEnabled: boolean): Promise<{ ok: boolean; symbol: string; buy_alert_enabled: boolean; sell_alert_enabled: boolean; message?: string }> {
   try {
-    const normalizedSymbol = symbol.toUpperCase();
     const data = await fetchAPI<{
       ok?: boolean;
       symbol?: string;
@@ -1843,26 +1778,20 @@ export async function updateSellAlert(symbol: string, sellAlertEnabled: boolean)
       sell_alert_enabled?: boolean;
       alert_enabled?: boolean;
       message?: string;
-    }>(`/watchlist/${normalizedSymbol}/sell-alert`, {
+    }>(`/watchlist/${symbol}/sell-alert`, {
       method: 'PUT',
       body: JSON.stringify({ sell_alert_enabled: sellAlertEnabled })
     });
-    console.log(`[DEBUG_SAVE] symbol=${normalizedSymbol} endpoint=/watchlist/${normalizedSymbol}/sell-alert status=success`);
     return {
       ok: data.ok ?? true,
-      symbol: data.symbol ?? normalizedSymbol,
+      symbol: data.symbol ?? symbol,
       buy_alert_enabled: data.buy_alert_enabled ?? data.alert_enabled ?? false,
       sell_alert_enabled: data.sell_alert_enabled ?? sellAlertEnabled,
       message: data.message
     };
   } catch (error) {
-    const normalizedSymbol = symbol.toUpperCase();
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    if (errorMsg.includes('405') || (error instanceof Error && error.status === 405)) {
-      console.error(`[FATAL] updateSellAlert called invalid endpoint for ${normalizedSymbol}. This should not happen.`);
-    }
     logRequestIssue(
-      `updateSellAlert:${normalizedSymbol}`,
+      `updateSellAlert:${symbol}`,
       'Handled sell alert update failure',
       error,
       'warn'
@@ -2275,34 +2204,6 @@ export interface SignalThrottleEntry {
   seconds_since_last: number | null;
 }
 
-export interface Workflow {
-  id: string;
-  name?: string;
-  description?: string;
-  schedule?: string;
-  status?: 'ok' | 'failed' | 'never_run' | 'unknown';
-  last_run_at?: string | null;
-  report_path?: string | null;
-  extra?: Record<string, any>;
-  run_endpoint?: string | null;
-  automated?: boolean;
-  // Legacy fields for backward compatibility
-  last_execution?: string | null;
-  last_status?: string;
-  last_report?: string | null;
-  last_error?: string | null;
-}
-
-export interface WorkflowsResponse {
-  workflows: Workflow[];
-}
-
-export interface RunWorkflowResponse {
-  workflow_id: string;
-  started: boolean;
-  message: string;
-}
-
 export async function getMonitoringSummary(): Promise<MonitoringSummary> {
   try {
     const data = await fetchAPI<MonitoringSummary>('/monitoring/summary');
@@ -2345,6 +2246,27 @@ export async function getTelegramMessages(): Promise<TelegramMessagesResponse> {
   }
 }
 
+export interface Workflow {
+  id: string;
+  name: string;
+  description: string;
+  automated: boolean;
+  schedule: string;
+  run_endpoint?: string | null;  // If null, workflow cannot be run manually
+  last_execution?: string | null;
+  last_status: string;
+  last_report?: string | null;
+  last_error?: string | null;
+}
+
+export interface WorkflowsResponse {
+  workflows: Workflow[];
+}
+
+export async function getWorkflows(): Promise<WorkflowsResponse> {
+  return fetchAPI<WorkflowsResponse>('/monitoring/workflows');
+}
+
 export async function getSignalThrottleState(limit = 200): Promise<SignalThrottleEntry[]> {
   try {
     const query = limit ? `?limit=${limit}` : '';
@@ -2354,32 +2276,5 @@ export async function getSignalThrottleState(limit = 200): Promise<SignalThrottl
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error('❌ getSignalThrottleState: Error fetching throttle data:', errorMsg);
     return [];
-  }
-}
-
-export async function getWorkflows(): Promise<WorkflowsResponse> {
-  try {
-    const data = await fetchAPI<WorkflowsResponse>('/monitoring/workflows');
-    return data;
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error('❌ getWorkflows: Error fetching workflows:', errorMsg);
-    return { workflows: [] };
-  }
-}
-
-export async function runWorkflow(workflowId: string): Promise<RunWorkflowResponse> {
-  try {
-    const data = await fetchAPI<RunWorkflowResponse>(
-      `/monitoring/workflows/${workflowId}/run`,
-      {
-        method: 'POST',
-      }
-    );
-    return data;
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`❌ runWorkflow: Error running workflow ${workflowId}:`, errorMsg);
-    throw error;
   }
 }

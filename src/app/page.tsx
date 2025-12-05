@@ -182,6 +182,7 @@ export default function DashboardPage() {
   );
 }
 import MonitoringPanel from '@/app/components/MonitoringPanel';
+import ErrorBoundary from '@/app/components/ErrorBoundary';
 import { palette } from '@/theme/palette';
 
 const REFRESH_FAST_MS = 15000; // 15 seconds for coins with Trade YES
@@ -880,6 +881,16 @@ function DashboardPageContent() {
   const [snapshotLastUpdated, setSnapshotLastUpdated] = useState<Date | null>(null);
   // const [expandedPositions, setExpandedPositions] = useState<Set<string>>(new Set()); // Not currently used
   const [orderFilter, setOrderFilter] = useState({ symbol: '', status: '', side: '', startDate: '', endDate: '' });
+  const [hideCancelled, setHideCancelled] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = window.localStorage.getItem('executedOrdersHideCancelled');
+    return stored === null ? true : stored === 'true';
+  });
+  const [hideCancelledOpenOrders, setHideCancelledOpenOrders] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = window.localStorage.getItem('openOrdersHideCancelled');
+    return stored === null ? true : stored === 'true';
+  });
   const [plPeriod, setPlPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('daily');
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
@@ -1066,15 +1077,25 @@ function DashboardPageContent() {
     }
   }, []);
   const coinMembershipSignature = useMemo(
-    () =>
-      topCoins
-        .map((coin) => coin.instrument_name)
-        .filter(Boolean)
-        .sort()
-        .join('|'),
+    () => {
+      // Defensive check: ensure topCoins is an array and not undefined/null
+      if (!topCoins || !Array.isArray(topCoins) || topCoins.length === 0) return '';
+      try {
+        return topCoins
+          .map((coin) => coin?.instrument_name)
+          .filter((name): name is string => Boolean(name))
+          .sort()
+          .join('|');
+      } catch (err) {
+        console.error('Error in coinMembershipSignature:', err);
+        return '';
+      }
+    },
     [topCoins]
   );
   const filteredOpenOrders = useMemo(() => {
+    // Defensive check: ensure openOrders is an array
+    if (!Array.isArray(openOrders)) return [];
     // Sort orders by creation date (newest first)
     const sortedOrders = [...openOrders].sort((a, b) => {
       const aTime = a.create_time || 0;
@@ -1086,6 +1107,11 @@ function DashboardPageContent() {
     });
     
     return sortedOrders.filter(order => {
+      // Filter out cancelled orders if hideCancelledOpenOrders is true
+      if (hideCancelledOpenOrders && isCancelledStatus(order.status)) {
+        return false;
+      }
+      
       const matchesSymbol = !orderFilter.symbol || order.instrument_name.toLowerCase().includes(orderFilter.symbol.toLowerCase());
       const matchesStatus = !orderFilter.status || order.status === orderFilter.status;
       const matchesSide = !orderFilter.side || order.side === orderFilter.side;
@@ -1125,7 +1151,7 @@ function DashboardPageContent() {
       
       return matchesSymbol && matchesStatus && matchesSide && matchesDate;
     });
-  }, [openOrders, orderFilter]);
+  }, [openOrders, orderFilter, hideCancelledOpenOrders]);
   // Helper function to calculate profit/loss for an executed order
   const calculateProfitLoss = useCallback((order: OpenOrder, allOrders: OpenOrder[]): { pnl: number; pnlPercent: number; isRealized: boolean } => {
     const orderSymbol = order.instrument_name;
@@ -1271,8 +1297,22 @@ function DashboardPageContent() {
     return { pnl: 0, pnlPercent: 0, isRealized: false };
   }, [topCoins]);
   
+  // Helper function to check if an order status is cancelled
+  const isCancelledStatus = (status: string | null | undefined): boolean => {
+    if (!status) return false;
+    const normalized = status.toUpperCase();
+    return normalized === 'CANCELLED' || normalized === 'CANCELED';
+  };
+
   const filteredExecutedOrders = useMemo(() => {
+    // Defensive check: ensure executedOrders is an array
+    if (!Array.isArray(executedOrders)) return [];
     const filtered = executedOrders.filter(order => {
+      // Filter out cancelled orders if hideCancelled is true
+      if (hideCancelled && isCancelledStatus(order.status)) {
+        return false;
+      }
+      
       const matchesSymbol = !orderFilter.symbol || order.instrument_name.toLowerCase().includes(orderFilter.symbol.toLowerCase());
       const matchesStatus = !orderFilter.status || order.status === orderFilter.status;
       const matchesSide = !orderFilter.side || order.side === orderFilter.side;
@@ -1316,10 +1356,14 @@ function DashboardPageContent() {
     });
     // Debug: Filtered executed orders (silenced to reduce console noise)
     return filtered;
-  }, [executedOrders, orderFilter]);
+  }, [executedOrders, orderFilter, hideCancelled]);
   
   // Calculate total P&L for filtered orders (only SELL orders count as realized P/L)
   const filteredTotalPL = useMemo(() => {
+    // Defensive checks: ensure dependencies are initialized
+    if (!Array.isArray(filteredExecutedOrders) || !Array.isArray(executedOrders) || typeof calculateProfitLoss !== 'function') {
+      return 0;
+    }
     let totalPL = 0;
     filteredExecutedOrders.forEach(order => {
       if (order.side?.toUpperCase() === 'SELL') {
@@ -1357,7 +1401,8 @@ function DashboardPageContent() {
       const endTime = endDate.getTime();
       
       let realizedPL = 0;
-      if (executedOrders && executedOrders.length > 0 && typeof calculateProfitLoss === 'function') {
+      // Additional defensive check
+      if (Array.isArray(executedOrders) && executedOrders.length > 0 && typeof calculateProfitLoss === 'function') {
         const realizedOrders = executedOrders.filter(order => {
           if (!order || order.side?.toUpperCase() !== 'SELL' || order.status !== 'FILLED') return false;
           const orderTime = order.update_time || order.create_time || 0;
@@ -1441,7 +1486,8 @@ function DashboardPageContent() {
   }, [plPeriod, selectedMonth, selectedYear, executedOrders, topCoins, calculateProfitLoss]);
 
   const orderedWatchlistCoins = useMemo(() => {
-    if (!topCoins || topCoins.length === 0) {
+    // Defensive check: ensure topCoins is an array
+    if (!Array.isArray(topCoins) || topCoins.length === 0) {
       // Silently return empty array during initial load
       return [];
     }
@@ -1484,6 +1530,8 @@ function DashboardPageContent() {
 
   const visibleWatchlistCoins = useMemo(
     () => {
+      // Defensive check: ensure orderedWatchlistCoins is an array
+      if (!Array.isArray(orderedWatchlistCoins)) return [];
       // Filter out deleted coins and show all remaining coins
       const deletedCoins = (() => {
         try {
@@ -1772,9 +1820,10 @@ function resolveDecisionIndexColor(value: number): string {
       : {};
 
     // CANONICAL: Use backend min_volume_ratio if provided (Signal Config source of truth), otherwise fallback to rules
+    // NOTE: Must use ?? (nullish coalescing) not || (falsy check) because 0 is a valid value
     const minVolumeRatio = backendMinVolumeRatio !== undefined && backendMinVolumeRatio !== null
       ? backendMinVolumeRatio
-      : (rules.volumeMinRatio || 0.5);
+      : (rules.volumeMinRatio ?? 0.5);
 
     const lines: string[] = [];
     const fullStrategyName = formatFullStrategyName(preset, riskMode);
@@ -4240,6 +4289,9 @@ function resolveDecisionIndexColor(value: number): string {
       
       // First, try to load from strategy_rules (new format, source of truth)
       if (config?.strategy_rules) {
+        // [VOLUME_DEBUG] Log raw backend response
+        console.log('[VOLUME_DEBUG_GET] Raw backend strategy_rules:', JSON.stringify(config.strategy_rules, null, 2));
+        
         Object.entries(config.strategy_rules).forEach(([presetKey, presetData]) => {
           const presetPayload = presetData as { rules?: Record<string, StrategyRules>; notificationProfile?: string } | undefined;
           // Convert backend key (lowercase) to frontend key (capitalized)
@@ -4253,6 +4305,9 @@ function resolveDecisionIndexColor(value: number): string {
             // Copy each risk mode rule with deep copy of nested objects
             Object.entries(presetPayload.rules).forEach(([riskMode, rule]) => {
               if (riskMode === 'Conservative' || riskMode === 'Aggressive') {
+                // [VOLUME_DEBUG] Log each rule being loaded
+                console.log(`[VOLUME_DEBUG_GET] Loading ${presetName}-${riskMode}: volumeMinRatio=${rule.volumeMinRatio} (type: ${typeof rule.volumeMinRatio})`);
+                
                 rulesCopy[riskMode as RiskMode] = {
                   ...rule,
                   // Deep copy maChecks to preserve exact backend values
@@ -4263,7 +4318,6 @@ function resolveDecisionIndexColor(value: number): string {
                   sl: rule.sl ? { ...rule.sl } : {},
                   tp: rule.tp ? { ...rule.tp } : {},
                 };
-                console.log(`📥 Backend ${presetName}-${riskMode} maChecks:`, JSON.stringify(rulesCopy[riskMode as RiskMode].maChecks, null, 2));
               }
             });
             
@@ -4312,34 +4366,71 @@ function resolveDecisionIndexColor(value: number): string {
       }
       
       // Update presetsConfig with backend data - BACKEND IS SOURCE OF TRUTH
-      // CRITICAL FIX: Use backend values directly, fallback to defaults only for missing presets
+      // 
+      // CRITICAL: Risk-mode-level merge to prevent overwriting custom values like volumeMinRatio
+      // 
+      // We must merge at the risk-mode level (not preset level) because:
+      // 1. Backend may only have partial data (e.g., only Conservative rules updated)
+      // 2. If we replace the entire preset, we lose Aggressive rules that weren't in backend
+      // 3. Custom values like volumeMinRatio must be preserved per risk mode
+      // 
+      // Example: If backend only has swing.Conservative.volumeMinRatio=1.5,
+      // we merge it into defaults, keeping swing.Aggressive.volumeMinRatio=0.5 intact.
       setPresetsConfig(() => {
-        console.log('📥 Setting presetsConfig from backend (source of truth)');
-        console.log('📥 backendPresetsConfig:', JSON.stringify(backendPresetsConfig, null, 2));
+        // Start with deep clone of PRESET_CONFIG to preserve all defaults
+        const merged = structuredClone(PRESET_CONFIG);
         
-        // Start with PRESET_CONFIG as base for presets not in backend
-        const finalConfig: PresetConfig = { ...PRESET_CONFIG };
-        
-        // Override with backend values where they exist
-        Object.keys(backendPresetsConfig).forEach((presetName) => {
-          const preset = backendPresetsConfig[presetName as Preset];
-          if (preset?.rules) {
-            // Use backend preset directly - it already has deep copies of nested objects
-            finalConfig[presetName as Preset] = {
-              notificationProfile: preset.notificationProfile || 
-                (presetName === 'Swing' ? 'swing' : presetName === 'Intraday' ? 'intraday' : 'scalp'),
-              rules: preset.rules
-            };
-            
-            // Debug: log final maChecks after assignment
-            Object.entries(preset.rules).forEach(([riskMode, rules]) => {
-              console.log(`✅ Final ${presetName}-${riskMode} maChecks in state:`, JSON.stringify(rules.maChecks, null, 2));
-            });
+        // Merge preset types with risk-mode-level merge
+        for (const presetType of Object.keys(PRESET_CONFIG) as Preset[]) {
+          const backendPreset = backendPresetsConfig[presetType];
+          if (!backendPreset) continue;
+          
+          // Ensure correct structure
+          if (!merged[presetType].rules) merged[presetType].rules = {} as Record<RiskMode, StrategyRules>;
+          
+          // Merge notification profile
+          if (backendPreset.notificationProfile) {
+            merged[presetType].notificationProfile = backendPreset.notificationProfile;
           }
-        });
+          
+          // Merge at risk-mode level to prevent overwriting
+          // Backend values override defaults, but missing backend values keep defaults
+          for (const riskMode of Object.keys(PRESET_CONFIG[presetType].rules) as RiskMode[]) {
+            const backendRules = backendPreset.rules?.[riskMode];
+            const defaultRules = PRESET_CONFIG[presetType].rules[riskMode];
+            
+            // [VOLUME_DEBUG] Log merge operation with detailed info
+            const backendVol = backendRules?.volumeMinRatio;
+            const defaultVol = defaultRules.volumeMinRatio;
+            const finalVol = backendVol !== undefined && backendVol !== null ? backendVol : defaultVol;
+            
+            console.log(`[VOLUME_DEBUG_FRONTEND_MERGE] Merging ${presetType}-${riskMode}:`, {
+              defaultVolumeMinRatio: defaultVol,
+              backendVolumeMinRatio: backendVol,
+              backendVolumeMinRatioType: typeof backendVol,
+              backendRulesExists: !!backendRules,
+              willUse: finalVol
+            });
+            
+            // CRITICAL: Only merge if backendRules exists and has values
+            // If backendRules is undefined, keep defaults (don't merge undefined)
+            if (backendRules) {
+              merged[presetType].rules[riskMode] = {
+                ...defaultRules,
+                ...backendRules,
+              };
+            } else {
+              // No backend rules for this risk mode, keep defaults
+              merged[presetType].rules[riskMode] = { ...defaultRules };
+            }
+            
+            // [VOLUME_DEBUG] Verify final merged value
+            const finalMergedVol = merged[presetType].rules[riskMode].volumeMinRatio;
+            console.log(`[VOLUME_DEBUG_FRONTEND_MERGE] Final merged ${presetType}-${riskMode} volumeMinRatio:`, finalMergedVol, `(type: ${typeof finalMergedVol})`);
+          }
+        }
         
-        console.log('📥 Final presetsConfig being set:', JSON.stringify(finalConfig, null, 2));
-        return finalConfig;
+        return merged;
       });
       
       // Mark initial load as complete after backend data is loaded
@@ -6960,45 +7051,125 @@ function resolveDecisionIndexColor(value: number): string {
                       </div>
 
                       {/* Volume Minimum Ratio */}
+                      {/* 
+                        Volume Requirement select is now fully driven by volumeMinRatio from preset rules.
+                        The user's selection persists after reload because:
+                        1. Value is read from presetsConfig[presetType].rules[riskMode].volumeMinRatio
+                        2. Changes are saved to backend via saveTradingConfig()
+                        3. On reload, backend values are merged into presetsConfig at risk-mode level
+                        
+                        IMPORTANT: 
+                        - We convert the selected string value to a number (parseFloat) before saving
+                          to avoid string/number mismatches that would prevent the dropdown from showing the correct value.
+                        - volumeMinRatio is a number coming from backend strategy_rules.
+                        - We must not use `|| 0.5` here, only `?? 0.5`, because 0 is a valid value.
+                      */}
                       <div>
                         <h5 className="font-semibold mb-3 text-purple-700">📊 Volume Requirement</h5>
                         <div>
                           <label className="block text-sm font-medium mb-2">Minimum Volume Ratio (x promedio)</label>
-                          <select
-                            title="Select minimum volume ratio"
-                            aria-label="Select minimum volume ratio"
-                            value={currentRules.volumeMinRatio ?? 0.5}
-                            onChange={(e) => {
-                              const value = parseFloat(e.target.value) || 0.5;
-                              setPresetsConfig(prev => ({
-                                ...prev,
-                                [selectedConfigPreset]: {
-                                  ...prev[selectedConfigPreset],
-                                  rules: {
-                                    ...prev[selectedConfigPreset].rules,
-                                    [selectedConfigRisk]: {
-                                      ...prev[selectedConfigPreset].rules[selectedConfigRisk],
-                                      volumeMinRatio: value
-                                    }
-                                  }
-                                }
-                              }));
-                            }}
-                            className="w-full border border-purple-300 rounded px-3 py-2"
-                          >
-                            <option value="0.5">0.5x (Solo la mitad del promedio - ultra agresivo)</option>
-                            <option value="1.0">1.0x (Permite cualquier volumen)</option>
-                            <option value="1.5">1.5x (Requiere volumen moderado)</option>
-                            <option value="2.0">2.0x (Requiere volumen alto - recomendado)</option>
-                          </select>
+                          {(() => {
+                            // Get current volumeMinRatio with proper fallback to PRESET_CONFIG defaults
+                            const currentVolumeRatio = currentRules?.volumeMinRatio ?? 
+                              PRESET_CONFIG[selectedConfigPreset]?.rules[selectedConfigRisk]?.volumeMinRatio ?? 0.5;
+                            
+                            // Convert to string for select component (options use string values)
+                            // If value doesn't match any option, use the numeric value as string (for custom values)
+                            const selectValue = String(currentVolumeRatio);
+                            
+                            // Define all available options
+                            const volumeOptions = [
+                              { value: "0.1", label: "0.1x (Muy agresivo - solo 10% del promedio)" },
+                              { value: "0.2", label: "0.2x (Muy agresivo - solo 20% del promedio)" },
+                              { value: "0.3", label: "0.3x (Agresivo - solo 30% del promedio)" },
+                              { value: "0.5", label: "0.5x (Moderado agresivo - 50% del promedio)" },
+                              { value: "0.7", label: "0.7x (Moderado - 70% del promedio)" },
+                              { value: "1.0", label: "1.0x (Neutro - permite cualquier volumen)" },
+                              { value: "1.5", label: "1.5x (Selectivo - requiere 1.5x promedio)" },
+                              { value: "2.0", label: "2.0x (Muy selectivo - requiere 2x promedio, recomendado)" },
+                            ];
+                            
+                            // Check if current value matches an option, if not add it as a custom option
+                            const hasMatchingOption = volumeOptions.some(opt => parseFloat(opt.value) === currentVolumeRatio);
+                            
+                            return (
+                              <div className="relative z-50">
+                                <select
+                                  title="Select minimum volume ratio"
+                                  aria-label="Select minimum volume ratio"
+                                  value={selectValue}
+                                  onChange={(e) => {
+                                    // Convert selected string to number before saving to avoid type mismatches
+                                    const newRatio = parseFloat(e.target.value);
+                                    if (isNaN(newRatio)) return;
+                                    
+                                    // [VOLUME_DEBUG] Log the change
+                                    console.log(`[VOLUME_DEBUG_ONCHANGE] User selected ${newRatio} for ${selectedConfigPreset}-${selectedConfigRisk}`);
+                                    
+                                    setPresetsConfig(prev => {
+                                      const existingPreset = prev[selectedConfigPreset] ?? PRESET_CONFIG[selectedConfigPreset];
+                                      const existingRules = existingPreset.rules ?? PRESET_CONFIG[selectedConfigPreset].rules;
+                                      const existingRiskRules = existingRules[selectedConfigRisk] ?? PRESET_CONFIG[selectedConfigPreset].rules[selectedConfigRisk];
+                                      
+                                      const updated = {
+                                        ...prev,
+                                        [selectedConfigPreset]: {
+                                          ...existingPreset,
+                                          rules: {
+                                            ...existingRules,
+                                            [selectedConfigRisk]: {
+                                              ...existingRiskRules,
+                                              volumeMinRatio: newRatio,
+                                            },
+                                          },
+                                        },
+                                      };
+                                      
+                                      // [VOLUME_DEBUG] Verify the value was set correctly
+                                      const verifyVol = updated[selectedConfigPreset].rules[selectedConfigRisk].volumeMinRatio;
+                                      console.log(`[VOLUME_DEBUG_ONCHANGE] After setState, ${selectedConfigPreset}-${selectedConfigRisk} volumeMinRatio:`, verifyVol, `(type: ${typeof verifyVol})`);
+                                      
+                                      return updated;
+                                    });
+                                  }}
+                                  className="w-full border border-purple-300 rounded px-3 py-2 pr-10 bg-white appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 z-50"
+                                >
+                                  {volumeOptions.map(opt => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                  {!hasMatchingOption && (
+                                    <option value={selectValue}>
+                                      {currentVolumeRatio}x (Valor personalizado)
+                                    </option>
+                                  )}
+                                </select>
+                                {/* Dropdown arrow indicator */}
+                                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none z-10">
+                                  <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </div>
+                              </div>
+                            );
+                          })()}
                           <p className="text-xs text-gray-600 mt-1">
-                            {currentRules.volumeMinRatio === 0.5 ? 'Permite señales incluso si el volumen solo es 50% del promedio (súper agresivo)' :
-                             currentRules.volumeMinRatio === 1.0 ? 'Permite señales con cualquier volumen (menos selectivo)' :
-                             currentRules.volumeMinRatio === 1.5 ? 'Solo señales con volumen ≥1.5x promedio (moderadamente selectivo)' :
-                             currentRules.volumeMinRatio === 2.0 ? 'Solo señales con volumen ≥2.0x promedio (muy selectivo, requerido para trading activo)' :
-                             `Solo señales con volumen ≥${currentRules.volumeMinRatio ?? 0.5}x promedio`}
-          </p>
-        </div>
+                            {(() => {
+                              const volRatio = currentRules?.volumeMinRatio ?? 
+                                PRESET_CONFIG[selectedConfigPreset]?.rules[selectedConfigRisk]?.volumeMinRatio ?? 0.5;
+                              if (volRatio === 0.1) return 'Permite señales con solo 10% del volumen promedio (extremadamente agresivo)';
+                              if (volRatio === 0.2) return 'Permite señales con solo 20% del volumen promedio (muy agresivo)';
+                              if (volRatio === 0.3) return 'Permite señales con solo 30% del volumen promedio (agresivo)';
+                              if (volRatio === 0.5) return 'Permite señales incluso si el volumen solo es 50% del promedio (súper agresivo)';
+                              if (volRatio === 0.7) return 'Requiere al menos 70% del volumen promedio (moderado)';
+                              if (volRatio === 1.0) return 'Permite señales con cualquier volumen (menos selectivo)';
+                              if (volRatio === 1.5) return 'Solo señales con volumen ≥1.5x promedio (moderadamente selectivo)';
+                              if (volRatio === 2.0) return 'Solo señales con volumen ≥2.0x promedio (muy selectivo, requerido para trading activo)';
+                              return `Solo señales con volumen ≥${volRatio}x promedio (valor personalizado)`;
+                            })()}
+                          </p>
+                        </div>
                       </div>
 
                       {/* Minimum Price Change Percentage */}
@@ -7254,7 +7425,6 @@ function resolveDecisionIndexColor(value: number): string {
                             : 1.0;
                           
                           console.log(`💾 Saving configuration for ${selectedConfigPreset}-${selectedConfigRisk}:`, currentRiskRules);
-                          console.log(`💾 maChecks being saved:`, JSON.stringify(currentRiskRules.maChecks, null, 2));
                           
                           // Disable initial load flag if still active (user is explicitly saving)
                           if (isInitialLoadRef.current) {
@@ -7277,6 +7447,13 @@ function resolveDecisionIndexColor(value: number): string {
                               
                               // Convert to backend format: lowercase preset name with rules structure
                               const backendPresetKey = presetName.toLowerCase();
+                              
+                              // [VOLUME_DEBUG] Log volumeMinRatio values before sending
+                              Object.entries(preset.rules).forEach(([riskMode, rules]) => {
+                                const volRatio = (rules as StrategyRules).volumeMinRatio;
+                                console.log(`[VOLUME_DEBUG_PUT] Preparing ${presetName}-${riskMode}: volumeMinRatio=${volRatio} (type: ${typeof volRatio})`);
+                              });
+                              
                               // CRITICAL FIX: Include notificationProfile when saving
                               (backendConfig.strategy_rules as Record<string, unknown>)[backendPresetKey] = {
                                 notificationProfile: preset.notificationProfile || 
@@ -7284,6 +7461,9 @@ function resolveDecisionIndexColor(value: number): string {
                                 rules: preset.rules
                               };
                             });
+                            
+                            // [VOLUME_DEBUG] Log full payload before sending
+                            console.log('[VOLUME_DEBUG_PUT] Full payload being sent to backend:', JSON.stringify(backendConfig.strategy_rules, null, 2));
                             
                             // Save to backend
                             await saveTradingConfig(backendConfig);
@@ -8658,8 +8838,9 @@ ${marginText}
                           }
                           
                           // Get volumeMinRatio from strategy rules (default to 0.5 if not set)
-                          const rules = presetsConfig[presetType]?.rules[riskMode] || PRESET_CONFIG[presetType]?.rules[riskMode];
-                          const minVolumeRatio = rules?.volumeMinRatio || 0.5;
+                          // NOTE: Must use ?? (nullish coalescing) not || (falsy check) because 0 is a valid value
+                          const rules = presetsConfig[presetType]?.rules[riskMode] ?? PRESET_CONFIG[presetType]?.rules[riskMode];
+                          const minVolumeRatio = rules?.volumeMinRatio ?? 0.5;
                           
                           // Color coding based on ratio using dynamic threshold:
                           // Red+Bold: ratio >= minVolumeRatio (meets BUY threshold)
@@ -9078,6 +9259,14 @@ ${marginText}
                               const results: Array<{ type: string; result: SimulateAlertResponse }> = [];
                               
                               // Simulate the determined side
+                              console.log(`[TEST_BUTTON] Calling simulateAlert`, { 
+                                symbol, 
+                                testSide, 
+                                amountUSD, 
+                                endpoint: '/api/test/simulate-alert',
+                                method: 'POST',
+                                payload: { symbol, signal_type: testSide, force_order: true, trade_amount_usd: amountUSD }
+                              });
                               console.log(`🧪 Simulando alerta ${testSide} para ${symbol} con amount=${amountUSD}...`);
                               const testResult = await simulateAlert(symbol, testSide, true, amountUSD);
                               results.push({ type: testSide, result: testResult });
@@ -9163,18 +9352,18 @@ ${marginText}
       {/* Open Orders Tab */}
       {activeTab === 'orders' && (
         <div>
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-4 gap-4">
             <h2 className="text-xl font-semibold">Open Orders - Crypto.com</h2>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-2 md:gap-4">
               {openOrdersLastUpdate && (
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-gray-500 whitespace-nowrap">
                   <span className="mr-2">🕐</span>
                   Last update: {formatDateTime(openOrdersLastUpdate)}
                 </div>
               )}
               {botStatus && (
                 <>
-                <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                <div className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
                   botStatus.is_running 
                     ? 'bg-green-100 text-green-700' 
                     : 'bg-red-100 text-red-700'
@@ -9209,7 +9398,7 @@ ${marginText}
                       }
                     }}
                     disabled={togglingLiveTrading || isUpdating || topCoinsLoading || portfolioLoading}
-                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors ${
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors whitespace-nowrap ${
                       botStatus.live_trading_enabled
                         ? 'bg-green-600 text-white hover:bg-green-700'
                         : 'bg-gray-400 text-white hover:bg-gray-500'
@@ -9223,13 +9412,30 @@ ${marginText}
               <button
                 onClick={() => fetchOpenOrders({ showLoader: true })}
                 disabled={openOrdersLoading}
-                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                className={`px-3 md:px-4 py-2 rounded-lg font-medium transition-all text-sm md:text-base whitespace-nowrap ${
                   openOrdersLoading
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     : 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
                 }`}
               >
                 {openOrdersLoading ? '🔄 Updating...' : '↻ Refresh'}
+              </button>
+              <button
+                onClick={() => {
+                  const newValue = !hideCancelledOpenOrders;
+                  setHideCancelledOpenOrders(newValue);
+                  if (typeof window !== 'undefined') {
+                    window.localStorage.setItem('openOrdersHideCancelled', newValue ? 'true' : 'false');
+                  }
+                }}
+                className={`px-3 md:px-4 py-2 rounded-lg font-medium transition-all text-sm md:text-base whitespace-nowrap ${
+                  hideCancelledOpenOrders
+                    ? 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
+                    : 'bg-gray-400 text-white hover:bg-gray-500 active:bg-gray-600'
+                }`}
+                title={hideCancelledOpenOrders ? 'Ocultando órdenes canceladas - Click para mostrar' : 'Mostrando órdenes canceladas - Click para ocultar'}
+              >
+                {hideCancelledOpenOrders ? '👁️ Ocultar Canceladas: ON' : '👁️ Ocultar Canceladas: OFF'}
               </button>
             </div>
           </div>
@@ -9788,6 +9994,23 @@ ${marginText}
               >
                 {executedOrdersLoading ? '🔄 Updating...' : '↻ Refresh'}
               </button>
+              <button
+                onClick={() => {
+                  const newValue = !hideCancelled;
+                  setHideCancelled(newValue);
+                  if (typeof window !== 'undefined') {
+                    window.localStorage.setItem('executedOrdersHideCancelled', newValue ? 'true' : 'false');
+                  }
+                }}
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                  hideCancelled
+                    ? 'bg-green-600 text-white hover:bg-green-700 active:bg-green-800'
+                    : 'bg-gray-400 text-white hover:bg-gray-500 active:bg-gray-600'
+                }`}
+                title={hideCancelled ? 'Ocultando órdenes canceladas - Click para mostrar' : 'Mostrando órdenes canceladas - Click para ocultar'}
+              >
+                {hideCancelled ? '👁️ Ocultar Canceladas: ON' : '👁️ Ocultar Canceladas: OFF'}
+              </button>
             </div>
           </div>
           
@@ -10195,12 +10418,14 @@ ${marginText}
       {/* Monitoring Tab */}
       {activeTab === 'monitoring' && (
         <div>
-          <MonitoringPanel 
-            refreshInterval={20000}
-            telegramMessages={telegramMessages}
-            telegramMessagesLoading={telegramMessagesLoading}
-            onRequestTelegramRefresh={fetchTelegramMessages}
-          />
+          <ErrorBoundary>
+            <MonitoringPanel 
+              refreshInterval={20000}
+              telegramMessages={telegramMessages}
+              telegramMessagesLoading={telegramMessagesLoading}
+              onRequestTelegramRefresh={fetchTelegramMessages}
+            />
+          </ErrorBoundary>
         </div>
       )}
 

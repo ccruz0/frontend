@@ -868,8 +868,17 @@ export async function updateDashboardItem(id: number, item: Partial<WatchlistIte
 }
 
 export async function saveCoinSettings(symbol: string, settings: Partial<CoinSettings>): Promise<WatchlistItem & { message?: string }> {
+  const normalizedSymbol = symbol ? symbol.toUpperCase() : '';
+  const settingsKeys = Object.keys(settings).filter(k => settings[k as keyof typeof settings] !== undefined);
+  
+  // Debug logging
+  console.debug(`[saveCoinSettings] Starting for ${normalizedSymbol}`, {
+    symbol: normalizedSymbol,
+    settingsKeys,
+    settingsCount: settingsKeys.length
+  });
+  
   try {
-    console.log(`Saving coin settings for ${symbol}:`, settings);
     const { trade_amount_usd, ...otherSettings } = settings;
     // Explicitly include null values to allow clearing fields (e.g., sl_percentage: null)
     const normalizedSettings: Partial<WatchlistItem> = {
@@ -883,17 +892,16 @@ export async function saveCoinSettings(symbol: string, settings: Partial<CoinSet
     if ('tp_percentage' in settings) normalizedSettings.tp_percentage = settings.tp_percentage ?? null;
     if ('min_price_change_pct' in settings) normalizedSettings.min_price_change_pct = settings.min_price_change_pct ?? null;
     if ('alert_cooldown_minutes' in settings) normalizedSettings.alert_cooldown_minutes = settings.alert_cooldown_minutes ?? null;
+    
     // First, get the existing item by symbol
     let items: WatchlistItem[] = [];
     try {
       const dashboardItems = await getDashboard();
       items = Array.isArray(dashboardItems) ? dashboardItems : [];
     } catch (error) {
-      console.error(`Failed to fetch dashboard items for ${symbol}:`, error);
+      console.error(`[saveCoinSettings] Failed to fetch dashboard items for ${normalizedSymbol}:`, error);
       throw new Error(`Failed to fetch watchlist: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-    
-    const normalizedSymbol = symbol ? symbol.toUpperCase() : '';
     
     // Find all items matching the symbol (may have duplicates)
     const matchingItems = items.filter(item => (item.symbol || '').toUpperCase() === normalizedSymbol);
@@ -931,88 +939,162 @@ export async function saveCoinSettings(symbol: string, settings: Partial<CoinSet
     
     const existingItem = selectCanonicalItem(matchingItems);
     
-    if (existingItem) {
-      console.log(`Found existing item for ${symbol}, updating with ID:`, existingItem.id);
-      try {
-      // Update existing item - merge with existing data
-      const result = await updateDashboardItem(existingItem.id, {
-        symbol,
-        exchange: existingItem.exchange || 'CRYPTO_COM',
-        buy_target: existingItem.buy_target,
-        take_profit: existingItem.take_profit,
-        stop_loss: existingItem.stop_loss,
-          ...normalizedSettings
+    if (existingItem && existingItem.id) {
+      console.debug(`[saveCoinSettings] Found existing item for ${normalizedSymbol}`, {
+        id: existingItem.id,
+        symbol: existingItem.symbol,
+        endpoint: `PUT /api/dashboard/${existingItem.id}`
       });
-      console.log(`Updated item for ${symbol}:`, result);
-      if (result.message) {
-        console.log(`✅ Backend confirmation: ${result.message}`);
-      }
-      return result;
+      
+      try {
+        // Update existing item - merge with existing data
+        // CORRECT ENDPOINT: PUT /api/dashboard/{item_id}
+        const result = await updateDashboardItem(existingItem.id, {
+          symbol,
+          exchange: existingItem.exchange || 'CRYPTO_COM',
+          buy_target: existingItem.buy_target,
+          take_profit: existingItem.take_profit,
+          stop_loss: existingItem.stop_loss,
+          ...normalizedSettings
+        });
+        
+        console.debug(`[saveCoinSettings] Successfully updated ${normalizedSymbol}`, {
+          id: existingItem.id,
+          message: result.message
+        });
+        
+        if (result.message) {
+          console.log(`✅ Backend confirmation: ${result.message}`);
+        }
+        return result;
       } catch (error) {
-        // Provide more specific error message
+        // Enhanced error handling with specific 405 detection
+        const errorWithStatus = error as Error & { status?: number; detail?: string };
         const errorMsg = error instanceof Error ? error.message : String(error);
-        if (errorMsg.includes('404') || errorMsg.includes('not found')) {
-          throw new Error(`Watchlist item for ${symbol} not found. It may have been deleted.`);
-        } else if (errorMsg.includes('502') || errorMsg.includes('Bad Gateway')) {
+        const status = errorWithStatus.status;
+        
+        // Handle 405 Method Not Allowed - this should never happen with correct endpoint
+        if (status === 405) {
+          const fatalMsg = `[FATAL] Method: PUT, Caller: saveCoinSettings - PUT /api/dashboard/${existingItem.id} returned 405. This endpoint should exist.`;
+          console.error(fatalMsg, {
+            symbol: normalizedSymbol,
+            itemId: existingItem.id,
+            endpoint: `/api/dashboard/${existingItem.id}`,
+            method: 'PUT',
+            error: errorMsg
+          });
+          logRequestIssue(
+            `saveCoinSettings:${normalizedSymbol}`,
+            fatalMsg,
+            error,
+            'error'
+          );
+          throw new Error(`Backend endpoint mismatch (405): PUT /api/dashboard/${existingItem.id} is not supported. This is a bug.`);
+        }
+        
+        // Handle other HTTP errors
+        if (status === 404 || errorMsg.includes('404') || errorMsg.includes('not found')) {
+          throw new Error(`Watchlist item for ${normalizedSymbol} not found. It may have been deleted.`);
+        } else if (status === 422 || errorMsg.includes('422') || errorMsg.includes('validation')) {
+          const warnMsg = `[WARN] Validation error saving ${normalizedSymbol}: ${errorMsg}`;
+          console.warn(warnMsg, { symbol: normalizedSymbol, settings: normalizedSettings });
+          logRequestIssue(
+            `saveCoinSettings:${normalizedSymbol}`,
+            warnMsg,
+            error,
+            'warn'
+          );
+          throw new Error(`Validation error: ${errorMsg}`);
+        } else if (status === 502 || errorMsg.includes('502') || errorMsg.includes('Bad Gateway')) {
           throw new Error(`Backend service unavailable (502). Please check if the backend is running.`);
-        } else if (errorMsg.includes('500')) {
+        } else if (status === 500 || errorMsg.includes('500')) {
           throw new Error(`Backend error (500): ${errorMsg}`);
         } else {
-          throw new Error(`Failed to update ${symbol}: ${errorMsg}`);
+          throw new Error(`Failed to update ${normalizedSymbol}: ${errorMsg}`);
         }
       }
     } else {
-      console.log(`Creating new item for ${symbol}`);
+      console.debug(`[saveCoinSettings] Creating new item for ${normalizedSymbol}`, {
+        endpoint: 'POST /api/dashboard'
+      });
+      
       try {
-      // Create new item - explicitly construct WatchlistInput to avoid type issues
-      const newItem: WatchlistInput = {
-        symbol,
-        exchange: 'CRYPTO_COM',
-        buy_target: normalizedSettings.buy_target,
-        take_profit: normalizedSettings.take_profit,
-        stop_loss: normalizedSettings.stop_loss,
-        trade_enabled: normalizedSettings.trade_enabled,
-        trade_amount_usd: normalizedSettings.trade_amount_usd,
-        trade_on_margin: normalizedSettings.trade_on_margin,
-        sl_tp_mode: normalizedSettings.sl_tp_mode,
-        min_price_change_pct: normalizedSettings.min_price_change_pct,
-        sl_percentage: normalizedSettings.sl_percentage,
-        tp_percentage: normalizedSettings.tp_percentage,
-        notes: normalizedSettings.notes,
-      };
-      const result = await addToDashboard(newItem);
-      console.log(`Created item for ${symbol}:`, result);
-      return result;
+        // Create new item - explicitly construct WatchlistInput to avoid type issues
+        const newItem: WatchlistInput = {
+          symbol,
+          exchange: 'CRYPTO_COM',
+          buy_target: normalizedSettings.buy_target,
+          take_profit: normalizedSettings.take_profit,
+          stop_loss: normalizedSettings.stop_loss,
+          trade_enabled: normalizedSettings.trade_enabled,
+          trade_amount_usd: normalizedSettings.trade_amount_usd,
+          trade_on_margin: normalizedSettings.trade_on_margin,
+          sl_tp_mode: normalizedSettings.sl_tp_mode,
+          min_price_change_pct: normalizedSettings.min_price_change_pct,
+          sl_percentage: normalizedSettings.sl_percentage,
+          tp_percentage: normalizedSettings.tp_percentage,
+          notes: normalizedSettings.notes,
+        };
+        const result = await addToDashboard(newItem);
+        console.debug(`[saveCoinSettings] Successfully created ${normalizedSymbol}`, {
+          id: result.id,
+          symbol: result.symbol
+        });
+        return result;
       } catch (error) {
+        const errorWithStatus = error as Error & { status?: number };
         const errorMsg = error instanceof Error ? error.message : String(error);
-        if (errorMsg.includes('502') || errorMsg.includes('Bad Gateway')) {
+        const status = errorWithStatus.status;
+        
+        if (status === 405) {
+          const fatalMsg = `[FATAL] Method: POST, Caller: saveCoinSettings - POST /api/dashboard returned 405. This endpoint should exist.`;
+          console.error(fatalMsg, {
+            symbol: normalizedSymbol,
+            endpoint: '/api/dashboard',
+            method: 'POST',
+            error: errorMsg
+          });
+          logRequestIssue(
+            `saveCoinSettings:${normalizedSymbol}`,
+            fatalMsg,
+            error,
+            'error'
+          );
+          throw new Error(`Backend endpoint mismatch (405): POST /api/dashboard is not supported. This is a bug.`);
+        } else if (status === 502 || errorMsg.includes('502') || errorMsg.includes('Bad Gateway')) {
           throw new Error(`Backend service unavailable (502). Please check if the backend is running.`);
-        } else if (errorMsg.includes('500')) {
+        } else if (status === 500 || errorMsg.includes('500')) {
           throw new Error(`Backend error (500): ${errorMsg}`);
         } else {
-          throw new Error(`Failed to create watchlist item for ${symbol}: ${errorMsg}`);
+          throw new Error(`Failed to create watchlist item for ${normalizedSymbol}: ${errorMsg}`);
         }
       }
     }
   } catch (error) {
-    // Re-throw with better context if it's already an Error with message
+    // Final error handling - log and re-throw with context
     if (error instanceof Error) {
+      // Only log as FATAL for 404/405/500+ errors, WARN for validation errors
+      const errorWithStatus = error as Error & { status?: number };
+      const status = errorWithStatus.status;
+      const isFatal = status === 404 || status === 405 || (status !== undefined && status >= 500);
+      const level = isFatal ? 'error' : 'warn';
+      
       logRequestIssue(
-        `saveCoinSettings:${symbol}`,
-        `Error saving coin settings: ${error.message}`,
+        `saveCoinSettings:${normalizedSymbol}`,
+        `Error saving coin settings for ${normalizedSymbol}: ${error.message}`,
         error,
-        'error'
+        level
       );
       throw error;
     }
     // Otherwise wrap it
     logRequestIssue(
-      `saveCoinSettings:${symbol}`,
-      'Handled error while saving coin settings',
+      `saveCoinSettings:${normalizedSymbol}`,
+      `Handled error while saving coin settings for ${normalizedSymbol}`,
       error,
       'warn'
     );
-    throw new Error(`Failed to save settings for ${symbol}: ${String(error)}`);
+    throw new Error(`Failed to save settings for ${normalizedSymbol}: ${String(error)}`);
   }
 }
 

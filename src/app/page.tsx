@@ -8821,7 +8821,8 @@ ${marginText}
                             let riskMode: RiskMode;
                             
                             if (preset === 'swing' || preset === 'intraday' || preset === 'scalp') {
-                              presetType = preset as Preset;
+                              // FIX: Capitalize preset to match Preset type ('Swing', 'Intraday', 'Scalp')
+                              presetType = (preset.charAt(0).toUpperCase() + preset.slice(1)) as Preset;
                               riskMode = 'Conservative';
                             } else if (preset.includes('-conservative')) {
                               const basePreset = preset.replace('-conservative', '');
@@ -9106,23 +9107,35 @@ ${marginText}
                               let presetType: Preset;
                               let riskMode: RiskMode;
                               
-                              if (preset === 'swing' || preset === 'intraday' || preset === 'scalp') {
-                                presetType = preset as Preset;
-                                riskMode = 'Conservative';
-                              } else if (preset.includes('-conservative')) {
-                                const basePreset = preset.replace('-conservative', '');
+                              // FIX: Parse preset string correctly to extract preset type and risk mode
+                              // Handle formats: 'swing', 'swing-aggressive', 'swing-conservative', etc.
+                              if (preset.includes('-conservative')) {
+                                const basePreset = preset.replace('-conservative', '').toLowerCase();
                                 presetType = (basePreset.charAt(0).toUpperCase() + basePreset.slice(1)) as Preset;
                                 riskMode = 'Conservative';
-                              } else if (preset.includes('-aggressive')) {
-                                const basePreset = preset.replace('-aggressive', '');
+                              } else if (preset.includes('-aggressive') || preset.includes('-agresiva')) {
+                                // Handle both English and Spanish variants
+                                const basePreset = preset.replace(/-aggressive|-agresiva/i, '').toLowerCase();
                                 presetType = (basePreset.charAt(0).toUpperCase() + basePreset.slice(1)) as Preset;
                                 riskMode = 'Aggressive';
-                              } else {
-                                presetType = 'Swing';
+                              } else if (preset === 'swing' || preset === 'intraday' || preset === 'scalp') {
+                                // FIX: Capitalize preset to match Preset type ('Swing', 'Intraday', 'Scalp')
+                                presetType = (preset.charAt(0).toUpperCase() + preset.slice(1)) as Preset;
                                 riskMode = 'Conservative';
+                              } else {
+                                // Fallback: try to extract base preset and default to Swing
+                                const basePreset = preset.split('-')[0].toLowerCase();
+                                if (basePreset === 'swing' || basePreset === 'intraday' || basePreset === 'scalp') {
+                                  presetType = (basePreset.charAt(0).toUpperCase() + basePreset.slice(1)) as Preset;
+                                  riskMode = 'Conservative';
+                                } else {
+                                  presetType = 'Swing';
+                                  riskMode = 'Conservative';
+                                }
                               }
                               
-                              const rules = presetsConfig[presetType]?.rules[riskMode] || PRESET_CONFIG[presetType]?.rules[riskMode];
+                              // FIX: Add fallback to ensure rules is never undefined
+                              const rules = presetsConfig[presetType]?.rules?.[riskMode] ?? PRESET_CONFIG[presetType]?.rules?.[riskMode];
                               const rsi = signalEntry?.rsi ?? coin.rsi;
                               const ma50 = signalEntry?.ma50 ?? coin.ma50;
                               const ema10 = signalEntry?.ema10 ?? coin.ema10;

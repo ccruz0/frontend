@@ -7582,12 +7582,13 @@ function resolveDecisionIndexColor(value: number): string {
                                       const rulesCopy: Record<RiskMode, StrategyRules> = {} as Record<RiskMode, StrategyRules>;
                                       Object.entries(presetData.rules as Record<string, unknown>).forEach(([riskMode, rule]: [string, unknown]) => {
                                         if (riskMode === 'Conservative' || riskMode === 'Aggressive') {
+                                          const ruleObj = rule as StrategyRules;
                                           rulesCopy[riskMode as RiskMode] = {
-                                            ...rule,
-                                            maChecks: rule.maChecks ? { ...rule.maChecks } : { ema10: false, ma50: false, ma200: false },
-                                            rsi: rule.rsi ? { ...rule.rsi } : { buyBelow: 40, sellAbove: 70 },
-                                            sl: rule.sl ? { ...rule.sl } : {},
-                                            tp: rule.tp ? { ...rule.tp } : {},
+                                            ...ruleObj,
+                                            maChecks: ruleObj.maChecks ? { ...ruleObj.maChecks } : { ema10: false, ma50: false, ma200: false },
+                                            rsi: ruleObj.rsi ? { ...ruleObj.rsi } : { buyBelow: 40, sellAbove: 70 },
+                                            sl: ruleObj.sl ? { ...ruleObj.sl } : {},
+                                            tp: ruleObj.tp ? { ...ruleObj.tp } : {},
                                           };
                                         }
                                       });

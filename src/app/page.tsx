@@ -1078,11 +1078,12 @@ function DashboardPageContent() {
   }, []);
   // Helper function to check if an order status is cancelled
   // Must be defined before useMemo hooks that use it to avoid TDZ (Temporal Dead Zone) errors
-  const isCancelledStatus = (status: string | null | undefined): boolean => {
+  // Wrapped in useCallback to ensure stable reference for dependency arrays
+  const isCancelledStatus = useCallback((status: string | null | undefined): boolean => {
     if (!status) return false;
     const normalized = status.toUpperCase();
     return normalized === 'CANCELLED' || normalized === 'CANCELED';
-  };
+  }, []);
 
   const coinMembershipSignature = useMemo(
     () => {
@@ -1159,7 +1160,7 @@ function DashboardPageContent() {
       
       return matchesSymbol && matchesStatus && matchesSide && matchesDate;
     });
-  }, [openOrders, orderFilter, hideCancelledOpenOrders]);
+  }, [openOrders, orderFilter, hideCancelledOpenOrders, isCancelledStatus]);
   // Helper function to calculate profit/loss for an executed order
   const calculateProfitLoss = useCallback((order: OpenOrder, allOrders: OpenOrder[]): { pnl: number; pnlPercent: number; isRealized: boolean } => {
     const orderSymbol = order.instrument_name;
@@ -1357,7 +1358,7 @@ function DashboardPageContent() {
     });
     // Debug: Filtered executed orders (silenced to reduce console noise)
     return filtered;
-  }, [executedOrders, orderFilter, hideCancelled]);
+  }, [executedOrders, orderFilter, hideCancelled, isCancelledStatus]);
   
   // Calculate total P&L for filtered orders (only SELL orders count as realized P/L)
   const filteredTotalPL = useMemo(() => {

@@ -1073,9 +1073,14 @@ export async function getTradingConfig(): Promise<TradingConfig | null> {
   }
 }
 
-export async function saveTradingConfig(config: TradingConfig): Promise<{ ok: boolean }> {
+export interface SaveTradingConfigResponse {
+  ok: boolean;
+  config?: TradingConfig;  // Optional: backend returns normalized config that was saved
+}
+
+export async function saveTradingConfig(config: TradingConfig): Promise<SaveTradingConfigResponse> {
   try {
-    const data = await fetchAPI<{ ok: boolean }>('/config', {
+    const data = await fetchAPI<SaveTradingConfigResponse>('/config', {
       method: 'PUT',
       body: JSON.stringify(config)
     });

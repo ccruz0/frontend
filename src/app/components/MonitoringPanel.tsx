@@ -32,7 +32,8 @@ function WorkflowRow({
   onRun: (id: string) => Promise<void>;
 }) {
   // Check if workflow can be run manually (must have a non-empty run_endpoint)
-  const canRun = Boolean(workflow.run_endpoint && workflow.run_endpoint.trim().length > 0);
+  // Explicitly check for null/undefined before calling .trim() to avoid TypeError
+  const canRun = workflow.run_endpoint != null && workflow.run_endpoint.trim().length > 0;
   
   const handleRun = async () => {
     if (isRunning || !canRun) return;

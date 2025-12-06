@@ -6863,10 +6863,10 @@ function resolveDecisionIndexColor(value: number): string {
                                   [selectedConfigPreset]: {
                                     ...prev[selectedConfigPreset],
                                     rules: {
-                                      ...prev[selectedConfigPreset].rules,
+                                      ...(prev[selectedConfigPreset]?.rules || {}),
                                       [selectedConfigRisk]: {
-                                        ...prev[selectedConfigPreset].rules[selectedConfigRisk],
-                                        rsi: { ...currentRules.rsi, buyBelow: value }
+                                        ...(prev[selectedConfigPreset]?.rules?.[selectedConfigRisk] || {}),
+                                        rsi: { ...(currentRules?.rsi || {}), buyBelow: value }
                                       }
                                     }
                                   }
@@ -6892,10 +6892,10 @@ function resolveDecisionIndexColor(value: number): string {
                                   [selectedConfigPreset]: {
                                     ...prev[selectedConfigPreset],
                                     rules: {
-                                      ...prev[selectedConfigPreset].rules,
+                                      ...(prev[selectedConfigPreset]?.rules || {}),
                                       [selectedConfigRisk]: {
-                                        ...prev[selectedConfigPreset].rules[selectedConfigRisk],
-                                        rsi: { ...currentRules.rsi, sellAbove: value }
+                                        ...(prev[selectedConfigPreset]?.rules?.[selectedConfigRisk] || {}),
+                                        rsi: { ...(currentRules?.rsi || {}), sellAbove: value }
                                       }
                                     }
                                   }
@@ -6924,11 +6924,11 @@ function resolveDecisionIndexColor(value: number): string {
                                   [selectedConfigPreset]: {
                                     ...prev[selectedConfigPreset],
                                     rules: {
-                                      ...prev[selectedConfigPreset].rules,
+                                      ...(prev[selectedConfigPreset]?.rules || {}),
                                       [selectedConfigRisk]: {
-                                        ...prev[selectedConfigPreset].rules[selectedConfigRisk],
+                                        ...(prev[selectedConfigPreset]?.rules?.[selectedConfigRisk] || {}),
                                         maChecks: {
-                                          ...currentRules.maChecks,
+                                          ...(currentRules?.maChecks || {}),
                                           [ma]: e.target.checked
                                         }
                                       }
@@ -7163,8 +7163,9 @@ function resolveDecisionIndexColor(value: number): string {
                                         return prev; // Return unchanged if preset doesn't exist
                                       }
                                       const existingPreset = prev[selectedConfigPreset] ?? defaultPreset;
-                                      const existingRules = existingPreset?.rules ?? defaultPreset?.rules;
-                                      const existingRiskRules = existingRules?.[selectedConfigRisk] ?? defaultPreset?.rules?.[selectedConfigRisk];
+                                      // FIX: Guard against undefined before spreading to prevent TypeError
+                                      const existingRules = existingPreset?.rules ?? defaultPreset?.rules ?? {};
+                                      const existingRiskRules = existingRules?.[selectedConfigRisk] ?? defaultPreset?.rules?.[selectedConfigRisk] ?? {};
                                       
                                       const updated = {
                                         ...prev,

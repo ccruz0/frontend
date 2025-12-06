@@ -1823,9 +1823,10 @@ function resolveDecisionIndexColor(value: number): string {
 
     // CANONICAL: Use backend min_volume_ratio if provided (Signal Config source of truth), otherwise fallback to rules
     // NOTE: Must use ?? (nullish coalescing) not || (falsy check) because 0 is a valid value
+    // FIX: Add optional chaining to prevent TypeError if rules is undefined or doesn't have volumeMinRatio
     const minVolumeRatio = backendMinVolumeRatio !== undefined && backendMinVolumeRatio !== null
       ? backendMinVolumeRatio
-      : (rules.volumeMinRatio ?? 0.5);
+      : (rules?.volumeMinRatio ?? 0.5);
 
     const lines: string[] = [];
     const fullStrategyName = formatFullStrategyName(preset, riskMode);
@@ -4393,6 +4394,12 @@ function resolveDecisionIndexColor(value: number): string {
           const backendPreset = backendPresetsConfig[presetType];
           if (!backendPreset) continue;
           
+          // FIX: Add null check to prevent TypeError if merged[presetType] is undefined
+          if (!merged[presetType]) {
+            console.warn(`[CONFIG] Missing preset type ${presetType} in merged config, skipping`);
+            continue;
+          }
+          
           // Ensure correct structure
           if (!merged[presetType].rules) merged[presetType].rules = {} as Record<RiskMode, StrategyRules>;
           
@@ -4403,13 +4410,19 @@ function resolveDecisionIndexColor(value: number): string {
           
           // Merge at risk-mode level to prevent overwriting
           // Backend values override defaults, but missing backend values keep defaults
-          for (const riskMode of Object.keys(PRESET_CONFIG[presetType].rules) as RiskMode[]) {
+          for (const riskMode of Object.keys(PRESET_CONFIG[presetType]?.rules || {}) as RiskMode[]) {
             const backendRules = backendPreset.rules?.[riskMode];
-            const defaultRules = PRESET_CONFIG[presetType].rules[riskMode];
+            const defaultRules = PRESET_CONFIG[presetType]?.rules?.[riskMode];
+            
+            // FIX: Add null check to prevent TypeError if defaultRules is undefined
+            if (!defaultRules) {
+              console.warn(`[CONFIG] Missing default rules for ${presetType}.${riskMode}, skipping merge`);
+              continue;
+            }
             
             // [CONFIG] Log merge operation with detailed info
             const backendVol = backendRules?.volumeMinRatio;
-            const defaultVol = defaultRules.volumeMinRatio;
+            const defaultVol = defaultRules?.volumeMinRatio ?? 0.5;
             const finalVol = backendVol !== undefined && backendVol !== null ? backendVol : defaultVol;
             
             console.log('[CONFIG] Loading volumeMinRatio on page load:', {
@@ -4435,7 +4448,8 @@ function resolveDecisionIndexColor(value: number): string {
             }
             
             // [CONFIG] Verify final merged value
-            const finalMergedVol = merged[presetType].rules[riskMode].volumeMinRatio;
+            // FIX: Add optional chaining to prevent TypeError if merged structure is incomplete
+            const finalMergedVol = merged[presetType]?.rules?.[riskMode]?.volumeMinRatio ?? 0.5;
             console.log('[CONFIG] ✅ Final loaded volumeMinRatio:', {
               preset: presetType,
               risk: riskMode,
@@ -7141,11 +7155,16 @@ function resolveDecisionIndexColor(value: number): string {
                                       newValue: newRatio,
                                       valueType: typeof newRatio
                                     });
-                                    
                                     setPresetsConfig(prev => {
-                                      const existingPreset = prev[selectedConfigPreset] ?? PRESET_CONFIG[selectedConfigPreset];
-                                      const existingRules = existingPreset.rules ?? PRESET_CONFIG[selectedConfigPreset].rules;
-                                      const existingRiskRules = existingRules[selectedConfigRisk] ?? PRESET_CONFIG[selectedConfigPreset].rules[selectedConfigRisk];
+                                      // FIX: Add null checks to prevent TypeError if PRESET_CONFIG structure is incomplete
+                                      const defaultPreset = PRESET_CONFIG[selectedConfigPreset];
+                                      if (!defaultPreset) {
+                                        console.error(`[CONFIG] Missing preset ${selectedConfigPreset} in PRESET_CONFIG`);
+                                        return prev; // Return unchanged if preset doesn't exist
+                                      }
+                                      const existingPreset = prev[selectedConfigPreset] ?? defaultPreset;
+                                      const existingRules = existingPreset?.rules ?? defaultPreset?.rules;
+                                      const existingRiskRules = existingRules?.[selectedConfigRisk] ?? defaultPreset?.rules?.[selectedConfigRisk];
                                       
                                       const updated = {
                                         ...prev,
@@ -9157,7 +9176,8 @@ ${marginText}
                               const volumeAvgPeriods = coin.volume_avg_periods ?? signalEntry?.volume_avg_periods ?? null;
                               // CANONICAL: Get min_volume_ratio from backend (Signal Config source of truth)
                               // Note: min_volume_ratio comes from coin object (backend), not from TradingSignals type
-                              const backendMinVolumeRatio = (coin as TopCoin & { min_volume_ratio?: number }).min_volume_ratio ?? rules.volumeMinRatio ?? 0.5;
+                              // FIX: Add optional chaining to prevent TypeError if rules is undefined
+                              const backendMinVolumeRatio = (coin as TopCoin & { min_volume_ratio?: number }).min_volume_ratio ?? rules?.volumeMinRatio ?? 0.5;
                               const signalTooltip = buildSignalCriteriaTooltip(
                                 presetType,
                                 riskMode,

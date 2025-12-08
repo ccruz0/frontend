@@ -9110,12 +9110,14 @@ ${marginText}
                               // FIX: Parse preset string correctly to extract preset type and risk mode
                               // Handle formats: 'swing', 'swing-aggressive', 'swing-conservative', etc.
                               if (preset.includes('-conservative')) {
-                                const basePreset = preset.replace('-conservative', '').toLowerCase();
+                                // Remove all matches and trim trailing hyphens to prevent malformed presets like "swing-"
+                                const basePreset = preset.replace(/-conservative/gi, '').replace(/-+$/, '').toLowerCase();
                                 presetType = (basePreset.charAt(0).toUpperCase() + basePreset.slice(1)) as Preset;
                                 riskMode = 'Conservative';
                               } else if (preset.includes('-aggressive') || preset.includes('-agresiva')) {
                                 // Handle both English and Spanish variants
-                                const basePreset = preset.replace(/-aggressive|-agresiva/i, '').toLowerCase();
+                                // Use global flag to remove all matches, then trim trailing hyphens
+                                const basePreset = preset.replace(/-aggressive|-agresiva/gi, '').replace(/-+$/, '').toLowerCase();
                                 presetType = (basePreset.charAt(0).toUpperCase() + basePreset.slice(1)) as Preset;
                                 riskMode = 'Aggressive';
                               } else if (preset === 'swing' || preset === 'intraday' || preset === 'scalp') {

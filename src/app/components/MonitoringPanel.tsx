@@ -276,6 +276,8 @@ export default function MonitoringPanel({
         return 'bg-red-100 text-red-800 border-red-200';
       case 'SENT':
         return 'bg-green-100 text-green-800 border-green-200';
+      case 'ORDER SKIPPED':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       default:
         return 'bg-gray-100 text-gray-700 border-gray-200';
     }
@@ -436,17 +438,35 @@ export default function MonitoringPanel({
   if (Array.isArray(telegramMessages) && telegramMessages.length > 0) {
     for (let idx = 0; idx < telegramMessages.length; idx++) {
       const msg = telegramMessages[idx];
-      const statusLabel = (msg.throttle_status || (msg.blocked ? 'BLOCKED' : 'SENT')).toUpperCase();
+      // Determine status label: order_skipped takes precedence over blocked
+      let statusLabel: string;
+      if (msg.order_skipped) {
+        statusLabel = 'ORDER SKIPPED';
+      } else if (msg.throttle_status) {
+        statusLabel = msg.throttle_status.toUpperCase();
+      } else if (msg.blocked) {
+        statusLabel = 'BLOCKED';
+      } else {
+        statusLabel = 'SENT';
+      }
+      // Background color: order_skipped gets yellow/orange, blocked gets gray, sent gets blue
+      const bgColor = msg.order_skipped 
+        ? 'bg-yellow-50' 
+        : msg.blocked 
+        ? 'bg-gray-50' 
+        : 'bg-blue-50';
       telegramItems.push(
         <div
           key={idx}
-          className={`p-4 ${msg.blocked ? 'bg-gray-50' : 'bg-blue-50'}`}
+          className={`p-4 ${bgColor}`}
         >
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p
                 className={`text-sm ${
-                  msg.blocked
+                  msg.order_skipped
+                    ? 'text-yellow-800 font-medium'
+                    : msg.blocked
                     ? 'text-gray-600 italic'
                     : 'text-blue-700 font-medium'
                 }`}
@@ -455,9 +475,11 @@ export default function MonitoringPanel({
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span
-                  className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${getThrottleStatusStyles(
-                    statusLabel
-                  )}`}
+                  className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${
+                    msg.order_skipped
+                      ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                      : getThrottleStatusStyles(statusLabel)
+                  }`}
                 >
                   {statusLabel}
                 </span>

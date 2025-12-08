@@ -2267,6 +2267,7 @@ export interface TelegramMessage {
   message: string;
   symbol: string | null;
   blocked: boolean;
+  order_skipped?: boolean;
   timestamp: string;
   throttle_status?: string | null;
   throttle_reason?: string | null;

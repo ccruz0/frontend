@@ -412,6 +412,13 @@ function logHandledError(
   }
 }
 
+// CRITICAL: Helper to normalize symbol keys to uppercase for consistent state access
+// All state keys are stored in UPPERCASE (from backend loading and mount effect normalization)
+// This ensures UI access via coin.instrument_name (which may be mixed case) always finds the correct state value
+function normalizeSymbolKey(symbol: string | undefined | null): string {
+  return symbol ? symbol.toUpperCase() : '';
+}
+
 // Strategy configuration types and constants (moved outside component)
 type Preset = 'Swing' | 'Intraday' | 'Scalp';
 type RiskMode = 'Conservative' | 'Aggressive';
@@ -2057,7 +2064,7 @@ function resolveDecisionIndexColor(value: number): string {
       return { colorClass: 'text-gray-400', tooltip: 'Signal data not available' };
     }
 
-    const preset = coinPresets[coin.instrument_name] || 'swing';
+    const preset = coinPresets[normalizeSymbolKey(coin.instrument_name)] || 'swing';
     let presetType: Preset;
     let riskMode: RiskMode;
     
@@ -3220,7 +3227,7 @@ function resolveDecisionIndexColor(value: number): string {
     const fastSymbols = Array.from(fastSymbolSet);
     const slowSymbolSet = new Set(
       coins
-        .filter((coin) => coin.instrument_name && coinTradeStatus[coin.instrument_name] !== true)
+        .filter((coin) => coin.instrument_name && coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] !== true)
         .map((coin) => coin.instrument_name)
         .filter((symbol): symbol is string => Boolean(symbol))
     );
@@ -3339,7 +3346,7 @@ function resolveDecisionIndexColor(value: number): string {
       // Filter coins by Trade YES/NO status if specified
       if (filterTradeYes !== undefined) {
         const filteredCoins = fetchedCoins.filter(coin => {
-          const isTradeYes = coinTradeStatus[coin.instrument_name] === true;
+          const isTradeYes = coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] === true;
           return filterTradeYes ? isTradeYes : !isTradeYes;
         });
         console.log(`📊 Filtered to ${filterType}: ${filteredCoins.length} coins`);
@@ -3522,7 +3529,8 @@ function resolveDecisionIndexColor(value: number): string {
       
       // Only load saved settings if we're not preserving local changes
       if (!preserveLocalChanges) {
-        // PRIMARY: Try to load from localStorage (this is the source of truth for local)
+        // PRIMARY: Try to load from localStorage (temporary, will be overridden by backend)
+        // NOTE: Backend values will take priority when they arrive
         try {
           const localAmounts = localStorage.getItem('watchlist_amounts');
           const localTradeStatus = localStorage.getItem('watchlist_trade_status');
@@ -3530,12 +3538,27 @@ function resolveDecisionIndexColor(value: number): string {
           const localSLPercent = localStorage.getItem('watchlist_sl_percent');
           const localTPPercent = localStorage.getItem('watchlist_tp_percent');
           
-          // Merge with existing state to preserve user changes that might not be saved yet
+          // Load from localStorage as temporary initial state
+          // Backend values will override these when they arrive
+          // CRITICAL: Clean stale $10 values before loading
           if (localAmounts) {
-            setCoinAmounts(prev => ({
-              ...prev,
-              ...(JSON.parse(localAmounts) as Record<string, string>)
-            }));
+            const parsedAmounts = JSON.parse(localAmounts) as Record<string, string>;
+            // Remove all values that are exactly "10", "10.0", or "10.00" (obsolete defaults)
+            const cleanedAmounts: Record<string, string> = {};
+            Object.entries(parsedAmounts).forEach(([symbol, value]) => {
+              const isStaleValue = value === '10' || value === '10.0' || value === '10.00';
+              if (!isStaleValue) {
+                cleanedAmounts[symbol] = value;
+              }
+            });
+            
+            // Only load cleaned values (non-$10 values)
+            if (Object.keys(cleanedAmounts).length > 0) {
+              setCoinAmounts(prev => ({
+                ...prev,
+                ...cleanedAmounts
+              }));
+            }
           }
           if (localTradeStatus) {
             setCoinTradeStatus(prev => ({
@@ -3567,195 +3590,200 @@ function resolveDecisionIndexColor(value: number): string {
           console.warn('Failed to load from localStorage:', err);
         }
         
-        // SECONDARY: Always load from backend database and merge with localStorage
+        // SECONDARY: Always load from backend database and update localStorage
+        // SIMPLIFIED APPROACH: Backend updates localStorage, dashboard only reads from localStorage
         try {
           // Always load from backend to get the latest saved values
           const dashboardItems: WatchlistItem[] = await getDashboard();
             // Store watchlist items for TP/SL counting
             setWatchlistItems(dashboardItems);
-            const savedAmounts: { [key: string]: string } = {};
-            const savedTradeStatus: { [key: string]: boolean } = {};
-            const savedMarginStatus: { [key: string]: boolean } = {};
-            const savedSlTpStatus: { [key: string]: boolean } = {};
-            const savedSLPercent: { [key: string]: string } = {};
-            const savedTPPercent: { [key: string]: string } = {};
-            const savedSLPrices: { [key: string]: number } = {};
-            const savedTPPrices: { [key: string]: number } = {};
             
-            const savedAlertStatus: { [key: string]: boolean } = {};
-            const savedBuyAlertStatus: { [key: string]: boolean } = {};
-            const savedSellAlertStatus: { [key: string]: boolean } = {};
+            // Build clean data structures from backend (source of truth)
+            const backendAmounts: { [key: string]: string } = {};
+            const backendTradeStatus: { [key: string]: boolean } = {};
+            const backendMarginStatus: { [key: string]: boolean } = {};
+            const backendSlTpStatus: { [key: string]: boolean } = {};
+            const backendSLPercent: { [key: string]: string } = {};
+            const backendTPPercent: { [key: string]: string } = {};
+            const backendSLPrices: { [key: string]: number } = {};
+            const backendTPPrices: { [key: string]: number } = {};
+            const backendAlertStatus: { [key: string]: boolean } = {};
+            const backendBuyAlertStatus: { [key: string]: boolean } = {};
+            const backendSellAlertStatus: { [key: string]: boolean } = {};
+            
+            // Get all backend symbols to know which ones are managed by backend
+            const backendSymbols = new Set(
+              dashboardItems
+                .map(item => item.symbol?.toUpperCase())
+                .filter(Boolean) as string[]
+            );
             
             dashboardItems.forEach(item => {
               if (item.symbol) {
-                if (item.trade_amount_usd !== undefined && item.trade_amount_usd !== null) savedAmounts[item.symbol] = item.trade_amount_usd.toString();
-                if (item.trade_enabled !== undefined && item.trade_enabled !== null) savedTradeStatus[item.symbol] = item.trade_enabled;
-                if (item.alert_enabled !== undefined && item.alert_enabled !== null) savedAlertStatus[item.symbol] = item.alert_enabled;
-                if (item.buy_alert_enabled !== undefined && item.buy_alert_enabled !== null) savedBuyAlertStatus[item.symbol] = item.buy_alert_enabled;
-                if (item.sell_alert_enabled !== undefined && item.sell_alert_enabled !== null) savedSellAlertStatus[item.symbol] = item.sell_alert_enabled;
-                if (item.trade_on_margin !== undefined && item.trade_on_margin !== null) savedMarginStatus[item.symbol + '_margin'] = item.trade_on_margin;
-                if (item.sl_tp_mode === 'aggressive') savedSlTpStatus[item.symbol + '_sl_tp'] = true;
-                // Only load percentages from backend if they are explicitly set (not null/undefined)
-                // This prevents restoring deleted percentages
+                const symbolUpper = item.symbol.toUpperCase();
+                // Only save non-null values from backend
+                if (item.trade_amount_usd !== undefined && item.trade_amount_usd !== null) {
+                  backendAmounts[symbolUpper] = item.trade_amount_usd.toString();
+                }
+                if (item.trade_enabled !== undefined && item.trade_enabled !== null) {
+                  backendTradeStatus[symbolUpper] = item.trade_enabled;
+                }
+                if (item.alert_enabled !== undefined && item.alert_enabled !== null) {
+                  backendAlertStatus[symbolUpper] = item.alert_enabled;
+                }
+                if (item.buy_alert_enabled !== undefined && item.buy_alert_enabled !== null) {
+                  backendBuyAlertStatus[symbolUpper] = item.buy_alert_enabled;
+                }
+                if (item.sell_alert_enabled !== undefined && item.sell_alert_enabled !== null) {
+                  backendSellAlertStatus[symbolUpper] = item.sell_alert_enabled;
+                }
+                if (item.trade_on_margin !== undefined && item.trade_on_margin !== null) {
+                  backendMarginStatus[symbolUpper + '_margin'] = item.trade_on_margin;
+                }
+                if (item.sl_tp_mode === 'aggressive') {
+                  backendSlTpStatus[symbolUpper + '_sl_tp'] = true;
+                }
+                // Only load percentages from backend if they are explicitly set (not null/undefined/0)
                 if (item.sl_percentage !== undefined && item.sl_percentage !== null && item.sl_percentage !== 0) {
-                  savedSLPercent[item.symbol] = item.sl_percentage.toString();
+                  backendSLPercent[symbolUpper] = item.sl_percentage.toString();
                 }
                 if (item.tp_percentage !== undefined && item.tp_percentage !== null && item.tp_percentage !== 0) {
-                  savedTPPercent[item.symbol] = item.tp_percentage.toString();
+                  backendTPPercent[symbolUpper] = item.tp_percentage.toString();
                 }
-                if (item.sl_price !== undefined && item.sl_price !== null) savedSLPrices[item.symbol] = item.sl_price;
-                if (item.tp_price !== undefined && item.tp_price !== null) savedTPPrices[item.symbol] = item.tp_price;
+                if (item.sl_price !== undefined && item.sl_price !== null) {
+                  backendSLPrices[symbolUpper] = item.sl_price;
+                }
+                if (item.tp_price !== undefined && item.tp_price !== null) {
+                  backendTPPrices[symbolUpper] = item.tp_price;
+                }
                 // min_price_change_pct will be loaded via useEffect after coinPresets is initialized
               }
             });
             
-            // Update state if we got any data from backend (not just amounts)
-            const hasAnyData = Object.keys(savedAmounts).length > 0 || 
-                              Object.keys(savedTradeStatus).length > 0 || 
-                              Object.keys(savedMarginStatus).length > 0 ||
-                              Object.keys(savedSLPercent).length > 0 ||
-                              Object.keys(savedTPPercent).length > 0 ||
-                              Object.keys(savedAlertStatus).length > 0;
-            
-            if (hasAnyData || dashboardItems.length > 0) {
-              // Merge with existing state to preserve user changes that might not be saved yet
-              if (Object.keys(savedAmounts).length > 0) {
-                setCoinAmounts(prev => ({
-                  ...prev,
-                  ...savedAmounts
-                }));
-              }
-              if (Object.keys(savedSLPercent).length > 0) {
-                setCoinSLPercent(prev => ({
-                  ...prev,
-                  ...savedSLPercent
-                }));
-              }
-              if (Object.keys(savedTPPercent).length > 0) {
-                setCoinTPPercent(prev => ({
-                  ...prev,
-                  ...savedTPPercent
-                }));
-              }
-              if (Object.keys(savedTradeStatus).length > 0 || Object.keys(savedMarginStatus).length > 0 || Object.keys(savedSlTpStatus).length > 0) {
-                setCoinTradeStatus(prev => ({
-                  ...prev,
-                  ...savedTradeStatus,
-                  ...savedMarginStatus,
-                  ...savedSlTpStatus
-                }));
-              }
-              if (Object.keys(savedAlertStatus).length > 0) {
-                setCoinAlertStatus(prev => ({
-                  ...prev,
-                  ...savedAlertStatus
-                }));
-              }
-              if (Object.keys(savedBuyAlertStatus).length > 0) {
-                setCoinBuyAlertStatus(prev => ({
-                  ...prev,
-                  ...savedBuyAlertStatus
-                }));
-                // Also save to localStorage
-                localStorage.setItem('watchlist_buy_alert_status', JSON.stringify({ ...coinBuyAlertStatus, ...savedBuyAlertStatus }));
-              }
-              if (Object.keys(savedSellAlertStatus).length > 0) {
-                setCoinSellAlertStatus(prev => ({
-                  ...prev,
-                  ...savedSellAlertStatus
-                }));
-                // Also save to localStorage
-                localStorage.setItem('watchlist_sell_alert_status', JSON.stringify({ ...coinSellAlertStatus, ...savedSellAlertStatus }));
-              }
-              
-              // Load saved SL/TP prices
-              if (Object.keys(savedSLPrices).length > 0) {
-                setCalculatedSL(savedSLPrices);
-                console.log('✅ Loaded saved SL prices from database:', savedSLPrices);
-              }
-              if (Object.keys(savedTPPrices).length > 0) {
-                setCalculatedTP(savedTPPrices);
-                console.log('✅ Loaded saved TP prices from database:', savedTPPrices);
-              }
-              
-              // Also save to localStorage as backup - merge with existing to preserve user changes
-              try {
-                // Merge amounts
-                const existingAmounts = localStorage.getItem('watchlist_amounts');
-                const existingAmountsObj = existingAmounts ? JSON.parse(existingAmounts) as Record<string, string> : {};
-                const mergedAmounts = {
-                  ...savedAmounts,
-                  ...existingAmountsObj  // Preserve user changes that might not be in backend yet
-                };
-                localStorage.setItem('watchlist_amounts', JSON.stringify(mergedAmounts));
-                
-                // Merge SL percent
-                const existingSLPercent = localStorage.getItem('watchlist_sl_percent');
-                const existingSLPercentObj = existingSLPercent ? JSON.parse(existingSLPercent) as Record<string, string> : {};
-                const mergedSLPercent = {
-                  ...savedSLPercent,
-                  ...existingSLPercentObj  // Preserve user changes that might not be in backend yet
-                };
-                localStorage.setItem('watchlist_sl_percent', JSON.stringify(mergedSLPercent));
-                
-                // Merge TP percent
-                const existingTPPercent = localStorage.getItem('watchlist_tp_percent');
-                const existingTPPercentObj = existingTPPercent ? JSON.parse(existingTPPercent) as Record<string, string> : {};
-                const mergedTPPercent = {
-                  ...savedTPPercent,
-                  ...existingTPPercentObj  // Preserve user changes that might not be in backend yet
-                };
-                localStorage.setItem('watchlist_tp_percent', JSON.stringify(mergedTPPercent));
-                
-                // Merge trade status
-                const existingTradeStatus = localStorage.getItem('watchlist_trade_status');
-                const existingStatus = existingTradeStatus ? JSON.parse(existingTradeStatus) as Record<string, boolean> : {};
-                const mergedTradeStatus = {
-                  ...savedTradeStatus,
-                  ...savedMarginStatus,
-                  ...savedSlTpStatus,
-                  ...existingStatus  // Preserve user changes that might not be in backend yet
-                };
-                localStorage.setItem('watchlist_trade_status', JSON.stringify(mergedTradeStatus));
-                
-                // Merge alert status
-                if (Object.keys(savedAlertStatus).length > 0) {
-                  const existingAlertStatus = localStorage.getItem('watchlist_alert_status');
-                  const existingAlertStatusObj = existingAlertStatus ? JSON.parse(existingAlertStatus) as Record<string, boolean> : {};
-                  const mergedAlertStatus = {
-                    ...savedAlertStatus,
-                    ...existingAlertStatusObj  // Preserve user changes that might not be in backend yet
-                  };
-                  localStorage.setItem('watchlist_alert_status', JSON.stringify(mergedAlertStatus));
+            // CRITICAL: Update localStorage with backend values (backend is source of truth)
+            // For symbols NOT in backend, preserve existing localStorage values (user changes not yet saved)
+            try {
+              // Amounts: Backend values + preserve non-backend symbols from localStorage
+              const existingAmounts = localStorage.getItem('watchlist_amounts');
+              const existingAmountsObj = existingAmounts ? JSON.parse(existingAmounts) as Record<string, string> : {};
+              const cleanedAmounts: Record<string, string> = { ...backendAmounts };
+              Object.entries(existingAmountsObj).forEach(([symbol, value]) => {
+                const symbolUpper = symbol.toUpperCase();
+                if (!backendSymbols.has(symbolUpper) && !(symbolUpper in cleanedAmounts)) {
+                  // Symbol not in backend - preserve localStorage value
+                  cleanedAmounts[symbolUpper] = value;
                 }
-              } catch (err) {
-                console.warn('Failed to merge localStorage values:', err);
-                // Fallback to direct save if merge fails
-                localStorage.setItem('watchlist_amounts', JSON.stringify(savedAmounts));
-                localStorage.setItem('watchlist_sl_percent', JSON.stringify(savedSLPercent));
-                localStorage.setItem('watchlist_tp_percent', JSON.stringify(savedTPPercent));
-                localStorage.setItem('watchlist_trade_status', JSON.stringify({
-                  ...savedTradeStatus,
-                  ...savedMarginStatus,
-                  ...savedSlTpStatus
-                }));
-                if (Object.keys(savedAlertStatus).length > 0) {
-                  localStorage.setItem('watchlist_alert_status', JSON.stringify(savedAlertStatus));
-                }
-              }
-              
-              console.log('✅ Loaded watchlist settings from backend:', {
-                items: dashboardItems.length,
-                amounts: Object.keys(savedAmounts).length,
-                tradeStatus: Object.keys(savedTradeStatus).length,
-                marginStatus: Object.keys(savedMarginStatus).length,
-                slPercent: Object.keys(savedSLPercent).length,
-                tpPercent: Object.keys(savedTPPercent).length,
-                alertStatus: Object.keys(savedAlertStatus).length
               });
-            } else {
-              // No saved data in backend yet, using localStorage (normal on first load)
+              localStorage.setItem('watchlist_amounts', JSON.stringify(cleanedAmounts));
+              
+              // Trade Status: Backend values + preserve non-backend symbols
+              const existingTradeStatus = localStorage.getItem('watchlist_trade_status');
+              const existingTradeStatusObj = existingTradeStatus ? JSON.parse(existingTradeStatus) as Record<string, boolean> : {};
+              const cleanedTradeStatus: Record<string, boolean> = {
+                ...backendTradeStatus,
+                ...backendMarginStatus,
+                ...backendSlTpStatus
+              };
+              Object.entries(existingTradeStatusObj).forEach(([symbol, value]) => {
+                const symbolUpper = symbol.toUpperCase();
+                const isBackendSymbol = backendSymbols.has(symbolUpper) || 
+                  Array.from(backendSymbols).some(bs => symbolUpper.startsWith(bs));
+                if (!isBackendSymbol && !(symbolUpper in cleanedTradeStatus)) {
+                  cleanedTradeStatus[symbolUpper] = value;
+                }
+              });
+              localStorage.setItem('watchlist_trade_status', JSON.stringify(cleanedTradeStatus));
+              
+              // SL/TP Percent: Backend values + preserve non-backend symbols
+              const existingSLPercent = localStorage.getItem('watchlist_sl_percent');
+              const existingSLPercentObj = existingSLPercent ? JSON.parse(existingSLPercent) as Record<string, string> : {};
+              const cleanedSLPercent: Record<string, string> = { ...backendSLPercent };
+              Object.entries(existingSLPercentObj).forEach(([symbol, value]) => {
+                const symbolUpper = symbol.toUpperCase();
+                if (!backendSymbols.has(symbolUpper) && !(symbolUpper in cleanedSLPercent)) {
+                  cleanedSLPercent[symbolUpper] = value;
+                }
+              });
+              localStorage.setItem('watchlist_sl_percent', JSON.stringify(cleanedSLPercent));
+              
+              const existingTPPercent = localStorage.getItem('watchlist_tp_percent');
+              const existingTPPercentObj = existingTPPercent ? JSON.parse(existingTPPercent) as Record<string, string> : {};
+              const cleanedTPPercent: Record<string, string> = { ...backendTPPercent };
+              Object.entries(existingTPPercentObj).forEach(([symbol, value]) => {
+                const symbolUpper = symbol.toUpperCase();
+                if (!backendSymbols.has(symbolUpper) && !(symbolUpper in cleanedTPPercent)) {
+                  cleanedTPPercent[symbolUpper] = value;
+                }
+              });
+              localStorage.setItem('watchlist_tp_percent', JSON.stringify(cleanedTPPercent));
+              
+              // Alert Status: Backend values + preserve non-backend symbols
+              const existingAlertStatus = localStorage.getItem('watchlist_alert_status');
+              const existingAlertStatusObj = existingAlertStatus ? JSON.parse(existingAlertStatus) as Record<string, boolean> : {};
+              const cleanedAlertStatus: Record<string, boolean> = { ...backendAlertStatus };
+              Object.entries(existingAlertStatusObj).forEach(([symbol, value]) => {
+                const symbolUpper = symbol.toUpperCase();
+                if (!backendSymbols.has(symbolUpper) && !(symbolUpper in cleanedAlertStatus)) {
+                  cleanedAlertStatus[symbolUpper] = value;
+                }
+              });
+              localStorage.setItem('watchlist_alert_status', JSON.stringify(cleanedAlertStatus));
+              
+              // Buy/Sell Alert Status
+              if (Object.keys(backendBuyAlertStatus).length > 0) {
+                localStorage.setItem('watchlist_buy_alert_status', JSON.stringify(backendBuyAlertStatus));
+              }
+              if (Object.keys(backendSellAlertStatus).length > 0) {
+                localStorage.setItem('watchlist_sell_alert_status', JSON.stringify(backendSellAlertStatus));
+              }
+              
+              console.log('✅ Updated localStorage from backend:', {
+                amounts: Object.keys(cleanedAmounts).length,
+                tradeStatus: Object.keys(cleanedTradeStatus).length,
+                slPercent: Object.keys(cleanedSLPercent).length,
+                tpPercent: Object.keys(cleanedTPPercent).length,
+                alertStatus: Object.keys(cleanedAlertStatus).length
+              });
+            } catch (err) {
+              console.warn('Failed to update localStorage from backend:', err);
             }
+            
+            // Now load from localStorage (which now has backend values) into state
+            // This ensures dashboard only reads from localStorage
+            setCoinAmounts(cleanedAmounts);
+            setCoinTradeStatus(cleanedTradeStatus);
+            setCoinSLPercent(cleanedSLPercent);
+            setCoinTPPercent(cleanedTPPercent);
+            setCoinAlertStatus(cleanedAlertStatus);
+            if (Object.keys(backendBuyAlertStatus).length > 0) {
+              setCoinBuyAlertStatus(backendBuyAlertStatus);
+            }
+            if (Object.keys(backendSellAlertStatus).length > 0) {
+              setCoinSellAlertStatus(backendSellAlertStatus);
+            }
+            
+            // Load saved SL/TP prices
+            if (Object.keys(backendSLPrices).length > 0) {
+              setCalculatedSL(backendSLPrices);
+              console.log('✅ Loaded saved SL prices from database:', backendSLPrices);
+            }
+            if (Object.keys(backendTPPrices).length > 0) {
+              setCalculatedTP(backendTPPrices);
+              console.log('✅ Loaded saved TP prices from database:', backendTPPrices);
+            }
+            
+            console.log('✅ Loaded watchlist settings from backend and updated localStorage:', {
+              items: dashboardItems.length,
+              amounts: Object.keys(cleanedAmounts).length,
+              tradeStatus: Object.keys(cleanedTradeStatus).length,
+              slPercent: Object.keys(cleanedSLPercent).length,
+              tpPercent: Object.keys(cleanedTPPercent).length,
+              alertStatus: Object.keys(cleanedAlertStatus).length
+            });
+            
+            // OLD COMPLEX MERGE CODE REMOVED - Now using simplified approach:
+            // Backend updates localStorage, dashboard reads from localStorage
+            // All state is now loaded from localStorage above (lines 3748-3756)
         } catch (err) {
           console.warn('Failed to load from backend, using localStorage:', err);
         }
@@ -4493,27 +4521,63 @@ function resolveDecisionIndexColor(value: number): string {
   // Load watchlist settings from localStorage on initial mount (before any data fetching)
   useEffect(() => {
     try {
+      // CRITICAL FIX: Clean localStorage of stale $10 values BEFORE loading
+      // This prevents obsolete values from being loaded into state
+      // CRITICAL FIX: Normalize all keys to UPPERCASE to match backend loading (line 3616)
       const localAmounts = localStorage.getItem('watchlist_amounts');
-      const localTradeStatus = localStorage.getItem('watchlist_trade_status');
-      const localAlertStatus = localStorage.getItem('watchlist_alert_status');
-      const localSLPercent = localStorage.getItem('watchlist_sl_percent');
-      const localTPPercent = localStorage.getItem('watchlist_tp_percent');
-      const localCoinPresets = localStorage.getItem('coin_presets');
-      
       if (localAmounts) {
         const parsedAmounts = JSON.parse(localAmounts) as Record<string, string>;
-        setCoinAmounts(parsedAmounts);
-        console.log('✅ Loaded watchlist amounts from localStorage on mount:', Object.keys(parsedAmounts).length, 'coins');
+        // Remove all values that are exactly "10", "10.0", or "10.00" (obsolete defaults)
+        // Normalize all keys to UPPERCASE to match backend loading
+        const cleanedAmounts: Record<string, string> = {};
+        Object.entries(parsedAmounts).forEach(([symbol, value]) => {
+          const isStaleValue = value === '10' || value === '10.0' || value === '10.00';
+          if (!isStaleValue) {
+            const symbolUpper = symbol.toUpperCase();
+            cleanedAmounts[symbolUpper] = value;
+          }
+        });
+        
+        // Update localStorage with cleaned values (normalized to uppercase)
+        if (Object.keys(cleanedAmounts).length !== Object.keys(parsedAmounts).length || 
+            Object.keys(cleanedAmounts).some(k => k !== k.toUpperCase())) {
+          localStorage.setItem('watchlist_amounts', JSON.stringify(cleanedAmounts));
+          console.log('🧹 Cleaned stale $10 values and normalized keys to uppercase in localStorage on mount');
+        }
+        
+        // Only load cleaned values (non-$10 values, uppercase keys)
+        if (Object.keys(cleanedAmounts).length > 0) {
+          setCoinAmounts(cleanedAmounts);
+          console.log('✅ Loaded watchlist amounts from localStorage on mount (cleaned, uppercase keys):', Object.keys(cleanedAmounts).length, 'coins');
+        }
       }
+      
+      const localTradeStatus = localStorage.getItem('watchlist_trade_status');
       if (localTradeStatus) {
         const parsedTradeStatus = JSON.parse(localTradeStatus) as Record<string, boolean>;
-        setCoinTradeStatus(parsedTradeStatus);
-        console.log('✅ Loaded trade status from localStorage on mount:', Object.keys(parsedTradeStatus).length, 'coins');
+        // Normalize all keys to UPPERCASE to match backend loading
+        const normalizedTradeStatus: Record<string, boolean> = {};
+        Object.entries(parsedTradeStatus).forEach(([symbol, value]) => {
+          normalizedTradeStatus[symbol.toUpperCase()] = value;
+        });
+        setCoinTradeStatus(normalizedTradeStatus);
+        // Update localStorage with normalized keys
+        localStorage.setItem('watchlist_trade_status', JSON.stringify(normalizedTradeStatus));
+        console.log('✅ Loaded trade status from localStorage on mount (normalized to uppercase):', Object.keys(normalizedTradeStatus).length, 'coins');
       }
+      
+      const localAlertStatus = localStorage.getItem('watchlist_alert_status');
       if (localAlertStatus) {
         const parsedAlertStatus = JSON.parse(localAlertStatus) as Record<string, boolean>;
-        setCoinAlertStatus(parsedAlertStatus);
-        console.log('✅ Loaded alert status from localStorage on mount:', Object.keys(parsedAlertStatus).length, 'coins');
+        // Normalize all keys to UPPERCASE to match backend loading
+        const normalizedAlertStatus: Record<string, boolean> = {};
+        Object.entries(parsedAlertStatus).forEach(([symbol, value]) => {
+          normalizedAlertStatus[symbol.toUpperCase()] = value;
+        });
+        setCoinAlertStatus(normalizedAlertStatus);
+        // Update localStorage with normalized keys
+        localStorage.setItem('watchlist_alert_status', JSON.stringify(normalizedAlertStatus));
+        console.log('✅ Loaded alert status from localStorage on mount (normalized to uppercase):', Object.keys(normalizedAlertStatus).length, 'coins');
       }
       
       // Load buy/sell alert status from localStorage
@@ -4521,28 +4585,69 @@ function resolveDecisionIndexColor(value: number): string {
       const localSellAlertStatus = localStorage.getItem('watchlist_sell_alert_status');
       if (localBuyAlertStatus) {
         const parsedBuyAlertStatus = JSON.parse(localBuyAlertStatus) as Record<string, boolean>;
-        setCoinBuyAlertStatus(parsedBuyAlertStatus);
-        console.log('✅ Loaded buy alert status from localStorage on mount:', Object.keys(parsedBuyAlertStatus).length, 'coins');
+        // Normalize all keys to UPPERCASE to match backend loading
+        const normalizedBuyAlertStatus: Record<string, boolean> = {};
+        Object.entries(parsedBuyAlertStatus).forEach(([symbol, value]) => {
+          normalizedBuyAlertStatus[symbol.toUpperCase()] = value;
+        });
+        setCoinBuyAlertStatus(normalizedBuyAlertStatus);
+        // Update localStorage with normalized keys
+        localStorage.setItem('watchlist_buy_alert_status', JSON.stringify(normalizedBuyAlertStatus));
+        console.log('✅ Loaded buy alert status from localStorage on mount (normalized to uppercase):', Object.keys(normalizedBuyAlertStatus).length, 'coins');
       }
       if (localSellAlertStatus) {
         const parsedSellAlertStatus = JSON.parse(localSellAlertStatus) as Record<string, boolean>;
-        setCoinSellAlertStatus(parsedSellAlertStatus);
-        console.log('✅ Loaded sell alert status from localStorage on mount:', Object.keys(parsedSellAlertStatus).length, 'coins');
+        // Normalize all keys to UPPERCASE to match backend loading
+        const normalizedSellAlertStatus: Record<string, boolean> = {};
+        Object.entries(parsedSellAlertStatus).forEach(([symbol, value]) => {
+          normalizedSellAlertStatus[symbol.toUpperCase()] = value;
+        });
+        setCoinSellAlertStatus(normalizedSellAlertStatus);
+        // Update localStorage with normalized keys
+        localStorage.setItem('watchlist_sell_alert_status', JSON.stringify(normalizedSellAlertStatus));
+        console.log('✅ Loaded sell alert status from localStorage on mount (normalized to uppercase):', Object.keys(normalizedSellAlertStatus).length, 'coins');
       }
+      
+      const localSLPercent = localStorage.getItem('watchlist_sl_percent');
       if (localSLPercent) {
         const parsedSLPercent = JSON.parse(localSLPercent) as Record<string, string>;
-        setCoinSLPercent(parsedSLPercent);
-        console.log('✅ Loaded SL percent from localStorage on mount:', Object.keys(parsedSLPercent).length, 'coins');
+        // Normalize all keys to UPPERCASE to match backend loading
+        const normalizedSLPercent: Record<string, string> = {};
+        Object.entries(parsedSLPercent).forEach(([symbol, value]) => {
+          normalizedSLPercent[symbol.toUpperCase()] = value;
+        });
+        setCoinSLPercent(normalizedSLPercent);
+        // Update localStorage with normalized keys
+        localStorage.setItem('watchlist_sl_percent', JSON.stringify(normalizedSLPercent));
+        console.log('✅ Loaded SL percent from localStorage on mount (normalized to uppercase):', Object.keys(normalizedSLPercent).length, 'coins');
       }
+      
+      const localTPPercent = localStorage.getItem('watchlist_tp_percent');
       if (localTPPercent) {
         const parsedTPPercent = JSON.parse(localTPPercent) as Record<string, string>;
-        setCoinTPPercent(parsedTPPercent);
-        console.log('✅ Loaded TP percent from localStorage on mount:', Object.keys(parsedTPPercent).length, 'coins');
+        // Normalize all keys to UPPERCASE to match backend loading
+        const normalizedTPPercent: Record<string, string> = {};
+        Object.entries(parsedTPPercent).forEach(([symbol, value]) => {
+          normalizedTPPercent[symbol.toUpperCase()] = value;
+        });
+        setCoinTPPercent(normalizedTPPercent);
+        // Update localStorage with normalized keys
+        localStorage.setItem('watchlist_tp_percent', JSON.stringify(normalizedTPPercent));
+        console.log('✅ Loaded TP percent from localStorage on mount (normalized to uppercase):', Object.keys(normalizedTPPercent).length, 'coins');
       }
+      
+      const localCoinPresets = localStorage.getItem('coin_presets');
       if (localCoinPresets) {
         const parsedCoinPresets = JSON.parse(localCoinPresets) as Record<string, string>;
-        setCoinPresets(parsedCoinPresets);
-        console.log('✅ Loaded coin presets from localStorage on mount:', Object.keys(parsedCoinPresets).length, 'coins');
+        // Normalize all keys to UPPERCASE to match backend loading
+        const normalizedCoinPresets: Record<string, string> = {};
+        Object.entries(parsedCoinPresets).forEach(([symbol, value]) => {
+          normalizedCoinPresets[symbol.toUpperCase()] = value;
+        });
+        setCoinPresets(normalizedCoinPresets);
+        // Update localStorage with normalized keys
+        localStorage.setItem('coin_presets', JSON.stringify(normalizedCoinPresets));
+        console.log('✅ Loaded coin presets from localStorage on mount (normalized to uppercase):', Object.keys(normalizedCoinPresets).length, 'coins');
       }
     } catch (err) {
       console.warn('Failed to load watchlist settings from localStorage on mount:', err);
@@ -4610,12 +4715,44 @@ function resolveDecisionIndexColor(value: number): string {
 
   // New handler for coin-specific preset changes with strategy logic
   const handleCoinPresetChangeWithStrategy = async (symbol: string, preset: string) => {
-    setCoinPresets(prev => ({ ...prev, [symbol]: preset }));
+    const messageKey = `${symbol}_preset`;
     
-    // CRITICAL: Save the preset to the backend first
+    // CRITICAL: Save the preset to the backend first (source of truth)
     try {
-      await updateCoinConfig(symbol, { preset });
+      const result = await updateCoinConfig(symbol, { preset });
       console.log(`✅ Saved preset ${preset} for ${symbol} to backend`);
+      
+      // Update state with backend response if available
+      // Note: updateCoinConfig may not return the preset, so we use the value we sent
+      const symbolUpper = symbol.toUpperCase();
+      setCoinPresets(prev => ({ ...prev, [symbolUpper]: preset }));
+      
+      // Update localStorage with backend value
+      const existingPresets = localStorage.getItem('coin_presets');
+      const existingPresetsObj = existingPresets ? JSON.parse(existingPresets) as Record<string, string> : {};
+      const updatedPresets = {
+        ...existingPresetsObj,
+        [symbolUpper]: preset
+      };
+      localStorage.setItem('coin_presets', JSON.stringify(updatedPresets));
+      
+      // Show success message
+      setAlertSavedMessages(prev => ({
+        ...prev,
+        [messageKey]: { type: 'success', timestamp: Date.now() }
+      }));
+      
+      // Clear message after 3 seconds
+      if (savedMessageTimersRef.current[messageKey]) {
+        clearTimeout(savedMessageTimersRef.current[messageKey]);
+      }
+      savedMessageTimersRef.current[messageKey] = setTimeout(() => {
+        setAlertSavedMessages(prev => {
+          const { [messageKey]: _removed, ...rest } = prev;
+          return rest;
+        });
+        delete savedMessageTimersRef.current[messageKey];
+      }, 3000);
     } catch (err) {
       logHandledError(
         `updateCoinPreset:${symbol}`,
@@ -4623,6 +4760,10 @@ function resolveDecisionIndexColor(value: number): string {
         err,
         'error'
       );
+      setAlertSavedMessages(prev => ({
+        ...prev,
+        [messageKey]: { type: 'error', timestamp: Date.now() }
+      }));
       // Continue with strategy logic even if save fails
     }
     
@@ -5123,7 +5264,7 @@ function resolveDecisionIndexColor(value: number): string {
           .filter((coin) => coin.instrument_name && coinTradeStatus[coin.instrument_name] === true)
           .map((coin) => coin.instrument_name);
         const slowSymbols = coins
-          .filter((coin) => coin.instrument_name && coinTradeStatus[coin.instrument_name] !== true)
+          .filter((coin) => coin.instrument_name && coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] !== true)
           .map((coin) => coin.instrument_name);
 
         console.log(`📊 Hydrating signals: ${fastSymbols.length} fast, ${slowSymbols.length} slow symbols`);
@@ -5363,7 +5504,7 @@ function resolveDecisionIndexColor(value: number): string {
     const calculateValues = () => {
       topCoinsRef.current.forEach(coin => {
         // Only calculate for active trades
-        const isActiveTrade = coinTradeStatus[coin.instrument_name] === true;
+        const isActiveTrade = coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] === true;
         if (!isActiveTrade) return;
         
         // Only calculate if we don't have saved values for this coin
@@ -5415,7 +5556,7 @@ function resolveDecisionIndexColor(value: number): string {
       console.log('📊 Signals updated, recalculating SL/TP values for active trades');
       topCoinsRef.current.forEach(coin => {
         // Only calculate for active trades
-        const isActiveTrade = coinTradeStatus[coin.instrument_name] === true;
+        const isActiveTrade = coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] === true;
         if (!isActiveTrade) return;
         
         // Only calculate if we don't have saved values for this coin AND we have signals
@@ -5464,7 +5605,7 @@ function resolveDecisionIndexColor(value: number): string {
       console.log('🔄 Loading saved SL/TP values for active trades');
       topCoinsRef.current.forEach(coin => {
         // Only process active trades
-        const isActiveTrade = coinTradeStatus[coin.instrument_name] === true;
+        const isActiveTrade = coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] === true;
         if (!isActiveTrade) return;
         
         // Check if we have saved values for this coin
@@ -7884,7 +8025,7 @@ function resolveDecisionIndexColor(value: number): string {
                     const isLast = globalIndex >= orderedWatchlistCoins.length - 1;
                     // Calculate master alert status (needed for both signal display and button)
                     const watchlistItem = watchlistItems.find(item => item.symbol === coin.instrument_name);
-                    const storedMasterAlert = coinAlertStatus[coin.instrument_name];
+                    const storedMasterAlert = coinAlertStatus[normalizeSymbolKey(coin.instrument_name)];
                     const hasAlertEnabled = coin.alert_enabled === true || watchlistItem?.alert_enabled === true;
                     const masterAlertEnabled = storedMasterAlert !== undefined
                       ? storedMasterAlert
@@ -7898,7 +8039,7 @@ function resolveDecisionIndexColor(value: number): string {
                         key={coin.instrument_name}
                         data-testid={`watchlist-row-${coin.instrument_name}`}
                         className={`hover:bg-gray-50 border-b ${
-                    coinTradeStatus[coin.instrument_name] 
+                    coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] 
                       ? 'bg-green-50 border-l-4 border-l-green-500' 
                       : ''
                         }`}
@@ -7943,12 +8084,12 @@ function resolveDecisionIndexColor(value: number): string {
                       <div className="flex gap-1 justify-center items-center">
                         <button
                           onClick={async () => {
-                            const amountUSD = parseFloat(coinAmounts[coin.instrument_name] || '0');
+                            const amountUSD = parseFloat(coinAmounts[normalizeSymbolKey(coin.instrument_name)] || '0');
                             if (!amountUSD || amountUSD <= 0) {
                               alert(`Por favor configura el Amount USD para ${coin.instrument_name}`);
                               return;
                             }
-                            const useMargin = coinTradeStatus[coin.instrument_name + '_margin'] || false;
+                            const useMargin = coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_margin'] || false;
                             // Use the current price from the dashboard (should be the latest price)
                             const price = coin.current_price;
                             if (price == null || price <= 0) {
@@ -8014,12 +8155,12 @@ ${marginText}
                         </button>
                         <button
                           onClick={async () => {
-                            const amountUSD = parseFloat(coinAmounts[coin.instrument_name] || '0');
+                            const amountUSD = parseFloat(coinAmounts[normalizeSymbolKey(coin.instrument_name)] || '0');
                             if (!amountUSD || amountUSD <= 0) {
                               alert(`Por favor configura el Amount USD para ${coin.instrument_name}`);
                               return;
                             }
-                            const useMargin = coinTradeStatus[coin.instrument_name + '_margin'] || false;
+                            const useMargin = coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_margin'] || false;
                             // Use the current price from the dashboard (should be the latest price)
                             const price = coin.current_price;
                             if (price == null || price <= 0) {
@@ -8104,13 +8245,13 @@ ${marginText}
                     </td>
                     <td className="px-1 py-3 text-center relative w-18">
                       <select
-                        value={coinPresets[coin.instrument_name] || 'swing'}
+                        value={coinPresets[normalizeSymbolKey(coin.instrument_name)] || 'swing'}
                         onChange={(e) => handleCoinPresetChangeWithStrategy(coin.instrument_name, e.target.value)}
                         onMouseEnter={() => setShowPresetTooltip(coin.instrument_name)}
                         onMouseLeave={() => setShowPresetTooltip(null)}
                         className="text-xs border border-gray-300 rounded px-2 py-1 bg-white w-20 relative z-10"
                         title={(() => {
-                          const preset = coinPresets[coin.instrument_name] || 'swing';
+                          const preset = coinPresets[normalizeSymbolKey(coin.instrument_name)] || 'swing';
                           let presetType: Preset;
                           let riskMode: RiskMode;
                           
@@ -8149,10 +8290,15 @@ ${marginText}
                         <option value="scalp-aggressive">Scalp-Aggressive</option>
                         <option value="custom">Custom</option>
                       </select>
+                      {alertSavedMessages[`${coin.instrument_name}_preset`] && (
+                        <span className="ml-2 text-xs text-green-600 font-medium animate-[fadeIn_0.2s_ease-in-out_forwards] whitespace-nowrap">
+                          ✓ New value saved
+                        </span>
+                      )}
                       {showPresetTooltip === coin.instrument_name && (
                         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg shadow-lg z-50 whitespace-pre-line max-w-xs">
                           {(() => {
-                            const preset = coinPresets[coin.instrument_name] || 'swing';
+                            const preset = coinPresets[normalizeSymbolKey(coin.instrument_name)] || 'swing';
                             let presetType: Preset;
                             let riskMode: RiskMode;
                             
@@ -8190,13 +8336,14 @@ ${marginText}
                       <div 
                         data-testid={`trading-toggle-${coin.instrument_name}`}
                         className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 transition-all w-12 justify-center ${
-                          coinTradeStatus[coin.instrument_name]
+                          coinTradeStatus[normalizeSymbolKey(coin.instrument_name)]
                             ? 'bg-yellow-400 text-yellow-900 border border-yellow-500 font-bold'
                             : 'bg-gray-100 text-gray-500 border border-gray-300'
                         }`}
                         onClick={async () => {
-                          const newValue = !coinTradeStatus[coin.instrument_name];
-                          console.log(`🔄 Changing Trade status for ${coin.instrument_name}: ${coinTradeStatus[coin.instrument_name]} -> ${newValue}`);
+                          const symbolKey = normalizeSymbolKey(coin.instrument_name);
+                          const newValue = !coinTradeStatus[symbolKey];
+                          console.log(`🔄 Changing Trade status for ${coin.instrument_name}: ${coinTradeStatus[symbolKey]} -> ${newValue}`);
                           setCoinTradeStatus(prev => {
                             const updated = {
                               ...prev,
@@ -8206,39 +8353,66 @@ ${marginText}
                             localStorage.setItem('watchlist_trade_status', JSON.stringify(updated));
                             return updated;
                           });
+                          const symbol = coin.instrument_name;
+                          const messageKey = `${symbol}_trade`;
+                          
                           // Save to database
                           try {
-                            console.log(`💾 Saving trade_enabled=${newValue} for ${coin.instrument_name} to database...`);
+                            console.log(`💾 Saving trade_enabled=${newValue} for ${symbol} to database...`);
                             // CRITICAL: Use the backend response to update local state (single source of truth)
                             // This ensures UI matches the canonical row that SignalMonitor reads
-                            const result = await saveCoinSettings(coin.instrument_name, { trade_enabled: newValue });
+                            const result = await saveCoinSettings(symbol, { trade_enabled: newValue });
                             
                             // Update local state from backend response to ensure consistency
                             if (result && typeof result === 'object' && 'trade_enabled' in result) {
                               const backendValue = result.trade_enabled;
                               if (typeof backendValue === 'boolean') {
-                                console.log(`✅ Backend confirmed trade_enabled=${backendValue} for ${coin.instrument_name} (id=${result.id})`);
+                                console.log(`✅ Backend confirmed trade_enabled=${backendValue} for ${symbol} (id=${result.id})`);
+                                const symbolUpper = symbol.toUpperCase();
                                 setCoinTradeStatus(prev => {
                                   const updated = {
                                     ...prev,
-                                    [coin.instrument_name]: backendValue
+                                    [symbolUpper]: backendValue
                                   };
                                   localStorage.setItem('watchlist_trade_status', JSON.stringify(updated));
                                   return updated;
                                 });
                               } else {
                                 // Fallback: if backendValue is not boolean, keep optimistic update
-                                console.log(`✅ Successfully saved trade_enabled=${newValue} for ${coin.instrument_name}`);
+                                console.log(`✅ Successfully saved trade_enabled=${newValue} for ${symbol}`);
                               }
                             } else {
                               // Fallback: if result doesn't have trade_enabled, keep optimistic update
-                              console.log(`✅ Successfully saved trade_enabled=${newValue} for ${coin.instrument_name}`);
+                              console.log(`✅ Successfully saved trade_enabled=${newValue} for ${symbol}`);
+                            }
+                            
+                            // Show success message
+                            setAlertSavedMessages(prev => ({
+                              ...prev,
+                              [messageKey]: { type: 'success', timestamp: Date.now() }
+                            }));
+                            
+                            // Clear message after 3 seconds
+                            if (savedMessageTimersRef.current[messageKey]) {
+                              clearTimeout(savedMessageTimersRef.current[messageKey]);
+                            }
+                            savedMessageTimersRef.current[messageKey] = setTimeout(() => {
+                              setAlertSavedMessages(prev => {
+                                const { [messageKey]: _removed, ...rest } = prev;
+                                return rest;
+                              });
+                              delete savedMessageTimersRef.current[messageKey];
+                            }, 3000);
+                            
+                            // Log backend message if available
+                            if (result && typeof result === 'object' && 'message' in result && result.message) {
+                              console.log(`✅ Backend: ${result.message}`);
                             }
                             
                             // CRITICAL: After saving, verify the symbol is still visible
                             // Do NOT trigger a full refresh that might filter it out
                             // The symbol should remain visible regardless of Trade status
-                            console.log(`🛡️ Symbol ${coin.instrument_name} should remain visible in watchlist (Trade=${newValue})`);
+                            console.log(`🛡️ Symbol ${symbol} should remain visible in watchlist (Trade=${newValue})`);
                           } catch (err) {
                             console.error(`❌ Failed to save trade_enabled for ${coin.instrument_name}:`, err);
                             // Revert the UI change on error
@@ -8291,55 +8465,87 @@ ${marginText}
                               }, 1000);
                             } else {
                               // For non-retryable errors, just log them
-                              console.error(`❌ Non-retryable error for ${coin.instrument_name}:`, errorMessage);
+                              console.error(`❌ Non-retryable error for ${symbol}:`, errorMessage);
+                              setAlertSavedMessages(prev => ({
+                                ...prev,
+                                [messageKey]: { type: 'error', timestamp: Date.now() }
+                              }));
                             }
                           }
                         }}
                       >
-                        {coinTradeStatus[coin.instrument_name] ? <span className="font-bold">YES</span> : 'NO'}
-    </div>
+                        {coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] ? <span className="font-bold">YES</span> : 'NO'}
+                      </div>
+                      {alertSavedMessages[`${coin.instrument_name}_trade`] && (
+                        <span className="text-xs text-green-600 font-medium animate-[fadeIn_0.2s_ease-in-out_forwards] whitespace-nowrap">
+                          ✓ New value saved
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right w-20">
-                      <input
-                        type="text"
-                        step="0.01"
-                        placeholder="$0.00"
-                        value={coinAmounts[coin.instrument_name] || ''}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setCoinAmounts(prev => ({
-                            ...prev,
-                            [coin.instrument_name]: value
-                          }));
-                        }}
-                        onBlur={async (e) => {
+                      <div className="flex items-center justify-end gap-2">
+                        <input
+                          type="text"
+                          step="0.01"
+                          placeholder="$0.00"
+                          value={coinAmounts[normalizeSymbolKey(coin.instrument_name)] || ''}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            const symbolKey = normalizeSymbolKey(coin.instrument_name);
+                            setCoinAmounts(prev => ({
+                              ...prev,
+                              [symbolKey]: value
+                            }));
+                          }}
+                          onBlur={async (e) => {
                           const rawValue = e.target.value.trim();
                           console.log(`Saving Amount USD for ${coin.instrument_name}:`, rawValue);
                           const symbol = coin.instrument_name;
+                          const messageKey = `${symbol}_amount`;
 
-                          // Helper to persist local state/storage
-                          const persistLocalAmounts = (updated: Record<string, string>) => {
-                            setCoinAmounts(updated);
-                            try {
-                              localStorage.setItem('watchlist_amounts', JSON.stringify(updated));
-                              console.log(`💾 Saved watchlist_amounts to localStorage for ${symbol}`);
-                            } catch (err) {
-                              logHandledError(
-                                'localStorage:watchlist_amounts',
-                                'Failed to persist watchlist amounts to localStorage',
-                                err
-                              );
-                            }
-                          };
-                            
                           const clearAmount = async () => {
-                            const { [symbol]: _removed, ...rest } = coinAmounts;
-                            persistLocalAmounts(rest);
                             try {
-                              await saveCoinSettings(symbol, { trade_amount_usd: null });
+                              const result = await saveCoinSettings(symbol, { trade_amount_usd: null });
                               console.log(`✅ Cleared Amount USD for ${symbol} in backend`);
+                              
+                              // Update state with backend response
+                              if (result && result.symbol) {
+                                const symbolUpper = result.symbol.toUpperCase();
+                                setCoinAmounts(prev => {
+                                  const { [symbolUpper]: _removed, ...rest } = prev;
+                                  return rest;
+                                });
+                                
+                                // Update localStorage with backend response
+                                const existingAmounts = localStorage.getItem('watchlist_amounts');
+                                const existingAmountsObj = existingAmounts ? JSON.parse(existingAmounts) as Record<string, string> : {};
+                                const { [symbolUpper]: _removed2, ...cleanedAmounts } = existingAmountsObj;
+                                localStorage.setItem('watchlist_amounts', JSON.stringify(cleanedAmounts));
+                              }
+                              
+                              // Show success message
+                              setAlertSavedMessages(prev => ({
+                                ...prev,
+                                [messageKey]: { type: 'success', timestamp: Date.now() }
+                              }));
+                              
+                              // Clear message after 3 seconds
+                              if (savedMessageTimersRef.current[messageKey]) {
+                                clearTimeout(savedMessageTimersRef.current[messageKey]);
+                              }
+                              savedMessageTimersRef.current[messageKey] = setTimeout(() => {
+                                setAlertSavedMessages(prev => {
+                                  const { [messageKey]: _removed, ...rest } = prev;
+                                  return rest;
+                                });
+                                delete savedMessageTimersRef.current[messageKey];
+                              }, 3000);
                             } catch (err) {
                               console.warn(`⚠️ Failed to clear Amount USD in backend for ${symbol}:`, err);
+                              setAlertSavedMessages(prev => ({
+                                ...prev,
+                                [messageKey]: { type: 'error', timestamp: Date.now() }
+                              }));
                             }
                           };
 
@@ -8350,14 +8556,62 @@ ${marginText}
 
                           const numValue = parseFloat(rawValue);
                           if (!isNaN(numValue) && numValue > 0) {
-                            const formatted = rawValue;
-                            const updatedAmounts = { ...coinAmounts, [symbol]: formatted };
-                            persistLocalAmounts(updatedAmounts);
                             try {
-                              await saveCoinSettings(symbol, { trade_amount_usd: numValue });
+                              // Save to backend first (source of truth)
+                              const result = await saveCoinSettings(symbol, { trade_amount_usd: numValue });
                               console.log(`✅ Saved Amount USD=${numValue} for ${symbol} in backend`);
+                              
+                              // Update state with backend response
+                              if (result && result.symbol) {
+                                const symbolUpper = result.symbol.toUpperCase();
+                                const backendValue = result.trade_amount_usd !== null && result.trade_amount_usd !== undefined
+                                  ? result.trade_amount_usd.toString()
+                                  : '';
+                                
+                                // Update state with backend value
+                                setCoinAmounts(prev => ({
+                                  ...prev,
+                                  [symbolUpper]: backendValue
+                                }));
+                                
+                                // Update localStorage with backend value
+                                const existingAmounts = localStorage.getItem('watchlist_amounts');
+                                const existingAmountsObj = existingAmounts ? JSON.parse(existingAmounts) as Record<string, string> : {};
+                                const updatedAmounts = {
+                                  ...existingAmountsObj,
+                                  [symbolUpper]: backendValue
+                                };
+                                localStorage.setItem('watchlist_amounts', JSON.stringify(updatedAmounts));
+                                
+                                // Show success message
+                                setAlertSavedMessages(prev => ({
+                                  ...prev,
+                                  [messageKey]: { type: 'success', timestamp: Date.now() }
+                                }));
+                                
+                                // Clear message after 3 seconds
+                                if (savedMessageTimersRef.current[messageKey]) {
+                                  clearTimeout(savedMessageTimersRef.current[messageKey]);
+                                }
+                                savedMessageTimersRef.current[messageKey] = setTimeout(() => {
+                                  setAlertSavedMessages(prev => {
+                                    const { [messageKey]: _removed, ...rest } = prev;
+                                    return rest;
+                                  });
+                                  delete savedMessageTimersRef.current[messageKey];
+                                }, 3000);
+                                
+                                // Log backend message if available
+                                if (result.message) {
+                                  console.log(`✅ Backend: ${result.message}`);
+                                }
+                              }
                             } catch (err) {
-                              console.warn(`⚠️ Backend save failed (using localStorage only) for ${symbol}:`, err);
+                              console.warn(`⚠️ Backend save failed for ${symbol}:`, err);
+                              setAlertSavedMessages(prev => ({
+                                ...prev,
+                                [messageKey]: { type: 'error', timestamp: Date.now() }
+                              }));
                             }
                             return;
                           }
@@ -8373,16 +8627,22 @@ ${marginText}
                           }
                         }}
                         className={`w-full border-2 rounded-lg px-3 py-2 shadow-sm focus:outline-none focus:ring-2 text-right font-medium ${
-                          coinTradeStatus[coin.instrument_name] && (!coinAmounts[coin.instrument_name] || coinAmounts[coin.instrument_name] === '')
+                          coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] && (!coinAmounts[coin.instrument_name] || coinAmounts[coin.instrument_name] === '')
                             ? 'border-red-500 focus:ring-red-500 bg-red-50 text-red-900'
                             : 'border-blue-300 focus:ring-blue-500 bg-white'
                         }`}
                       />
+                        {alertSavedMessages[`${coin.instrument_name}_amount`] && (
+                          <span className="text-xs text-green-600 font-medium animate-[fadeIn_0.2s_ease-in-out_forwards] whitespace-nowrap">
+                            ✓ New value saved
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-center w-14">
                       <div 
                         className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 transition-all w-12 justify-center ${
-                          coinTradeStatus[coin.instrument_name + '_margin']
+                          coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_margin']
                             ? 'bg-yellow-400 text-yellow-900 border border-yellow-500 font-bold'
                             : 'bg-gray-100 text-gray-500 border border-gray-300'
                         }`}
@@ -8402,78 +8662,125 @@ ${marginText}
                         }}
                       >
                         {coinTradeStatus[coin.instrument_name + '_margin'] ? 'YES' : 'NO'}
-        </div>
+                      </div>
+                      {alertSavedMessages[`${coin.instrument_name}_margin`] && (
+                        <span className="text-xs text-green-600 font-medium animate-[fadeIn_0.2s_ease-in-out_forwards] whitespace-nowrap">
+                          ✓ New value saved
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center w-16">
                       <div 
                         className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 transition-all w-14 justify-center ${
-                          coinTradeStatus[coin.instrument_name + '_sl_tp']
+                          coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_sl_tp']
                             ? 'bg-red-100 text-red-700 border border-red-300'
                             : 'bg-green-100 text-green-700 border border-green-300'
                         }`}
                         onClick={async () => {
-                          const newValue = !coinTradeStatus[coin.instrument_name + '_sl_tp'];
-                          setCoinTradeStatus(prev => ({
-                            ...prev,
-                            [coin.instrument_name + '_sl_tp']: newValue
-                          }));
+                          const symbol = coin.instrument_name;
+                          const messageKey = `${symbol}_risk`;
+                          const newValue = !coinTradeStatus[symbol + '_sl_tp'];
                           
-                          // Update preset to reflect the new risk mode
-                          const currentPreset = coinPresets[coin.instrument_name] || 'swing';
-                          let newPreset: string;
-                          
-                          if (currentPreset === 'swing' || currentPreset === 'intraday' || currentPreset === 'scalp') {
-                            // Convert basic preset to combined preset
-                            newPreset = newValue ? `${currentPreset}-aggressive` : `${currentPreset}-conservative`;
-                          } else if (currentPreset.includes('-conservative')) {
-                            // Switch from conservative to aggressive
-                            newPreset = newValue ? currentPreset.replace('-conservative', '-aggressive') : currentPreset;
-                          } else if (currentPreset.includes('-aggressive')) {
-                            // Switch from aggressive to conservative
-                            newPreset = newValue ? currentPreset : currentPreset.replace('-aggressive', '-conservative');
-                          } else {
-                            // Fallback
-                            newPreset = newValue ? 'swing-aggressive' : 'swing-conservative';
-                          }
-                          
-                          setCoinPresets(prev => ({
-                            ...prev,
-                            [coin.instrument_name]: newPreset
-                          }));
-                          
-                          // Save to database
-                          await saveCoinSettings(coin.instrument_name, { 
-                            sl_tp_mode: newValue ? 'aggressive' : 'conservative'
-                          });
-                          
-                          // Recalculate SL/TP values immediately
-                          const values = calculateSLTPValues(coin);
-                          console.log(`🔄 Recalculating SL/TP for ${coin.instrument_name} after mode change:`, values);
-                          setCalculatedSL(prev => ({ ...prev, [coin.instrument_name]: values.sl }));
-                          setCalculatedTP(prev => ({ ...prev, [coin.instrument_name]: values.tp }));
-                          
-                          // Save the recalculated values to the database
                           try {
-                            const settingsToSave: Partial<CoinSettings> = {
+                            // Save to backend first (source of truth)
+                            const result = await saveCoinSettings(symbol, { 
                               sl_tp_mode: newValue ? 'aggressive' : 'conservative'
-                            };
+                            });
+                            console.log(`✅ Saved RISK=${newValue ? 'aggressive' : 'conservative'} for ${symbol} in backend`);
                             
-                            if (values.sl) {
-                              settingsToSave.sl_price = values.sl;
+                            // Update state with backend response
+                            if (result && result.symbol) {
+                              const symbolUpper = result.symbol.toUpperCase();
+                              const backendValue = result.sl_tp_mode === 'aggressive';
+                              
+                              setCoinTradeStatus(prev => {
+                                const updated = {
+                                  ...prev,
+                                  [symbolUpper + '_sl_tp']: backendValue
+                                };
+                                // Update localStorage with backend value
+                                localStorage.setItem('watchlist_trade_status', JSON.stringify(updated));
+                                return updated;
+                              });
+                              
+                              // Update preset to reflect the new risk mode
+                              const currentPreset = coinPresets[symbol] || 'swing';
+                              let newPreset: string;
+                              
+                              if (currentPreset === 'swing' || currentPreset === 'intraday' || currentPreset === 'scalp') {
+                                newPreset = backendValue ? `${currentPreset}-aggressive` : `${currentPreset}-conservative`;
+                              } else if (currentPreset.includes('-conservative')) {
+                                newPreset = backendValue ? currentPreset.replace('-conservative', '-aggressive') : currentPreset;
+                              } else if (currentPreset.includes('-aggressive')) {
+                                newPreset = backendValue ? currentPreset : currentPreset.replace('-aggressive', '-conservative');
+                              } else {
+                                newPreset = backendValue ? 'swing-aggressive' : 'swing-conservative';
+                              }
+                              
+                              setCoinPresets(prev => ({
+                                ...prev,
+                                [symbol]: newPreset
+                              }));
+                              
+                              // Recalculate SL/TP values immediately
+                              const values = calculateSLTPValues(coin);
+                              console.log(`🔄 Recalculating SL/TP for ${symbol} after mode change:`, values);
+                              setCalculatedSL(prev => ({ ...prev, [symbol]: values.sl }));
+                              setCalculatedTP(prev => ({ ...prev, [symbol]: values.tp }));
+                              
+                              // Save the recalculated values to the database
+                              try {
+                                const settingsToSave: Partial<CoinSettings> = {
+                                  sl_tp_mode: backendValue ? 'aggressive' : 'conservative'
+                                };
+                                
+                                if (values.sl) {
+                                  settingsToSave.sl_price = values.sl;
+                                }
+                                
+                                if (values.tp) {
+                                  settingsToSave.tp_price = values.tp;
+                                }
+                                
+                                await saveCoinSettings(symbol, settingsToSave);
+                                console.log(`✅ Saved recalculated SL/TP for ${symbol}:`, settingsToSave);
+                              } catch (err) {
+                                console.warn(`⚠️ Failed to save recalculated SL/TP for ${symbol}:`, err);
+                              }
                             }
                             
-                            if (values.tp) {
-                              settingsToSave.tp_price = values.tp;
-                            }
+                            // Show success message
+                            setAlertSavedMessages(prev => ({
+                              ...prev,
+                              [messageKey]: { type: 'success', timestamp: Date.now() }
+                            }));
                             
-                            await saveCoinSettings(coin.instrument_name, settingsToSave);
-                            console.log(`✅ Saved recalculated SL/TP for ${coin.instrument_name}:`, settingsToSave);
+                            // Clear message after 3 seconds
+                            if (savedMessageTimersRef.current[messageKey]) {
+                              clearTimeout(savedMessageTimersRef.current[messageKey]);
+                            }
+                            savedMessageTimersRef.current[messageKey] = setTimeout(() => {
+                              setAlertSavedMessages(prev => {
+                                const { [messageKey]: _removed, ...rest } = prev;
+                                return rest;
+                              });
+                              delete savedMessageTimersRef.current[messageKey];
+                            }, 3000);
+                            
+                            // Log backend message if available
+                            if (result.message) {
+                              console.log(`✅ Backend: ${result.message}`);
+                            }
                           } catch (err) {
-                            console.warn(`⚠️ Failed to save recalculated SL/TP for ${coin.instrument_name}:`, err);
+                            console.warn(`⚠️ Backend save failed for RISK:`, err);
+                            setAlertSavedMessages(prev => ({
+                              ...prev,
+                              [messageKey]: { type: 'error', timestamp: Date.now() }
+                            }));
                           }
                         }}
                         title={(() => {
-                          const preset = coinPresets[coin.instrument_name] || 'swing';
+                          const preset = coinPresets[normalizeSymbolKey(coin.instrument_name)] || 'swing';
                           let presetType: Preset;
                           
                           if (preset === 'swing' || preset === 'intraday' || preset === 'scalp') {
@@ -8498,7 +8805,12 @@ ${marginText}
                         })()}
                       >
                         {coinTradeStatus[coin.instrument_name + '_sl_tp'] ? 'Aggressive' : 'Conservative'}
-    </div>
+                      </div>
+                      {alertSavedMessages[`${coin.instrument_name}_risk`] && (
+                        <span className="text-xs text-green-600 font-medium animate-[fadeIn_0.2s_ease-in-out_forwards] whitespace-nowrap">
+                          ✓ New value saved
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right w-20">
                       <input
@@ -8546,13 +8858,14 @@ ${marginText}
                         }}
                         onChange={(e) => {
                           const value = e.target.value;
+                          const symbolKey = normalizeSymbolKey(coin.instrument_name);
                           setCoinSLPercent(prev => ({
                             ...prev,
-                            [coin.instrument_name]: value
+                            [symbolKey]: value
                           }));
                         }}
                         onMouseEnter={() => {
-                          if (coinSLPercent[coin.instrument_name]) {
+                          if (coinSLPercent[normalizeSymbolKey(coin.instrument_name)]) {
                             setShowOverrideValues(prev => ({
                               ...prev,
                               [coin.instrument_name]: { ...prev[coin.instrument_name], sl: true }
@@ -8572,66 +8885,127 @@ ${marginText}
                             [coin.instrument_name]: { ...prev[coin.instrument_name], sl: false }
                           }));
                           
-                          // Then handle the value saving
+                          const symbol = coin.instrument_name;
+                          const messageKey = `${symbol}_sl`;
                           const value = e.target.value;
                           const numValue = parseFloat(value);
                           
                           // Handle both valid values and empty values (deletion)
                           if (value === '' || value === '0') {
-                            // Field was cleared - remove override and save
-                            setCoinSLPercent(prev => {
-                              const updated = { ...prev };
-                              delete updated[coin.instrument_name];
-                              return updated;
-                            });
-                            
-                            // Save to localStorage
+                            // Field was cleared - save to backend first
                             try {
-                              const updated = { ...coinSLPercent };
-                              delete updated[coin.instrument_name];
-                              localStorage.setItem('watchlist_sl_percent', JSON.stringify(updated));
-                              console.log(`💾 Cleared SL% from localStorage: ${coin.instrument_name}`);
-                            } catch (err) {
-                              logHandledError(
-                                'localStorage:watchlist_sl_percent:clear',
-                                'Failed to clear SL% override in localStorage',
-                                err
-                              );
-                            }
-                            
-                            // Try backend - set to null to clear
-                            try {
-                              await saveCoinSettings(coin.instrument_name, { sl_percentage: null });
+                              const result = await saveCoinSettings(symbol, { sl_percentage: null });
                               console.log(`✅ Cleared SL% from backend`);
+                              
+                              // Update state with backend response
+                              if (result && result.symbol) {
+                                const symbolUpper = result.symbol.toUpperCase();
+                                setCoinSLPercent(prev => {
+                                  const { [symbolUpper]: _removed, ...rest } = prev;
+                                  return rest;
+                                });
+                                
+                                // Update localStorage with backend response
+                                const existingSLPercent = localStorage.getItem('watchlist_sl_percent');
+                                const existingSLPercentObj = existingSLPercent ? JSON.parse(existingSLPercent) as Record<string, string> : {};
+                                const { [symbolUpper]: _removed2, ...cleanedSLPercent } = existingSLPercentObj;
+                                localStorage.setItem('watchlist_sl_percent', JSON.stringify(cleanedSLPercent));
+                              }
+                              
+                              // Show success message
+                              setAlertSavedMessages(prev => ({
+                                ...prev,
+                                [messageKey]: { type: 'success', timestamp: Date.now() }
+                              }));
+                              
+                              // Clear message after 3 seconds
+                              if (savedMessageTimersRef.current[messageKey]) {
+                                clearTimeout(savedMessageTimersRef.current[messageKey]);
+                              }
+                              savedMessageTimersRef.current[messageKey] = setTimeout(() => {
+                                setAlertSavedMessages(prev => {
+                                  const { [messageKey]: _removed, ...rest } = prev;
+                                  return rest;
+                                });
+                                delete savedMessageTimersRef.current[messageKey];
+                              }, 3000);
                             } catch (err) {
                               console.warn('⚠️ Backend clear failed for SL%', err);
+                              setAlertSavedMessages(prev => ({
+                                ...prev,
+                                [messageKey]: { type: 'error', timestamp: Date.now() }
+                              }));
                             }
                           } else if (!isNaN(numValue) && numValue > 0) {
-                            // Valid value - save normally
-                            setCoinSLPercent(prev => ({
-                              ...prev,
-                              [coin.instrument_name]: value
-                            }));
-                            
-                            // Save to localStorage
+                            // Valid value - save to backend first (source of truth)
                             try {
-                              const updated = { ...coinSLPercent, [coin.instrument_name]: value };
-                              localStorage.setItem('watchlist_sl_percent', JSON.stringify(updated));
-                              console.log(`💾 Saved SL% to localStorage: ${coin.instrument_name} = ${value}`);
-                            } catch (err) {
-                              logHandledError(
-                                'localStorage:watchlist_sl_percent:save',
-                                'Failed to save SL% override to localStorage',
-                                err
-                              );
-                            }
-                            
-                            // Try backend
-                            try {
-                              await saveCoinSettings(coin.instrument_name, { sl_percentage: numValue });
-                              console.log(`✅ Also saved SL% to backend`);
+                              const result = await saveCoinSettings(symbol, { sl_percentage: numValue });
+                              console.log(`✅ Saved SL%=${numValue} for ${symbol} in backend`);
+                              
+                              // Update state with backend response
+                              if (result && result.symbol) {
+                                const symbolUpper = result.symbol.toUpperCase();
+                                const backendValue = result.sl_percentage !== null && result.sl_percentage !== undefined && result.sl_percentage !== 0
+                                  ? result.sl_percentage.toString()
+                                  : '';
+                                
+                                // Update state with backend value
+                                if (backendValue) {
+                                  setCoinSLPercent(prev => ({
+                                    ...prev,
+                                    [symbolUpper]: backendValue
+                                  }));
+                                  
+                                  // Update localStorage with backend value
+                                  const existingSLPercent = localStorage.getItem('watchlist_sl_percent');
+                                  const existingSLPercentObj = existingSLPercent ? JSON.parse(existingSLPercent) as Record<string, string> : {};
+                                  const updatedSLPercent = {
+                                    ...existingSLPercentObj,
+                                    [symbolUpper]: backendValue
+                                  };
+                                  localStorage.setItem('watchlist_sl_percent', JSON.stringify(updatedSLPercent));
+                                } else {
+                                  // Backend returned null/0 - clear from state
+                                  setCoinSLPercent(prev => {
+                                    const { [symbolUpper]: _removed, ...rest } = prev;
+                                    return rest;
+                                  });
+                                  
+                                  const existingSLPercent = localStorage.getItem('watchlist_sl_percent');
+                                  const existingSLPercentObj = existingSLPercent ? JSON.parse(existingSLPercent) as Record<string, string> : {};
+                                  const { [symbolUpper]: _removed2, ...cleanedSLPercent } = existingSLPercentObj;
+                                  localStorage.setItem('watchlist_sl_percent', JSON.stringify(cleanedSLPercent));
+                                }
+                              }
+                              
+                              // Show success message
+                              setAlertSavedMessages(prev => ({
+                                ...prev,
+                                [messageKey]: { type: 'success', timestamp: Date.now() }
+                              }));
+                              
+                              // Clear message after 3 seconds
+                              if (savedMessageTimersRef.current[messageKey]) {
+                                clearTimeout(savedMessageTimersRef.current[messageKey]);
+                              }
+                              savedMessageTimersRef.current[messageKey] = setTimeout(() => {
+                                setAlertSavedMessages(prev => {
+                                  const { [messageKey]: _removed, ...rest } = prev;
+                                  return rest;
+                                });
+                                delete savedMessageTimersRef.current[messageKey];
+                              }, 3000);
+                              
+                              // Log backend message if available
+                              if (result.message) {
+                                console.log(`✅ Backend: ${result.message}`);
+                              }
                             } catch (err) {
                               console.warn('⚠️ Backend save failed for SL%', err);
+                              setAlertSavedMessages(prev => ({
+                                ...prev,
+                                [messageKey]: { type: 'error', timestamp: Date.now() }
+                              }));
                             }
                           }
                         }}
@@ -8639,19 +9013,24 @@ ${marginText}
                           if (e.key === 'Enter') e.currentTarget.blur();
                         }}
                         className={`w-32 border-2 rounded px-2 py-1 shadow-sm focus:outline-none focus:ring-2 text-right font-medium ${
-                          coinSLPercent[coin.instrument_name] && coinSLPercent[coin.instrument_name] !== ''
+                          coinSLPercent[normalizeSymbolKey(coin.instrument_name)] && coinSLPercent[normalizeSymbolKey(coin.instrument_name)] !== ''
                             ? 'border-purple-400 focus:ring-purple-500 bg-purple-50 text-purple-900'
                             : 'border-blue-300 focus:ring-blue-500 bg-blue-50 text-blue-900'
                         }`}
-                        title={coinSLPercent[coin.instrument_name] ? 
-                          `Override: ${coinSLPercent[coin.instrument_name]}% | Price: $${formatNumber(calculatedSL[coin.instrument_name] || 0, coin.instrument_name)}` : 
+                        title={coinSLPercent[normalizeSymbolKey(coin.instrument_name)] ?
+                          `Override: ${coinSLPercent[normalizeSymbolKey(coin.instrument_name)]}% | Price: $${formatNumber(calculatedSL[coin.instrument_name] || 0, coin.instrument_name)}` :
                           `Price: $${formatNumber(calculatedSL[coin.instrument_name] || 0, coin.instrument_name)} (from resistance levels)`
                         }
                       />
-                      {coinSLPercent[coin.instrument_name] && coinSLPercent[coin.instrument_name] !== '' ? (
+                      {coinSLPercent[normalizeSymbolKey(coin.instrument_name)] && coinSLPercent[normalizeSymbolKey(coin.instrument_name)] !== '' ? (
                         <span className="ml-1 text-sm text-purple-600 font-semibold">%</span>
                       ) : (
                         <span className="ml-1 text-sm text-blue-600 font-semibold">$</span>
+                      )}
+                      {alertSavedMessages[`${coin.instrument_name}_sl`] && (
+                        <span className="ml-2 text-xs text-green-600 font-medium animate-[fadeIn_0.2s_ease-in-out_forwards] whitespace-nowrap">
+                          ✓ New value saved
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right w-20">
@@ -8700,13 +9079,14 @@ ${marginText}
                         }}
                         onChange={(e) => {
                           const value = e.target.value;
+                          const symbolKey = normalizeSymbolKey(coin.instrument_name);
                           setCoinTPPercent(prev => ({
                             ...prev,
-                            [coin.instrument_name]: value
+                            [symbolKey]: value
                           }));
                         }}
                         onMouseEnter={() => {
-                          if (coinTPPercent[coin.instrument_name]) {
+                          if (coinTPPercent[normalizeSymbolKey(coin.instrument_name)]) {
                             setShowOverrideValues(prev => ({
                               ...prev,
                               [coin.instrument_name]: { ...prev[coin.instrument_name], tp: true }
@@ -8726,66 +9106,127 @@ ${marginText}
                             [coin.instrument_name]: { ...prev[coin.instrument_name], tp: false }
                           }));
                           
-                          // Then handle the value saving
+                          const symbol = coin.instrument_name;
+                          const messageKey = `${symbol}_tp`;
                           const value = e.target.value;
                           const numValue = parseFloat(value);
                           
                           // Handle both valid values and empty values (deletion)
                           if (value === '' || value === '0') {
-                            // Field was cleared - remove override and save
-                            setCoinTPPercent(prev => {
-                              const updated = { ...prev };
-                              delete updated[coin.instrument_name];
-                              return updated;
-                            });
-                            
-                            // Save to localStorage
+                            // Field was cleared - save to backend first
                             try {
-                              const updated = { ...coinTPPercent };
-                              delete updated[coin.instrument_name];
-                              localStorage.setItem('watchlist_tp_percent', JSON.stringify(updated));
-                              console.log(`💾 Cleared TP% from localStorage: ${coin.instrument_name}`);
-                            } catch (err) {
-                              logHandledError(
-                                'localStorage:watchlist_tp_percent:clear',
-                                'Failed to clear TP% override in localStorage',
-                                err
-                              );
-                            }
-                            
-                            // Try backend - set to null to clear
-                            try {
-                              await saveCoinSettings(coin.instrument_name, { tp_percentage: null });
+                              const result = await saveCoinSettings(symbol, { tp_percentage: null });
                               console.log(`✅ Cleared TP% from backend`);
+                              
+                              // Update state with backend response
+                              if (result && result.symbol) {
+                                const symbolUpper = result.symbol.toUpperCase();
+                                setCoinTPPercent(prev => {
+                                  const { [symbolUpper]: _removed, ...rest } = prev;
+                                  return rest;
+                                });
+                                
+                                // Update localStorage with backend response
+                                const existingTPPercent = localStorage.getItem('watchlist_tp_percent');
+                                const existingTPPercentObj = existingTPPercent ? JSON.parse(existingTPPercent) as Record<string, string> : {};
+                                const { [symbolUpper]: _removed2, ...cleanedTPPercent } = existingTPPercentObj;
+                                localStorage.setItem('watchlist_tp_percent', JSON.stringify(cleanedTPPercent));
+                              }
+                              
+                              // Show success message
+                              setAlertSavedMessages(prev => ({
+                                ...prev,
+                                [messageKey]: { type: 'success', timestamp: Date.now() }
+                              }));
+                              
+                              // Clear message after 3 seconds
+                              if (savedMessageTimersRef.current[messageKey]) {
+                                clearTimeout(savedMessageTimersRef.current[messageKey]);
+                              }
+                              savedMessageTimersRef.current[messageKey] = setTimeout(() => {
+                                setAlertSavedMessages(prev => {
+                                  const { [messageKey]: _removed, ...rest } = prev;
+                                  return rest;
+                                });
+                                delete savedMessageTimersRef.current[messageKey];
+                              }, 3000);
                             } catch (err) {
                               console.warn('⚠️ Backend clear failed for TP%', err);
+                              setAlertSavedMessages(prev => ({
+                                ...prev,
+                                [messageKey]: { type: 'error', timestamp: Date.now() }
+                              }));
                             }
                           } else if (!isNaN(numValue) && numValue > 0) {
-                            // Valid value - save normally
-                            setCoinTPPercent(prev => ({
-                              ...prev,
-                              [coin.instrument_name]: value
-                            }));
-                            
-                            // Save to localStorage
+                            // Valid value - save to backend first (source of truth)
                             try {
-                              const updated = { ...coinTPPercent, [coin.instrument_name]: value };
-                              localStorage.setItem('watchlist_tp_percent', JSON.stringify(updated));
-                              console.log(`💾 Saved TP% to localStorage: ${coin.instrument_name} = ${value}`);
-                            } catch (err) {
-                              logHandledError(
-                                'localStorage:watchlist_tp_percent:save',
-                                'Failed to save TP% override to localStorage',
-                                err
-                              );
-                            }
-                            
-                            // Try backend
-                            try {
-                              await saveCoinSettings(coin.instrument_name, { tp_percentage: numValue });
-                              console.log(`✅ Also saved TP% to backend`);
+                              const result = await saveCoinSettings(symbol, { tp_percentage: numValue });
+                              console.log(`✅ Saved TP%=${numValue} for ${symbol} in backend`);
+                              
+                              // Update state with backend response
+                              if (result && result.symbol) {
+                                const symbolUpper = result.symbol.toUpperCase();
+                                const backendValue = result.tp_percentage !== null && result.tp_percentage !== undefined && result.tp_percentage !== 0
+                                  ? result.tp_percentage.toString()
+                                  : '';
+                                
+                                // Update state with backend value
+                                if (backendValue) {
+                                  setCoinTPPercent(prev => ({
+                                    ...prev,
+                                    [symbolUpper]: backendValue
+                                  }));
+                                  
+                                  // Update localStorage with backend value
+                                  const existingTPPercent = localStorage.getItem('watchlist_tp_percent');
+                                  const existingTPPercentObj = existingTPPercent ? JSON.parse(existingTPPercent) as Record<string, string> : {};
+                                  const updatedTPPercent = {
+                                    ...existingTPPercentObj,
+                                    [symbolUpper]: backendValue
+                                  };
+                                  localStorage.setItem('watchlist_tp_percent', JSON.stringify(updatedTPPercent));
+                                } else {
+                                  // Backend returned null/0 - clear from state
+                                  setCoinTPPercent(prev => {
+                                    const { [symbolUpper]: _removed, ...rest } = prev;
+                                    return rest;
+                                  });
+                                  
+                                  const existingTPPercent = localStorage.getItem('watchlist_tp_percent');
+                                  const existingTPPercentObj = existingTPPercent ? JSON.parse(existingTPPercent) as Record<string, string> : {};
+                                  const { [symbolUpper]: _removed2, ...cleanedTPPercent } = existingTPPercentObj;
+                                  localStorage.setItem('watchlist_tp_percent', JSON.stringify(cleanedTPPercent));
+                                }
+                              }
+                              
+                              // Show success message
+                              setAlertSavedMessages(prev => ({
+                                ...prev,
+                                [messageKey]: { type: 'success', timestamp: Date.now() }
+                              }));
+                              
+                              // Clear message after 3 seconds
+                              if (savedMessageTimersRef.current[messageKey]) {
+                                clearTimeout(savedMessageTimersRef.current[messageKey]);
+                              }
+                              savedMessageTimersRef.current[messageKey] = setTimeout(() => {
+                                setAlertSavedMessages(prev => {
+                                  const { [messageKey]: _removed, ...rest } = prev;
+                                  return rest;
+                                });
+                                delete savedMessageTimersRef.current[messageKey];
+                              }, 3000);
+                              
+                              // Log backend message if available
+                              if (result.message) {
+                                console.log(`✅ Backend: ${result.message}`);
+                              }
                             } catch (err) {
                               console.warn('⚠️ Backend save failed for TP%', err);
+                              setAlertSavedMessages(prev => ({
+                                ...prev,
+                                [messageKey]: { type: 'error', timestamp: Date.now() }
+                              }));
                             }
                           }
                         }}
@@ -8793,19 +9234,24 @@ ${marginText}
                           if (e.key === 'Enter') e.currentTarget.blur();
                         }}
                         className={`w-32 border-2 rounded px-2 py-1 shadow-sm focus:outline-none focus:ring-2 text-right font-medium ${
-                          coinTPPercent[coin.instrument_name] && coinTPPercent[coin.instrument_name] !== ''
+                          coinTPPercent[normalizeSymbolKey(coin.instrument_name)] && coinTPPercent[normalizeSymbolKey(coin.instrument_name)] !== ''
                             ? 'border-purple-400 focus:ring-purple-500 bg-purple-50 text-purple-900'
                             : 'border-blue-300 focus:ring-blue-500 bg-blue-50 text-blue-900'
                         }`}
-                        title={coinTPPercent[coin.instrument_name] ? 
-                          `Override: ${coinTPPercent[coin.instrument_name]}% | Price: $${formatNumber(calculatedTP[coin.instrument_name] || 0, coin.instrument_name)}` : 
+                        title={coinTPPercent[normalizeSymbolKey(coin.instrument_name)] ?
+                          `Override: ${coinTPPercent[normalizeSymbolKey(coin.instrument_name)]}% | Price: $${formatNumber(calculatedTP[coin.instrument_name] || 0, coin.instrument_name)}` :
                           `Price: $${formatNumber(calculatedTP[coin.instrument_name] || 0, coin.instrument_name)} (from resistance levels)`
                         }
                       />
-                      {coinTPPercent[coin.instrument_name] && coinTPPercent[coin.instrument_name] !== '' ? (
+                      {coinTPPercent[normalizeSymbolKey(coin.instrument_name)] && coinTPPercent[normalizeSymbolKey(coin.instrument_name)] !== '' ? (
                         <span className="ml-1 text-sm text-purple-600 font-semibold">%</span>
                       ) : (
                         <span className="ml-1 text-sm text-blue-600 font-semibold">$</span>
+                      )}
+                      {alertSavedMessages[`${coin.instrument_name}_tp`] && (
+                        <span className="ml-2 text-xs text-green-600 font-medium animate-[fadeIn_0.2s_ease-in-out_forwards] whitespace-nowrap">
+                          ✓ New value saved
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-center w-14" 
@@ -8814,7 +9260,7 @@ ${marginText}
                         <span 
                           className={`font-semibold ${(() => {
                             const rsi = signals[coin.instrument_name]?.rsi || 0;
-                            const preset = coinPresets[coin.instrument_name] || 'swing';
+                            const preset = coinPresets[normalizeSymbolKey(coin.instrument_name)] || 'swing';
                             
                             // Get strategy rules for this preset
                             let presetType: Preset;
@@ -9035,7 +9481,7 @@ ${marginText}
                           const formattedRatio = ratio < 1.0 ? ratio.toFixed(2) : ratio.toFixed(1);
                           
                           // Get strategy rules for this coin to use dynamic volumeMinRatio
-                          const preset = coinPresets[coin.instrument_name] || 'swing';
+                          const preset = coinPresets[normalizeSymbolKey(coin.instrument_name)] || 'swing';
                           let presetType: Preset;
                           let riskMode: RiskMode;
                           
@@ -9103,7 +9549,7 @@ ${marginText}
                                 safeGetStrategyDecision(coin.strategy) ||
                                 undefined;
                               
-                              const preset = coinPresets[coin.instrument_name] || 'swing';
+                              const preset = coinPresets[normalizeSymbolKey(coin.instrument_name)] || 'swing';
                               let presetType: Preset;
                               let riskMode: RiskMode;
                               
@@ -9264,7 +9710,7 @@ ${marginText}
                         {(() => {
                           // Recalculate masterAlertEnabled here to ensure it's in scope
                           const watchlistItem = watchlistItems.find(item => item.symbol === coin.instrument_name);
-                          const storedMasterAlert = coinAlertStatus[coin.instrument_name];
+                          const storedMasterAlert = coinAlertStatus[normalizeSymbolKey(coin.instrument_name)];
                           const hasAlertEnabled = coin.alert_enabled === true || watchlistItem?.alert_enabled === true;
                           const masterAlertEnabled = storedMasterAlert !== undefined
                             ? storedMasterAlert

@@ -3662,11 +3662,22 @@ function resolveDecisionIndexColor(value: number): string {
             
             // CRITICAL: Update localStorage with backend values (backend is source of truth)
             // For symbols NOT in backend, preserve existing localStorage values (user changes not yet saved)
+            // Declare cleaned variables in outer scope so they're accessible after the try block
+            let cleanedAmounts: Record<string, string> = { ...backendAmounts };
+            let cleanedTradeStatus: Record<string, boolean> = {
+              ...backendTradeStatus,
+              ...backendMarginStatus,
+              ...backendSlTpStatus
+            };
+            let cleanedSLPercent: Record<string, string> = { ...backendSLPercent };
+            let cleanedTPPercent: Record<string, string> = { ...backendTPPercent };
+            let cleanedAlertStatus: Record<string, boolean> = { ...backendAlertStatus };
+            
             try {
               // Amounts: Backend values + preserve non-backend symbols from localStorage
               const existingAmounts = localStorage.getItem('watchlist_amounts');
               const existingAmountsObj = existingAmounts ? JSON.parse(existingAmounts) as Record<string, string> : {};
-              const cleanedAmounts: Record<string, string> = { ...backendAmounts };
+              cleanedAmounts = { ...backendAmounts };
               Object.entries(existingAmountsObj).forEach(([symbol, value]) => {
                 const symbolUpper = symbol.toUpperCase();
                 if (!backendSymbols.has(symbolUpper) && !(symbolUpper in cleanedAmounts)) {
@@ -3679,7 +3690,7 @@ function resolveDecisionIndexColor(value: number): string {
               // Trade Status: Backend values + preserve non-backend symbols
               const existingTradeStatus = localStorage.getItem('watchlist_trade_status');
               const existingTradeStatusObj = existingTradeStatus ? JSON.parse(existingTradeStatus) as Record<string, boolean> : {};
-              const cleanedTradeStatus: Record<string, boolean> = {
+              cleanedTradeStatus = {
                 ...backendTradeStatus,
                 ...backendMarginStatus,
                 ...backendSlTpStatus
@@ -3697,7 +3708,7 @@ function resolveDecisionIndexColor(value: number): string {
               // SL/TP Percent: Backend values + preserve non-backend symbols
               const existingSLPercent = localStorage.getItem('watchlist_sl_percent');
               const existingSLPercentObj = existingSLPercent ? JSON.parse(existingSLPercent) as Record<string, string> : {};
-              const cleanedSLPercent: Record<string, string> = { ...backendSLPercent };
+              cleanedSLPercent = { ...backendSLPercent };
               Object.entries(existingSLPercentObj).forEach(([symbol, value]) => {
                 const symbolUpper = symbol.toUpperCase();
                 if (!backendSymbols.has(symbolUpper) && !(symbolUpper in cleanedSLPercent)) {
@@ -3708,7 +3719,7 @@ function resolveDecisionIndexColor(value: number): string {
               
               const existingTPPercent = localStorage.getItem('watchlist_tp_percent');
               const existingTPPercentObj = existingTPPercent ? JSON.parse(existingTPPercent) as Record<string, string> : {};
-              const cleanedTPPercent: Record<string, string> = { ...backendTPPercent };
+              cleanedTPPercent = { ...backendTPPercent };
               Object.entries(existingTPPercentObj).forEach(([symbol, value]) => {
                 const symbolUpper = symbol.toUpperCase();
                 if (!backendSymbols.has(symbolUpper) && !(symbolUpper in cleanedTPPercent)) {
@@ -3720,7 +3731,7 @@ function resolveDecisionIndexColor(value: number): string {
               // Alert Status: Backend values + preserve non-backend symbols
               const existingAlertStatus = localStorage.getItem('watchlist_alert_status');
               const existingAlertStatusObj = existingAlertStatus ? JSON.parse(existingAlertStatus) as Record<string, boolean> : {};
-              const cleanedAlertStatus: Record<string, boolean> = { ...backendAlertStatus };
+              cleanedAlertStatus = { ...backendAlertStatus };
               Object.entries(existingAlertStatusObj).forEach(([symbol, value]) => {
                 const symbolUpper = symbol.toUpperCase();
                 if (!backendSymbols.has(symbolUpper) && !(symbolUpper in cleanedAlertStatus)) {
@@ -7697,7 +7708,7 @@ function resolveDecisionIndexColor(value: number): string {
                               Object.entries(saveResult.config.strategy_rules).forEach(([presetKey, presetData]: [string, unknown]) => {
                                 if (presetData && typeof presetData === 'object' && 'rules' in presetData && presetData.rules) {
                                   Object.entries(presetData.rules as Record<string, unknown>).forEach(([riskMode, rules]: [string, unknown]) => {
-                                    const volRatio = rules?.volumeMinRatio;
+                                    const volRatio = (rules as StrategyRules)?.volumeMinRatio;
                                     console.log(`[CONFIG] ✅ Verified saved ${presetKey}-${riskMode} volumeMinRatio:`, volRatio);
                                   });
                                 }
@@ -7722,7 +7733,7 @@ function resolveDecisionIndexColor(value: number): string {
                                     }
                                   });
                                   savedPresetsConfig![presetName] = {
-                                    notificationProfile: (presetData.notificationProfile as 'swing' | 'intraday' | 'scalp') || 
+                                    notificationProfile: ((presetData as { notificationProfile?: 'swing' | 'intraday' | 'scalp' }).notificationProfile) || 
                                       (presetName === 'Swing' ? 'swing' : presetName === 'Intraday' ? 'intraday' : 'scalp'),
                                     rules: rulesCopy
                                   };
@@ -7755,7 +7766,7 @@ function resolveDecisionIndexColor(value: number): string {
                                         }
                                       });
                                       savedPresetsConfig![presetName] = {
-                                        notificationProfile: (presetData.notificationProfile as 'swing' | 'intraday' | 'scalp') || 
+                                        notificationProfile: ((presetData as { notificationProfile?: 'swing' | 'intraday' | 'scalp' }).notificationProfile) || 
                                           (presetName === 'Swing' ? 'swing' : presetName === 'Intraday' ? 'intraday' : 'scalp'),
                                         rules: rulesCopy
                                       };
@@ -7792,7 +7803,7 @@ function resolveDecisionIndexColor(value: number): string {
                                         }
                                       });
                                       savedPresetsConfig![presetName] = {
-                                        notificationProfile: (presetData.notificationProfile as 'swing' | 'intraday' | 'scalp') || 
+                                        notificationProfile: ((presetData as { notificationProfile?: 'swing' | 'intraday' | 'scalp' }).notificationProfile) || 
                                           (presetName === 'Swing' ? 'swing' : presetName === 'Intraday' ? 'intraday' : 'scalp'),
                                         rules: rulesCopy
                                       };

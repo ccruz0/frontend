@@ -6151,12 +6151,16 @@ function resolveDecisionIndexColor(value: number): string {
                               orderValue = price * quantity;
                             }
                             
-                            // Identify TP orders (only explicit TAKE_PROFIT types)
-                            if (orderType.includes('TAKE_PROFIT') || orderType === 'TAKE_PROFIT_LIMIT') {
+                            // Identify TP orders (check both order_type and trigger_type/order_role)
+                            const triggerType = ((order as any).trigger_type || '').toUpperCase();
+                            const isTP = orderType.includes('TAKE_PROFIT') || orderType === 'TAKE_PROFIT_LIMIT' || triggerType === 'TAKE_PROFIT';
+                            const isSL = orderType.includes('STOP_LOSS') || orderType === 'STOP_LOSS_LIMIT' || triggerType === 'STOP_LOSS';
+                            
+                            if (isTP) {
                               tpValue += orderValue;
                             }
                             // Identify SL orders (only explicit STOP_LOSS types)
-                            else if (orderType.includes('STOP_LOSS') || orderType === 'STOP_LOSS_LIMIT') {
+                            else if (isSL) {
                               slValue += orderValue;
                             }
                             // Note: We no longer try to guess LIMIT orders as TP/SL to avoid double counting
@@ -6192,7 +6196,10 @@ function resolveDecisionIndexColor(value: number): string {
                           const tpOrders = matchingOrders.filter(order => {
                             const orderType = (order.order_type || '').toUpperCase();
                             const orderStatus = (order.status || '').toUpperCase();
-                            return orderType.includes('TAKE_PROFIT') && activeStatuses.has(orderStatus);
+                            const triggerType = ((order as any).trigger_type || '').toUpperCase();
+                            // Check both order_type and trigger_type (which contains order_role from database)
+                            const isTP = orderType.includes('TAKE_PROFIT') || triggerType === 'TAKE_PROFIT';
+                            return isTP && activeStatuses.has(orderStatus);
                           });
                           
                           if (tpOrders.length === 0) {
@@ -6432,12 +6439,16 @@ function resolveDecisionIndexColor(value: number): string {
                               orderValue = price * quantity;
                             }
                             
-                            // Identify TP orders (only explicit TAKE_PROFIT types)
-                            if (orderType.includes('TAKE_PROFIT') || orderType === 'TAKE_PROFIT_LIMIT') {
+                            // Identify TP orders (check both order_type and trigger_type/order_role)
+                            const triggerType = ((order as any).trigger_type || '').toUpperCase();
+                            const isTP = orderType.includes('TAKE_PROFIT') || orderType === 'TAKE_PROFIT_LIMIT' || triggerType === 'TAKE_PROFIT';
+                            const isSL = orderType.includes('STOP_LOSS') || orderType === 'STOP_LOSS_LIMIT' || triggerType === 'STOP_LOSS';
+                            
+                            if (isTP) {
                               tpValue += orderValue;
                             }
                             // Identify SL orders (only explicit STOP_LOSS types)
-                            else if (orderType.includes('STOP_LOSS') || orderType === 'STOP_LOSS_LIMIT') {
+                            else if (isSL) {
                               slValue += orderValue;
                             }
                             // Note: We no longer try to guess LIMIT orders as TP/SL to avoid double counting

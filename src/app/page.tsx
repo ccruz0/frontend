@@ -6234,8 +6234,11 @@ function resolveDecisionIndexColor(value: number): string {
                           const backendOrderValues = tpSlOrderValues[coinBase] || { tp_value_usd: 0, sl_value_usd: 0 };
                           
                           // Use backend values if they're higher (more accurate) or if frontend calculation found nothing
-                          const finalTpValue = Math.max(tpValue, backendOrderValues.tp_value_usd || 0);
-                          const finalSlValue = Math.max(slValue, backendOrderValues.sl_value_usd || 0);
+                          let finalTpValue = Math.max(tpValue, backendOrderValues.tp_value_usd || 0);
+                          let finalSlValue = Math.max(slValue, backendOrderValues.sl_value_usd || 0);
+
+                          // Cap TP/SL values to the holding value (you can't have orders worth more than you own)
+                          // We'll cap this when we have the holding value, but for now store the raw values
 
                           // Use unified open position count from backend when available.
                           // open_position_counts is keyed by base currency (e.g., "ADA", "LDO").
@@ -6249,17 +6252,26 @@ function resolveDecisionIndexColor(value: number): string {
                             unifiedCount = 0;
                           }
 
-                          // Build tooltip details listing all matching open orders for this asset
-                          // so the user can verify exactly what is being counted.
+                          // Build tooltip details listing all matching TP (Take Profit) orders for this asset
+                          // Only show TP orders since that's what the count represents
                           let details = '';
-                          if (matchingOrders.length === 0) {
-                            details = 'No open orders';
+                          const activeStatuses = new Set(['NEW', 'ACTIVE', 'PARTIALLY_FILLED']);
+                          const tpOrders = matchingOrders.filter(order => {
+                            const orderType = (order.order_type || '').toUpperCase();
+                            const orderStatus = (order.status || '').toUpperCase();
+                            return orderType.includes('TAKE_PROFIT') && activeStatuses.has(orderStatus);
+                          });
+                          
+                          if (tpOrders.length === 0) {
+                            details = 'No active TP (Take Profit) orders';
                           } else {
                             const lines: string[] = [];
-                            lines.push(`Open orders for ${coinUpper}: ${matchingOrders.length}`);
-                            matchingOrders.forEach((order, idx) => {
+                            lines.push(`Active TP Orders for ${coinUpper}: ${tpOrders.length}`);
+                            lines.push(''); // Empty line for spacing
+                            tpOrders.forEach((order, idx) => {
                               const side = (order.side || '').toUpperCase() || 'N/A';
                               const type = (order.order_type || '').toUpperCase() || 'N/A';
+                              const status = (order.status || '').toUpperCase() || 'N/A';
                               const extendedOrder = order as ExtendedOpenOrder;
                               const orderSymbol = (order.instrument_name || extendedOrder.symbol || '').toUpperCase() || coinUpper;
                               const qtyRaw = order.quantity || extendedOrder.cumulative_quantity || extendedOrder.cumulative_quantity || '0';
@@ -6271,7 +6283,10 @@ function resolveDecisionIndexColor(value: number): string {
                               const qtyText = qty > 0 ? qty.toFixed(4) : String(qtyRaw);
                               const priceText = price > 0 ? price.toFixed(6) : String(priceRaw);
                               const idText = shortId ? ` #${shortId}` : '';
-                              lines.push(`${idx + 1}. ${side} ${type} ${orderSymbol}${idText} — qty ${qtyText} @ ${priceText}`);
+                              const value = qty * price;
+                              const valueText = value > 0 ? ` ($${value.toFixed(2)})` : '';
+                              lines.push(`${idx + 1}. ${side} ${type} [${status}]`);
+                              lines.push(`   ${orderSymbol}${idText} — ${qtyText} @ $${priceText}${valueText}`);
                             });
                             details = lines.join('\n');
                           }
@@ -6311,7 +6326,21 @@ function resolveDecisionIndexColor(value: number): string {
                           // Get open orders info (count, TP value, SL value) for this coin
                           const openOrdersInfo = getOpenOrdersInfo(balance.asset, balance);
                           
-                          return { balance: { ...balance, balance: displayBalance }, displayValueUsd, percentOfPortfolio, orderValues, openOrdersInfo };
+                          // Cap TP/SL values to the holding value (you can't have orders worth more than you own)
+                          const cappedTpValue = Math.min(openOrdersInfo.tpValue, displayValueUsd);
+                          const cappedSlValue = Math.min(openOrdersInfo.slValue, displayValueUsd);
+                          
+                          return { 
+                            balance: { ...balance, balance: displayBalance }, 
+                            displayValueUsd, 
+                            percentOfPortfolio, 
+                            orderValues, 
+                            openOrdersInfo: {
+                              ...openOrdersInfo,
+                              tpValue: cappedTpValue,
+                              slValue: cappedSlValue
+                            }
+                          };
                         })
                         .sort((a, b) => b.displayValueUsd - a.displayValueUsd) // Sort by USD value descending
                         .map(({ balance, displayValueUsd, percentOfPortfolio, orderValues: _orderValues, openOrdersInfo }) => (
@@ -6606,6 +6635,16 @@ function resolveDecisionIndexColor(value: number): string {
                             const assetBalance = portfolioData.assets.find(a => a.coin === asset.coin);
                             const openOrdersInfo = getOpenOrdersInfo(asset.coin, assetBalance);
                             
+                            // Cap TP/SL values to the holding value (you can't have orders worth more than you own)
+                            const assetValueUsd = Math.abs(netValueUsd);
+                            const cappedTpValue = Math.min(openOrdersInfo.tpValue, assetValueUsd);
+                            const cappedSlValue = Math.min(openOrdersInfo.slValue, assetValueUsd);
+                            const cappedOpenOrdersInfo = {
+                              ...openOrdersInfo,
+                              tpValue: cappedTpValue,
+                              slValue: cappedSlValue
+                            };
+                            
                             return (
                               <tr key={`${asset.coin}-${idx}`} className="hover:bg-gray-50 border-b">
                                 <td className="px-4 py-3 font-medium">{normalizeSymbol(asset.coin || '')}</td>
@@ -6626,24 +6665,24 @@ function resolveDecisionIndexColor(value: number): string {
                                 </td>
                                 <td className="px-4 py-3 text-right">
                                   <span className={`px-2 py-1 rounded text-sm font-medium ${
-                                    openOrdersInfo.tpValue > 0 && asset.value_usd && Math.abs(openOrdersInfo.tpValue - asset.value_usd) / asset.value_usd <= 0.05
+                                    cappedOpenOrdersInfo.tpValue > 0 && asset.value_usd && Math.abs(cappedOpenOrdersInfo.tpValue - asset.value_usd) / asset.value_usd <= 0.05
                                       ? 'bg-green-100 text-green-800 border border-green-500' 
-                                      : openOrdersInfo.tpValue > 0
+                                      : cappedOpenOrdersInfo.tpValue > 0
                                         ? 'bg-yellow-100 text-yellow-800 border border-yellow-400'
                                         : 'bg-gray-100 text-gray-600 border border-gray-300'
-                                  }`} title={openOrdersInfo.tpValue > 0 && asset.value_usd && Math.abs(openOrdersInfo.tpValue - asset.value_usd) / asset.value_usd <= 0.05 ? `TP orders cover portfolio value ($${openOrdersInfo.tpValue.toFixed(2)} ≈ $${formatNumber(asset.value_usd || 0)})` : openOrdersInfo.tpValue > 0 ? `TP orders: $${openOrdersInfo.tpValue.toFixed(2)} (portfolio: $${formatNumber(asset.value_usd || 0)})` : 'No TP orders'}>
-                                    ${openOrdersInfo.tpValue.toFixed(2)}
+                                  }`} title={cappedOpenOrdersInfo.tpValue > 0 && asset.value_usd && Math.abs(cappedOpenOrdersInfo.tpValue - asset.value_usd) / asset.value_usd <= 0.05 ? `TP orders cover portfolio value ($${cappedOpenOrdersInfo.tpValue.toFixed(2)} ≈ $${formatNumber(asset.value_usd || 0)})` : cappedOpenOrdersInfo.tpValue > 0 ? `TP orders: $${cappedOpenOrdersInfo.tpValue.toFixed(2)} (portfolio: $${formatNumber(asset.value_usd || 0)})` : 'No TP orders'}>
+                                    ${cappedOpenOrdersInfo.tpValue.toFixed(2)}
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-right">
                                   <span className={`px-2 py-1 rounded text-sm font-medium ${
-                                    openOrdersInfo.slValue > 0 && asset.value_usd && Math.abs(openOrdersInfo.slValue - asset.value_usd) / asset.value_usd <= 0.05
+                                    cappedOpenOrdersInfo.slValue > 0 && asset.value_usd && Math.abs(cappedOpenOrdersInfo.slValue - asset.value_usd) / asset.value_usd <= 0.05
                                       ? 'bg-green-100 text-green-800 border border-green-500' 
-                                      : openOrdersInfo.slValue > 0
+                                      : cappedOpenOrdersInfo.slValue > 0
                                         ? 'bg-yellow-100 text-yellow-800 border border-yellow-400'
                                         : 'bg-gray-100 text-gray-600 border border-gray-300'
-                                  }`} title={openOrdersInfo.slValue > 0 && asset.value_usd && Math.abs(openOrdersInfo.slValue - asset.value_usd) / asset.value_usd <= 0.05 ? `SL orders cover portfolio value ($${openOrdersInfo.slValue.toFixed(2)} ≈ $${formatNumber(asset.value_usd || 0)})` : openOrdersInfo.slValue > 0 ? `SL orders: $${openOrdersInfo.slValue.toFixed(2)} (portfolio: $${formatNumber(asset.value_usd || 0)})` : 'No SL orders'}>
-                                    ${openOrdersInfo.slValue.toFixed(2)}
+                                  }`} title={cappedOpenOrdersInfo.slValue > 0 && asset.value_usd && Math.abs(cappedOpenOrdersInfo.slValue - asset.value_usd) / asset.value_usd <= 0.05 ? `SL orders cover portfolio value ($${cappedOpenOrdersInfo.slValue.toFixed(2)} ≈ $${formatNumber(asset.value_usd || 0)})` : cappedOpenOrdersInfo.slValue > 0 ? `SL orders: $${cappedOpenOrdersInfo.slValue.toFixed(2)} (portfolio: $${formatNumber(asset.value_usd || 0)})` : 'No SL orders'}>
+                                    ${cappedOpenOrdersInfo.slValue.toFixed(2)}
                                   </span>
                                 </td>
                               </tr>

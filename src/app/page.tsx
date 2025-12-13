@@ -6126,9 +6126,17 @@ function resolveDecisionIndexColor(value: number): string {
                           let tpValue = 0;
                           let slValue = 0;
                           
-                          // Process explicit TP/SL orders
+                          // Process explicit TP/SL orders only (don't guess LIMIT orders)
+                          // Filter to only active orders
+                          const activeStatuses = new Set(['NEW', 'ACTIVE', 'PARTIALLY_FILLED']);
                           matchingOrders.forEach(order => {
                             const orderType = (order.order_type || '').toUpperCase();
+                            const orderStatus = (order.status || '').toUpperCase();
+                            
+                            // Only process active orders
+                            if (!activeStatuses.has(orderStatus)) {
+                              return;
+                            }
                             
                             // Calculate order value: prefer cumulative_value or order_value, fallback to price * quantity
                             let orderValue = 0;
@@ -6143,99 +6151,24 @@ function resolveDecisionIndexColor(value: number): string {
                               orderValue = price * quantity;
                             }
                             
-                            // Identify TP orders (TAKE_PROFIT_LIMIT)
+                            // Identify TP orders (only explicit TAKE_PROFIT types)
                             if (orderType.includes('TAKE_PROFIT') || orderType === 'TAKE_PROFIT_LIMIT') {
                               tpValue += orderValue;
                             }
-                            // Identify SL orders (STOP_LIMIT)
-                            else if (orderType.includes('STOP') || orderType === 'STOP_LIMIT') {
+                            // Identify SL orders (only explicit STOP_LOSS types)
+                            else if (orderType.includes('STOP_LOSS') || orderType === 'STOP_LOSS_LIMIT') {
                               slValue += orderValue;
                             }
+                            // Note: We no longer try to guess LIMIT orders as TP/SL to avoid double counting
                           });
                           
-                          // Check for LIMIT SELL orders that could be TP
-                          // First, try to match with BUY orders
-                          buyOrders.forEach(buyOrder => {
-                            const buyPrice = parseFloat(buyOrder.price || '0');
-                            const buyQuantity = parseFloat(buyOrder.quantity || '0');
-                            
-                            if (buyPrice > 0 && buyQuantity > 0) {
-                              sellOrders.forEach(sellOrder => {
-                                const sellOrderType = (sellOrder.order_type || '').toUpperCase();
-                                const sellPrice = parseFloat(sellOrder.price || '0');
-                                const sellQuantity = parseFloat(sellOrder.quantity || '0');
-                                
-                                // Check if it's a LIMIT order (not already counted as TP/SL)
-                                if (sellOrderType === 'LIMIT' && sellPrice > buyPrice) {
-                                  // Check if quantities are similar (within 10% tolerance)
-                                  const quantityDiff = Math.abs(sellQuantity - buyQuantity) / buyQuantity;
-                                  if (quantityDiff <= 0.1) {
-                                    // Calculate order value
-                                    let orderValue = 0;
-                                    const extendedSellOrder = sellOrder as ExtendedOpenOrder;
-                                    if (extendedSellOrder.cumulative_value && parseFloat(String(extendedSellOrder.cumulative_value)) > 0) {
-                                      orderValue = parseFloat(String(extendedSellOrder.cumulative_value));
-                                    } else if (extendedSellOrder.order_value && parseFloat(String(extendedSellOrder.order_value)) > 0) {
-                                      orderValue = parseFloat(String(extendedSellOrder.order_value));
-                                    } else {
-                                      orderValue = sellPrice * sellQuantity;
-                                    }
-                                    tpValue += orderValue;
-                                  }
-                                }
-                              });
-                            }
-                          });
-                          
-                          // If no BUY orders found, check LIMIT SELL orders against portfolio balance
-                          // This handles cases where positions were opened but BUY orders are already filled
-                          if (buyOrders.length === 0 && sellOrders.length > 0) {
-                            // Find the portfolio balance for this coin
-                            const portfolioBalance = realBalances.find(b => {
-                              const balAsset = (b.asset || '').toUpperCase();
-                              return balAsset === coinUpper || balAsset.startsWith(coinUpper.split('_')[0]);
-                            });
-                            
-                            if (portfolioBalance) {
-                              const balanceQty = parseFloat((portfolioBalance.balance || portfolioBalance.total || (portfolioBalance.free || 0) + (portfolioBalance.locked || 0)).toString());
-                              
-                              if (balanceQty > 0) {
-                                sellOrders.forEach(sellOrder => {
-                                  const sellOrderType = (sellOrder.order_type || '').toUpperCase();
-                                  const sellQuantity = parseFloat(sellOrder.quantity || '0');
-                                  
-                                  // Check if it's a LIMIT order (not already counted as TP/SL)
-                                  if (sellOrderType === 'LIMIT') {
-                                    // Check if quantities are similar (within 10% tolerance)
-                                    const quantityDiff = Math.abs(sellQuantity - balanceQty) / balanceQty;
-                                    if (quantityDiff <= 0.1) {
-                                      // Calculate order value
-                                      let orderValue = 0;
-                                      const extendedSellOrder = sellOrder as ExtendedOpenOrder;
-                                      if (extendedSellOrder.cumulative_value && parseFloat(String(extendedSellOrder.cumulative_value)) > 0) {
-                                        orderValue = parseFloat(String(extendedSellOrder.cumulative_value));
-                                      } else if (extendedSellOrder.order_value && parseFloat(String(extendedSellOrder.order_value)) > 0) {
-                                        orderValue = parseFloat(String(extendedSellOrder.order_value));
-                                      } else {
-                                        const sellPrice = parseFloat(sellOrder.price || '0');
-                                        orderValue = sellPrice * sellQuantity;
-                                      }
-                                      tpValue += orderValue;
-                                    }
-                                  }
-                                });
-                              }
-                            }
-                          }
-                          
-                          // FIX: Also use tpSlOrderValues from backend API as fallback
-                          // This ensures TP/SL values are shown even if not detected in openOrders loop
+                          // Use backend values as fallback only if frontend found nothing
                           const coinBase = coinUpper.split('_')[0];
                           const backendOrderValues = tpSlOrderValues[coinBase] || { tp_value_usd: 0, sl_value_usd: 0 };
                           
-                          // Use backend values if they're higher (more accurate) or if frontend calculation found nothing
-                          let finalTpValue = Math.max(tpValue, backendOrderValues.tp_value_usd || 0);
-                          let finalSlValue = Math.max(slValue, backendOrderValues.sl_value_usd || 0);
+                          // Use frontend calculation if available, otherwise use backend (don't use MAX to avoid double counting)
+                          let finalTpValue = tpValue > 0 ? tpValue : (backendOrderValues.tp_value_usd || 0);
+                          let finalSlValue = slValue > 0 ? slValue : (backendOrderValues.sl_value_usd || 0);
 
                           // Cap TP/SL values to the holding value (you can't have orders worth more than you own)
                           // We'll cap this when we have the holding value, but for now store the raw values
@@ -6474,9 +6407,17 @@ function resolveDecisionIndexColor(value: number): string {
                           let tpValue = 0;
                           let slValue = 0;
                           
-                          // Process explicit TP/SL orders
+                          // Process explicit TP/SL orders only (don't guess LIMIT orders)
+                          // Filter to only active orders
+                          const activeStatuses = new Set(['NEW', 'ACTIVE', 'PARTIALLY_FILLED']);
                           matchingOrders.forEach(order => {
                             const orderType = (order.order_type || '').toUpperCase();
+                            const orderStatus = (order.status || '').toUpperCase();
+                            
+                            // Only process active orders
+                            if (!activeStatuses.has(orderStatus)) {
+                              return;
+                            }
                             
                             // Calculate order value: prefer cumulative_value or order_value, fallback to price * quantity
                             let orderValue = 0;
@@ -6491,99 +6432,24 @@ function resolveDecisionIndexColor(value: number): string {
                               orderValue = price * quantity;
                             }
                             
-                            // Identify TP orders (TAKE_PROFIT_LIMIT)
+                            // Identify TP orders (only explicit TAKE_PROFIT types)
                             if (orderType.includes('TAKE_PROFIT') || orderType === 'TAKE_PROFIT_LIMIT') {
                               tpValue += orderValue;
                             }
-                            // Identify SL orders (STOP_LIMIT)
-                            else if (orderType.includes('STOP') || orderType === 'STOP_LIMIT') {
+                            // Identify SL orders (only explicit STOP_LOSS types)
+                            else if (orderType.includes('STOP_LOSS') || orderType === 'STOP_LOSS_LIMIT') {
                               slValue += orderValue;
                             }
+                            // Note: We no longer try to guess LIMIT orders as TP/SL to avoid double counting
                           });
                           
-                          // Check for LIMIT SELL orders that could be TP
-                          // First, try to match with BUY orders
-                          buyOrders.forEach(buyOrder => {
-                            const buyPrice = parseFloat(buyOrder.price || '0');
-                            const buyQuantity = parseFloat(buyOrder.quantity || '0');
-                            
-                            if (buyPrice > 0 && buyQuantity > 0) {
-                              sellOrders.forEach(sellOrder => {
-                                const sellOrderType = (sellOrder.order_type || '').toUpperCase();
-                                const sellPrice = parseFloat(sellOrder.price || '0');
-                                const sellQuantity = parseFloat(sellOrder.quantity || '0');
-                                
-                                // Check if it's a LIMIT order (not already counted as TP/SL)
-                                if (sellOrderType === 'LIMIT' && sellPrice > buyPrice) {
-                                  // Check if quantities are similar (within 10% tolerance)
-                                  const quantityDiff = Math.abs(sellQuantity - buyQuantity) / buyQuantity;
-                                  if (quantityDiff <= 0.1) {
-                                    // Calculate order value
-                                    let orderValue = 0;
-                                    const extendedSellOrder = sellOrder as ExtendedOpenOrder;
-                                    if (extendedSellOrder.cumulative_value && parseFloat(String(extendedSellOrder.cumulative_value)) > 0) {
-                                      orderValue = parseFloat(String(extendedSellOrder.cumulative_value));
-                                    } else if (extendedSellOrder.order_value && parseFloat(String(extendedSellOrder.order_value)) > 0) {
-                                      orderValue = parseFloat(String(extendedSellOrder.order_value));
-                                    } else {
-                                      orderValue = sellPrice * sellQuantity;
-                                    }
-                                    tpValue += orderValue;
-                                  }
-                                }
-                              });
-                            }
-                          });
-                          
-                          // If no BUY orders found, check LIMIT SELL orders against portfolio balance
-                          // This handles cases where positions were opened but BUY orders are already filled
-                          if (buyOrders.length === 0 && sellOrders.length > 0) {
-                            // Find the portfolio balance for this coin
-                            const portfolioBalance = realBalances.find(b => {
-                              const balAsset = (b.asset || '').toUpperCase();
-                              return balAsset === coinUpper || balAsset.startsWith(coinUpper.split('_')[0]);
-                            });
-                            
-                            if (portfolioBalance) {
-                              const balanceQty = parseFloat((portfolioBalance.balance || portfolioBalance.total || (portfolioBalance.free || 0) + (portfolioBalance.locked || 0)).toString());
-                              
-                              if (balanceQty > 0) {
-                                sellOrders.forEach(sellOrder => {
-                                  const sellOrderType = (sellOrder.order_type || '').toUpperCase();
-                                  const sellQuantity = parseFloat(sellOrder.quantity || '0');
-                                  
-                                  // Check if it's a LIMIT order (not already counted as TP/SL)
-                                  if (sellOrderType === 'LIMIT') {
-                                    // Check if quantities are similar (within 10% tolerance)
-                                    const quantityDiff = Math.abs(sellQuantity - balanceQty) / balanceQty;
-                                    if (quantityDiff <= 0.1) {
-                                      // Calculate order value
-                                      let orderValue = 0;
-                                      const extendedSellOrder = sellOrder as ExtendedOpenOrder;
-                                      if (extendedSellOrder.cumulative_value && parseFloat(String(extendedSellOrder.cumulative_value)) > 0) {
-                                        orderValue = parseFloat(String(extendedSellOrder.cumulative_value));
-                                      } else if (extendedSellOrder.order_value && parseFloat(String(extendedSellOrder.order_value)) > 0) {
-                                        orderValue = parseFloat(String(extendedSellOrder.order_value));
-                                      } else {
-                                        const sellPrice = parseFloat(sellOrder.price || '0');
-                                        orderValue = sellPrice * sellQuantity;
-                                      }
-                                      tpValue += orderValue;
-                                    }
-                                  }
-                                });
-                              }
-                            }
-                          }
-                          
-                          // FIX: Also use tpSlOrderValues from backend API as fallback
-                          // This ensures TP/SL values are shown even if not detected in openOrders loop
+                          // Use backend values as fallback only if frontend found nothing
                           const coinBase = coinUpper.split('_')[0];
                           const backendOrderValues = tpSlOrderValues[coinBase] || { tp_value_usd: 0, sl_value_usd: 0 };
                           
-                          // Use backend values if they're higher (more accurate) or if frontend calculation found nothing
-                          const finalTpValue = Math.max(tpValue, backendOrderValues.tp_value_usd || 0);
-                          const finalSlValue = Math.max(slValue, backendOrderValues.sl_value_usd || 0);
+                          // Use frontend calculation if available, otherwise use backend (don't use MAX to avoid double counting)
+                          const finalTpValue = tpValue > 0 ? tpValue : (backendOrderValues.tp_value_usd || 0);
+                          const finalSlValue = slValue > 0 ? slValue : (backendOrderValues.sl_value_usd || 0);
                           
                           return {
                             count: buyOrders.length,  // FIX: Only count BUY orders (exclude SL/TP)

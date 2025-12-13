@@ -445,6 +445,36 @@ export default function MonitoringPanel({
     );
   }
 
+  // Helper function to determine text color based on message content
+  const getMessageTextColor = (message: string, orderSkipped: boolean, blocked: boolean): string => {
+    const upperMessage = message.toUpperCase();
+    
+    // Check for SELL signals and orders (red) - more comprehensive matching
+    if (upperMessage.includes('SELL SIGNAL') || 
+        upperMessage.includes('SELL ORDER') || 
+        upperMessage.includes('🔴 SELL') ||
+        (upperMessage.includes('SELL') && (upperMessage.includes('SIGNAL') || upperMessage.includes('ORDER') || upperMessage.includes('DETECTED')))) {
+      return 'text-red-600 font-medium';
+    }
+    
+    // Check for BUY signals and orders (green) - more comprehensive matching
+    if (upperMessage.includes('BUY SIGNAL') || 
+        upperMessage.includes('BUY ORDER') || 
+        upperMessage.includes('🟢 BUY') ||
+        (upperMessage.includes('BUY') && (upperMessage.includes('SIGNAL') || upperMessage.includes('ORDER') || upperMessage.includes('DETECTED')))) {
+      return 'text-green-600 font-medium';
+    }
+    
+    // Default colors based on status
+    if (orderSkipped) {
+      return 'text-yellow-800 font-medium';
+    }
+    if (blocked) {
+      return 'text-gray-600 italic';
+    }
+    return 'text-blue-700 font-medium';
+  };
+
   // Build telegram message items array
   const telegramItems: React.ReactNode[] = [];
   if (Array.isArray(telegramMessages) && telegramMessages.length > 0) {
@@ -475,13 +505,7 @@ export default function MonitoringPanel({
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p
-                className={`text-sm ${
-                  msg.order_skipped
-                    ? 'text-yellow-800 font-medium'
-                    : msg.blocked
-                    ? 'text-gray-600 italic'
-                    : 'text-blue-700 font-medium'
-                }`}
+                className={`text-sm ${getMessageTextColor(msg.message || '', msg.order_skipped || false, msg.blocked || false)}`}
               >
                 {msg.message}
               </p>

@@ -6151,10 +6151,24 @@ function resolveDecisionIndexColor(value: number): string {
                               orderValue = price * quantity;
                             }
                             
-                            // Identify TP orders (check both order_type and trigger_type/order_role)
+                            // Identify TP orders (check order_type, trigger_type/order_role, and raw metadata)
                             const triggerType = ((order as any).trigger_type || '').toUpperCase();
-                            const isTP = orderType.includes('TAKE_PROFIT') || orderType === 'TAKE_PROFIT_LIMIT' || triggerType === 'TAKE_PROFIT';
-                            const isSL = orderType.includes('STOP_LOSS') || orderType === 'STOP_LOSS_LIMIT' || triggerType === 'STOP_LOSS';
+                            const rawOrder = (order as any).raw || (order as any).metadata || {};
+                            const rawOrderType = (rawOrder.order_type || rawOrder.type || '').toUpperCase();
+                            const rawOrderRole = (rawOrder.order_role || '').toUpperCase();
+                            
+                            const isTP = 
+                              orderType.includes('TAKE_PROFIT') || 
+                              orderType === 'TAKE_PROFIT_LIMIT' || 
+                              triggerType === 'TAKE_PROFIT' ||
+                              rawOrderType.includes('TAKE_PROFIT') ||
+                              rawOrderRole === 'TAKE_PROFIT';
+                            const isSL = 
+                              orderType.includes('STOP_LOSS') || 
+                              orderType === 'STOP_LOSS_LIMIT' || 
+                              triggerType === 'STOP_LOSS' ||
+                              rawOrderType.includes('STOP_LOSS') ||
+                              rawOrderRole === 'STOP_LOSS';
                             
                             if (isTP) {
                               tpValue += orderValue;
@@ -6194,11 +6208,21 @@ function resolveDecisionIndexColor(value: number): string {
                           let details = '';
                           // Reuse activeStatuses defined earlier in this function
                           const tpOrders = matchingOrders.filter(order => {
-                            const orderType = (order.order_type || '').toUpperCase();
+                            const orderType = (order.order_type || (order as any).type || '').toUpperCase();
                             const orderStatus = (order.status || '').toUpperCase();
                             const triggerType = ((order as any).trigger_type || '').toUpperCase();
-                            // Check both order_type and trigger_type (which contains order_role from database)
-                            const isTP = orderType.includes('TAKE_PROFIT') || triggerType === 'TAKE_PROFIT';
+                            const rawOrder = (order as any).raw || (order as any).metadata || {};
+                            const rawOrderType = (rawOrder.order_type || rawOrder.type || '').toUpperCase();
+                            const rawOrderRole = (rawOrder.order_role || '').toUpperCase();
+                            
+                            // Check multiple sources: order_type, trigger_type (order_role), and raw metadata
+                            const isTP = 
+                              orderType.includes('TAKE_PROFIT') || 
+                              orderType === 'TAKE_PROFIT_LIMIT' ||
+                              triggerType === 'TAKE_PROFIT' ||
+                              rawOrderType.includes('TAKE_PROFIT') ||
+                              rawOrderRole === 'TAKE_PROFIT';
+                            
                             return isTP && activeStatuses.has(orderStatus);
                           });
                           
@@ -6439,10 +6463,24 @@ function resolveDecisionIndexColor(value: number): string {
                               orderValue = price * quantity;
                             }
                             
-                            // Identify TP orders (check both order_type and trigger_type/order_role)
+                            // Identify TP orders (check order_type, trigger_type/order_role, and raw metadata)
                             const triggerType = ((order as any).trigger_type || '').toUpperCase();
-                            const isTP = orderType.includes('TAKE_PROFIT') || orderType === 'TAKE_PROFIT_LIMIT' || triggerType === 'TAKE_PROFIT';
-                            const isSL = orderType.includes('STOP_LOSS') || orderType === 'STOP_LOSS_LIMIT' || triggerType === 'STOP_LOSS';
+                            const rawOrder = (order as any).raw || (order as any).metadata || {};
+                            const rawOrderType = (rawOrder.order_type || rawOrder.type || '').toUpperCase();
+                            const rawOrderRole = (rawOrder.order_role || '').toUpperCase();
+                            
+                            const isTP = 
+                              orderType.includes('TAKE_PROFIT') || 
+                              orderType === 'TAKE_PROFIT_LIMIT' || 
+                              triggerType === 'TAKE_PROFIT' ||
+                              rawOrderType.includes('TAKE_PROFIT') ||
+                              rawOrderRole === 'TAKE_PROFIT';
+                            const isSL = 
+                              orderType.includes('STOP_LOSS') || 
+                              orderType === 'STOP_LOSS_LIMIT' || 
+                              triggerType === 'STOP_LOSS' ||
+                              rawOrderType.includes('STOP_LOSS') ||
+                              rawOrderRole === 'STOP_LOSS';
                             
                             if (isTP) {
                               tpValue += orderValue;

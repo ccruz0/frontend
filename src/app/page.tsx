@@ -6188,7 +6188,7 @@ function resolveDecisionIndexColor(value: number): string {
                           // Build tooltip details listing all matching TP (Take Profit) orders for this asset
                           // Only show TP orders since that's what the count represents
                           let details = '';
-                          const activeStatuses = new Set(['NEW', 'ACTIVE', 'PARTIALLY_FILLED']);
+                          // Reuse activeStatuses defined earlier in this function
                           const tpOrders = matchingOrders.filter(order => {
                             const orderType = (order.order_type || '').toUpperCase();
                             const orderStatus = (order.status || '').toUpperCase();
@@ -10390,7 +10390,7 @@ ${marginText}
                 </div>
                 {expectedTPDetails.actual_position_value !== undefined && (
                   <div>
-                    <div className="text-xs text-gray-500 uppercase">Position Value</div>
+                    <div className="text-xs text-gray-500 uppercase">Purchase Value (Cost Basis)</div>
                     <div className="text-lg font-semibold font-mono">${formatNumber(expectedTPDetails.actual_position_value)}</div>
                   </div>
                 )}

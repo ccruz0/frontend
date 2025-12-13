@@ -397,6 +397,14 @@ export default function MonitoringPanel({
     const limitedEntries = throttleEntries.slice(0, 5);
     for (let idx = 0; idx < limitedEntries.length; idx++) {
       const entry = limitedEntries[idx];
+      const priceChangeDisplay = entry.price_change_pct != null 
+        ? `${entry.price_change_pct >= 0 ? '+' : ''}${entry.price_change_pct.toFixed(2)}%`
+        : '—';
+      const priceChangeColor = entry.price_change_pct != null
+        ? entry.price_change_pct >= 0 
+          ? 'text-green-600' 
+          : 'text-red-600'
+        : 'text-gray-500';
       throttleRows.push(
         <tr key={`${entry.symbol}-${entry.strategy_key}-${entry.side}-${idx}`} className="hover:bg-gray-50">
           <td className="px-4 py-3 text-sm font-semibold text-gray-900">{entry.symbol}</td>
@@ -406,6 +414,9 @@ export default function MonitoringPanel({
           <td className="px-4 py-3 text-sm">{renderSideBadge(entry.side)}</td>
           <td className="px-4 py-3 text-sm text-gray-700">
             {entry.last_price != null ? `$${entry.last_price.toFixed(4)}` : '—'}
+          </td>
+          <td className={`px-4 py-3 text-sm font-medium ${priceChangeColor}`}>
+            {priceChangeDisplay}
           </td>
           <td className="px-4 py-3 text-sm text-gray-600">
             {entry.last_time ? formatTimestamp(entry.last_time) : 'N/A'}
@@ -676,6 +687,7 @@ export default function MonitoringPanel({
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Strategy</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Side</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Price</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price Change %</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Event</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ago</th>
                 </tr>

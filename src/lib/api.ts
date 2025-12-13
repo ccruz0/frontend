@@ -2285,6 +2285,7 @@ export interface SignalThrottleEntry {
   last_price: number | null;
   last_time: string | null;
   seconds_since_last: number | null;
+  price_change_pct: number | null;
 }
 
 export async function getMonitoringSummary(): Promise<MonitoringSummary> {

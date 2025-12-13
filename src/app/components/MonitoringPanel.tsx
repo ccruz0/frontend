@@ -391,11 +391,12 @@ export default function MonitoringPanel({
     }
   }
 
-  // Build throttle rows array
+  // Build throttle rows array - limit to last 5 orders
   const throttleRows: React.ReactNode[] = [];
   if (Array.isArray(throttleEntries) && throttleEntries.length > 0) {
-    for (let idx = 0; idx < throttleEntries.length; idx++) {
-      const entry = throttleEntries[idx];
+    const limitedEntries = throttleEntries.slice(0, 5);
+    for (let idx = 0; idx < limitedEntries.length; idx++) {
+      const entry = limitedEntries[idx];
       throttleRows.push(
         <tr key={`${entry.symbol}-${entry.strategy_key}-${entry.side}-${idx}`} className="hover:bg-gray-50">
           <td className="px-4 py-3 text-sm font-semibold text-gray-900">{entry.symbol}</td>

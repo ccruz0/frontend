@@ -43,9 +43,61 @@ function WorkflowRow({
       // Error already handled in parent
     }
   };
+  
   const statusColor = workflow.last_status === 'success' ? 'text-green-600' : 
                      workflow.last_status === 'error' ? 'text-red-600' : 
                      workflow.last_status === 'running' ? 'text-blue-600' : 'text-gray-600';
+  
+  const statusBadge = workflow.last_status === 'success' ? 'bg-green-100 text-green-800 border-green-200' :
+                      workflow.last_status === 'error' ? 'bg-red-100 text-red-800 border-red-200' :
+                      workflow.last_status === 'running' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                      'bg-gray-100 text-gray-600 border-gray-200';
+
+  // Format last execution time
+  const formatLastExecution = (isoString: string | null | undefined): string => {
+    if (!isoString) return 'Never';
+    try {
+      const date = new Date(isoString);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      
+      // For older dates, show formatted date
+      return date.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return 'Invalid date';
+    }
+  };
+
+  // Get report URL if available
+  const getReportUrl = (reportPath: string | null | undefined): string | null => {
+    if (!reportPath) return null;
+    // If it's already a full URL, return it
+    if (reportPath.startsWith('http://') || reportPath.startsWith('https://')) {
+      return reportPath;
+    }
+    // If it's a relative path, construct URL
+    // Reports are typically in docs/monitoring/, accessible via the backend
+    const apiUrl = getApiUrl();
+    // Remove /api suffix if present, then add the report path
+    const baseUrl = apiUrl.replace(/\/api\/?$/, '');
+    return `${baseUrl}/${reportPath}`;
+  };
+
+  const reportUrl = getReportUrl(workflow.last_report);
 
   return (
     <tr className="hover:bg-gray-50">
@@ -53,22 +105,37 @@ function WorkflowRow({
       <td className="px-4 py-3 text-sm text-gray-600">{workflow.description}</td>
       <td className="px-4 py-3 text-sm text-gray-500">{workflow.schedule}</td>
       <td className="px-4 py-3">
-        <span className={`text-xs ${statusColor}`}>
+        <span className={`px-2 py-1 text-xs font-semibold rounded-full border ${statusBadge}`}>
           {workflow.last_status || 'unknown'}
         </span>
       </td>
+      <td className="px-4 py-3 text-sm text-gray-600">
+        {formatLastExecution(workflow.last_execution)}
+      </td>
       <td className="px-4 py-3">
-        {canRun ? (
-          <button
-            onClick={handleRun}
-            disabled={isRunning}
-            className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isRunning ? 'Running...' : 'Run now'}
-          </button>
-        ) : (
-          <span className="text-xs text-gray-400">Automated only</span>
-        )}
+        <div className="flex flex-col gap-2">
+          {canRun ? (
+            <button
+              onClick={handleRun}
+              disabled={isRunning}
+              className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isRunning ? 'Running...' : 'Run now'}
+            </button>
+          ) : (
+            <span className="text-xs text-gray-400">Automated only</span>
+          )}
+          {reportUrl && (
+            <a
+              href={reportUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 text-center"
+            >
+              Open report
+            </a>
+          )}
+        </div>
       </td>
       <td className="px-4 py-3">
         {message && (
@@ -747,6 +814,7 @@ export default function MonitoringPanel({
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Schedule</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Run</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Messages</th>
                 </tr>

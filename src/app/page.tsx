@@ -6105,16 +6105,31 @@ function resolveDecisionIndexColor(value: number): string {
                         ): { count: number; tpValue: number; slValue: number; details: string } => {
                           const coinUpper = coinAsset.toUpperCase();
                           // Filter orders matching the symbol (for tooltip only)
-                          // If coinAsset contains underscore (e.g., DOGE_USDT), require exact match
+                          // If coinAsset contains underscore (e.g., DOGE_USDT), match exact or USD/USDT variant
                           // Otherwise, match base currency (e.g., DOGE matches DOGE_USD and DOGE_USDT)
                           const matchingOrders = openOrders.filter(order => {
                             // Use instrument_name (which contains the symbol like BTC_USDT)
                             const orderSymbol = (order.instrument_name || (order as ExtendedOpenOrder).symbol || '').toUpperCase();
                             if (!orderSymbol) return false;
                             
-                            // If coinAsset has underscore (e.g., DOGE_USDT), require exact match
+                            // If coinAsset has underscore (e.g., BTC_USDT), match exact or USD/USDT variant
                             if (coinUpper.includes('_')) {
-                              return orderSymbol === coinUpper;
+                              // Exact match
+                              if (orderSymbol === coinUpper) return true;
+                              
+                              // USD and USDT are equivalent - check if base currency matches
+                              const coinBase = coinUpper.split('_')[0];
+                              const orderBase = orderSymbol.split('_')[0];
+                              if (coinBase === orderBase) {
+                                // Check if both end with USD or USDT (they're equivalent)
+                                const coinSuffix = coinUpper.split('_')[1];
+                                const orderSuffix = orderSymbol.split('_')[1];
+                                if ((coinSuffix === 'USD' || coinSuffix === 'USDT') && 
+                                    (orderSuffix === 'USD' || orderSuffix === 'USDT')) {
+                                  return true;
+                                }
+                              }
+                              return false;
                             }
                             
                             // Otherwise, match exact symbol or base currency
@@ -6134,8 +6149,12 @@ function resolveDecisionIndexColor(value: number): string {
                           let slValue = 0;
                           
                           // Process explicit TP/SL orders only (don't guess LIMIT orders)
-                          // Filter to only active orders
-                          const activeStatuses = new Set(['NEW', 'ACTIVE', 'PARTIALLY_FILLED']);
+                          // Filter to only active orders (include PENDING as it's an active state for trigger orders)
+                          const activeStatuses = new Set(['NEW', 'ACTIVE', 'PARTIALLY_FILLED', 'PENDING']);
+                          
+                          // Store TP orders for tooltip display - reuse the same detection logic
+                          const identifiedTPOrders: typeof matchingOrders = [];
+                          
                           matchingOrders.forEach(order => {
                             const orderType = (order.order_type || '').toUpperCase();
                             const orderStatus = (order.status || '').toUpperCase();
@@ -6159,26 +6178,31 @@ function resolveDecisionIndexColor(value: number): string {
                             }
                             
                             // Identify TP orders (check order_type, trigger_type/order_role, and raw metadata)
-                            const triggerType = ((order as any).trigger_type || '').toUpperCase();
+                            // Use comprehensive check matching the tooltip logic
+                            const triggerType = ((order.trigger_type || (order as any).trigger_type || '').toUpperCase()).trim();
                             const rawOrder = (order as any).raw || (order as any).metadata || {};
-                            const rawOrderType = (rawOrder.order_type || rawOrder.type || '').toUpperCase();
-                            const rawOrderRole = (rawOrder.order_role || '').toUpperCase();
+                            const rawOrderType = ((rawOrder.order_type || rawOrder.type || '').toUpperCase()).trim();
+                            const rawOrderRole = ((rawOrder.order_role || '').toUpperCase()).trim();
+                            const isTrigger = order.is_trigger || (order as any).is_trigger || false;
                             
                             const isTP = 
                               orderType.includes('TAKE_PROFIT') || 
                               orderType === 'TAKE_PROFIT_LIMIT' || 
                               triggerType === 'TAKE_PROFIT' ||
+                              (isTrigger && triggerType && triggerType.includes('TAKE_PROFIT')) ||
                               rawOrderType.includes('TAKE_PROFIT') ||
                               rawOrderRole === 'TAKE_PROFIT';
                             const isSL = 
                               orderType.includes('STOP_LOSS') || 
                               orderType === 'STOP_LOSS_LIMIT' || 
                               triggerType === 'STOP_LOSS' ||
+                              (isTrigger && triggerType && triggerType.includes('STOP_LOSS')) ||
                               rawOrderType.includes('STOP_LOSS') ||
                               rawOrderRole === 'STOP_LOSS';
                             
                             if (isTP) {
                               tpValue += orderValue;
+                              identifiedTPOrders.push(order); // Store for tooltip display
                             }
                             // Identify SL orders (only explicit STOP_LOSS types)
                             else if (isSL) {
@@ -6211,47 +6235,26 @@ function resolveDecisionIndexColor(value: number): string {
                           }
 
                           // Build tooltip details listing all matching TP (Take Profit) orders for this asset
-                          // Only show TP orders since that's what the count represents
-                          // Use the same detection logic as the value calculation above to ensure consistency
+                          // Use the TP orders we already identified during value calculation to ensure consistency
                           let details = '';
-                          // Reuse activeStatuses defined earlier in this function
-                          const tpOrders = matchingOrders.filter(order => {
-                            const orderType = (order.order_type || (order as any).type || '').toUpperCase();
-                            const orderStatus = (order.status || '').toUpperCase();
-                            
-                            // Only process active orders
-                            if (!activeStatuses.has(orderStatus)) {
-                              return false;
-                            }
-                            
-                            // Check trigger_type directly on order object (from serialize_unified_order)
-                            // trigger_type is set from order_role in routes_dashboard.py line 316
-                            const triggerType = ((order.trigger_type || (order as any).trigger_type || '').toUpperCase()).trim();
-                            const rawOrder = (order as any).raw || (order as any).metadata || {};
-                            const rawOrderType = ((rawOrder.order_type || rawOrder.type || '').toUpperCase()).trim();
-                            const rawOrderRole = ((rawOrder.order_role || '').toUpperCase()).trim();
-                            
-                            // Also check if order has is_trigger flag and trigger_type indicates TP
-                            const isTrigger = order.is_trigger || (order as any).is_trigger || false;
-                            
-                            // Check multiple sources: order_type, trigger_type (which contains order_role from backend), and raw metadata
-                            // trigger_type can be "TAKE_PROFIT" (set from order_role in backend) or order_type can contain "TAKE_PROFIT"
-                            const isTP = 
-                              orderType.includes('TAKE_PROFIT') || 
-                              orderType === 'TAKE_PROFIT_LIMIT' ||
-                              triggerType === 'TAKE_PROFIT' ||
-                              (isTrigger && triggerType && triggerType.includes('TAKE_PROFIT')) ||
-                              rawOrderType.includes('TAKE_PROFIT') ||
-                              rawOrderRole === 'TAKE_PROFIT';
-                            
-                            return isTP;
-                          });
+                          const tpOrders = identifiedTPOrders; // Reuse orders identified during value calculation
                           
                           if (tpOrders.length === 0) {
                             // If no TP orders found but tpValue > 0, there might be TP orders that weren't detected
                             // Show a message indicating this
                             if (finalTpValue > 0) {
-                              details = `TP orders detected (value: $${finalTpValue.toFixed(2)}) but details unavailable`;
+                              details = `TP orders detected (value: $${finalTpValue.toFixed(2)}) but details unavailable. Check console for debug info.`;
+                              // Debug logging to help identify the issue
+                              console.log(`[TP Debug] ${coinUpper}: tpValue=${finalTpValue}, matchingOrders=${matchingOrders.length}`, {
+                                matchingOrders: matchingOrders.map(o => ({
+                                  id: o.order_id,
+                                  symbol: o.instrument_name || (o as ExtendedOpenOrder).symbol,
+                                  type: o.order_type,
+                                  trigger_type: (o as any).trigger_type,
+                                  status: o.status,
+                                  raw: (o as any).raw
+                                }))
+                              });
                             } else {
                               details = 'No active TP (Take Profit) orders';
                             }
@@ -6474,8 +6477,8 @@ function resolveDecisionIndexColor(value: number): string {
                           let slValue = 0;
                           
                           // Process explicit TP/SL orders only (don't guess LIMIT orders)
-                          // Filter to only active orders
-                          const activeStatuses = new Set(['NEW', 'ACTIVE', 'PARTIALLY_FILLED']);
+                          // Filter to only active orders (include PENDING as it's an active state for trigger orders)
+                          const activeStatuses = new Set(['NEW', 'ACTIVE', 'PARTIALLY_FILLED', 'PENDING']);
                           matchingOrders.forEach(order => {
                             const orderType = (order.order_type || '').toUpperCase();
                             const orderStatus = (order.status || '').toUpperCase();

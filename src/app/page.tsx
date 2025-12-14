@@ -9457,15 +9457,19 @@ ${marginText}
                         let avgVolume: number | undefined;
                         
                         // Priority 1: Use strategy volume_ratio from coin object (canonical source)
+                        // CRITICAL: When volume_ratio is 0.0, use current_volume (even if 0.0), not volume_24h fallback
                         if (coin?.volume_ratio !== undefined && coin.volume_ratio !== null && coin.volume_ratio >= 0) {
                           ratio = coin.volume_ratio;
-                          volume = coin.current_volume || coin.volume_24h;
+                          // Use current_volume if available (even if 0.0), only fallback to volume_24h if current_volume is null/undefined
+                          volume = coin.current_volume !== undefined && coin.current_volume !== null ? coin.current_volume : (coin.volume_24h || 0);
                           avgVolume = coin.avg_volume;
                         } 
                         // Priority 2: Use volume_ratio from signals (if available and coin doesn't have it)
-                        else if (signal?.volume_ratio !== undefined && signal.volume_ratio > 0) {
+                        // CRITICAL: When volume_ratio is 0.0, use current_volume (even if 0.0), not volume_24h fallback
+                        else if (signal?.volume_ratio !== undefined && signal.volume_ratio !== null && signal.volume_ratio >= 0) {
                           ratio = signal.volume_ratio;
-                          volume = signal.current_volume || signal.volume_24h;
+                          // Use current_volume if available (even if 0.0), only fallback to volume_24h if current_volume is null/undefined
+                          volume = signal.current_volume !== undefined && signal.current_volume !== null ? signal.current_volume : (signal.volume_24h || 0);
                           avgVolume = signal.avg_volume;
                         } 
                         // Priority 3: Calculate from signal data (current_volume / avg_volume)

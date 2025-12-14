@@ -5648,6 +5648,7 @@ function resolveDecisionIndexColor(value: number): string {
       {/* Tab Navigation */}
       <div className="flex gap-2 mb-6 border-b">
         <button
+          data-testid="tab-portfolio"
           onClick={() => setActiveTab('portfolio')}
           className={`px-4 py-2 font-medium flex items-center gap-2 ${
             activeTab === 'portfolio'
@@ -5659,6 +5660,7 @@ function resolveDecisionIndexColor(value: number): string {
           <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">v{getCurrentVersion()}</span>
         </button>
         <button
+          data-testid="tab-watchlist"
           onClick={() => setActiveTab('watchlist')}
           className={`px-4 py-2 font-medium flex items-center gap-2 ${
             activeTab === 'watchlist'
@@ -5670,6 +5672,7 @@ function resolveDecisionIndexColor(value: number): string {
           <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">v{getCurrentVersion()}</span>
         </button>
         <button
+          data-testid="tab-orders"
           onClick={() => setActiveTab('orders')}
           className={`px-4 py-2 font-medium flex items-center gap-2 ${
             activeTab === 'orders'
@@ -5681,6 +5684,7 @@ function resolveDecisionIndexColor(value: number): string {
           <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">v{getCurrentVersion()}</span>
         </button>
         <button
+          data-testid="tab-expected-take-profit"
           onClick={() => setActiveTab('expected-take-profit')}
           className={`px-4 py-2 font-medium flex items-center gap-2 ${
             activeTab === 'expected-take-profit'
@@ -5692,6 +5696,7 @@ function resolveDecisionIndexColor(value: number): string {
           <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">v{getCurrentVersion()}</span>
         </button>
         <button
+          data-testid="tab-executed-orders"
           onClick={() => setActiveTab('executed-orders')}
           className={`px-4 py-2 font-medium flex items-center gap-2 ${
             activeTab === 'executed-orders'
@@ -5703,6 +5708,7 @@ function resolveDecisionIndexColor(value: number): string {
           <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">v{getCurrentVersion()}</span>
         </button>
         <button
+          data-testid="tab-monitoring"
           onClick={() => {
             setActiveTab('monitoring');
           }}
@@ -5723,6 +5729,7 @@ function resolveDecisionIndexColor(value: number): string {
           <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">v{getCurrentVersion()}</span>
         </button>
         <button
+          data-testid="tab-version-history"
           onClick={() => setActiveTab('version-history')}
           className={`px-4 py-2 font-medium flex items-center gap-2 ${
             activeTab === 'version-history'
@@ -6205,33 +6212,52 @@ function resolveDecisionIndexColor(value: number): string {
 
                           // Build tooltip details listing all matching TP (Take Profit) orders for this asset
                           // Only show TP orders since that's what the count represents
+                          // Use the same detection logic as the value calculation above to ensure consistency
                           let details = '';
                           // Reuse activeStatuses defined earlier in this function
                           const tpOrders = matchingOrders.filter(order => {
                             const orderType = (order.order_type || (order as any).type || '').toUpperCase();
                             const orderStatus = (order.status || '').toUpperCase();
-                            const triggerType = ((order as any).trigger_type || '').toUpperCase();
-                            const rawOrder = (order as any).raw || (order as any).metadata || {};
-                            const rawOrderType = (rawOrder.order_type || rawOrder.type || '').toUpperCase();
-                            const rawOrderRole = (rawOrder.order_role || '').toUpperCase();
                             
-                            // Check multiple sources: order_type, trigger_type (order_role), and raw metadata
+                            // Only process active orders
+                            if (!activeStatuses.has(orderStatus)) {
+                              return false;
+                            }
+                            
+                            // Check trigger_type directly on order object (from serialize_unified_order)
+                            // trigger_type is set from order_role in routes_dashboard.py line 316
+                            const triggerType = ((order.trigger_type || (order as any).trigger_type || '').toUpperCase()).trim();
+                            const rawOrder = (order as any).raw || (order as any).metadata || {};
+                            const rawOrderType = ((rawOrder.order_type || rawOrder.type || '').toUpperCase()).trim();
+                            const rawOrderRole = ((rawOrder.order_role || '').toUpperCase()).trim();
+                            
+                            // Also check if order has is_trigger flag and trigger_type indicates TP
+                            const isTrigger = order.is_trigger || (order as any).is_trigger || false;
+                            
+                            // Check multiple sources: order_type, trigger_type (which contains order_role from backend), and raw metadata
+                            // trigger_type can be "TAKE_PROFIT" (set from order_role in backend) or order_type can contain "TAKE_PROFIT"
                             const isTP = 
                               orderType.includes('TAKE_PROFIT') || 
                               orderType === 'TAKE_PROFIT_LIMIT' ||
                               triggerType === 'TAKE_PROFIT' ||
+                              (isTrigger && triggerType && triggerType.includes('TAKE_PROFIT')) ||
                               rawOrderType.includes('TAKE_PROFIT') ||
                               rawOrderRole === 'TAKE_PROFIT';
                             
-                            return isTP && activeStatuses.has(orderStatus);
+                            return isTP;
                           });
                           
                           if (tpOrders.length === 0) {
-                            details = 'No active TP (Take Profit) orders';
+                            // If no TP orders found but tpValue > 0, there might be TP orders that weren't detected
+                            // Show a message indicating this
+                            if (finalTpValue > 0) {
+                              details = `TP orders detected (value: $${finalTpValue.toFixed(2)}) but details unavailable`;
+                            } else {
+                              details = 'No active TP (Take Profit) orders';
+                            }
                           } else {
                             const lines: string[] = [];
                             lines.push(`Active TP Orders for ${coinUpper}: ${tpOrders.length}`);
-                            lines.push(''); // Empty line for spacing
                             tpOrders.forEach((order, idx) => {
                               const side = (order.side || '').toUpperCase() || 'N/A';
                               const type = (order.order_type || '').toUpperCase() || 'N/A';
@@ -6247,11 +6273,20 @@ function resolveDecisionIndexColor(value: number): string {
                               const qtyText = qty > 0 ? qty.toFixed(4) : String(qtyRaw);
                               const priceText = price > 0 ? price.toFixed(6) : String(priceRaw);
                               const idText = shortId ? ` #${shortId}` : '';
-                              const value = qty * price;
-                              const valueText = value > 0 ? ` ($${value.toFixed(2)})` : '';
-                              lines.push(`${idx + 1}. ${side} ${type} [${status}]`);
-                              lines.push(`   ${orderSymbol}${idText} — ${qtyText} @ $${priceText}${valueText}`);
+                              // Calculate order value: prefer cumulative_value or order_value, fallback to price * quantity
+                              let orderValue = 0;
+                              if (extendedOrder.cumulative_value && parseFloat(String(extendedOrder.cumulative_value)) > 0) {
+                                orderValue = parseFloat(String(extendedOrder.cumulative_value));
+                              } else if (extendedOrder.order_value && parseFloat(String(extendedOrder.order_value)) > 0) {
+                                orderValue = parseFloat(String(extendedOrder.order_value));
+                              } else {
+                                orderValue = qty * price;
+                              }
+                              const valueText = orderValue > 0 ? ` ($${orderValue.toFixed(2)})` : '';
+                              // Format for HTML title attribute (use | as separator since newlines don't work well)
+                              lines.push(`${idx + 1}. ${side} ${type} [${status}] | ${orderSymbol}${idText} | ${qtyText} @ $${priceText}${valueText}`);
                             });
+                            // Join with newlines for better readability (browsers may collapse them but it's still better than nothing)
                             details = lines.join('\n');
                           }
                           
@@ -6308,7 +6343,7 @@ function resolveDecisionIndexColor(value: number): string {
                         })
                         .sort((a, b) => b.displayValueUsd - a.displayValueUsd) // Sort by USD value descending
                         .map(({ balance, displayValueUsd, percentOfPortfolio, orderValues: _orderValues, openOrdersInfo }) => (
-                          <tr key={balance.asset} className="hover:bg-gray-50 border-b">
+                          <tr key={balance.asset} data-testid={`portfolio-row-${balance.asset}`} className="hover:bg-gray-50 border-b">
                             <td className="px-4 py-3 font-medium">{normalizeSymbol(balance.asset || '')}</td>
                             <td className="px-4 py-3 text-right">{formatNumber(balance.balance ?? balance.total ?? ((balance.free ?? 0) + (balance.locked ?? 0)), balance.asset)}</td>
                             <td className="px-4 py-3 text-right">{formatNumber(balance.locked ?? 0, balance.asset)}</td>
@@ -6561,7 +6596,7 @@ function resolveDecisionIndexColor(value: number): string {
                             };
                             
                             return (
-                              <tr key={`${asset.coin}-${idx}`} className="hover:bg-gray-50 border-b">
+                              <tr key={`${asset.coin}-${idx}`} data-testid={`portfolio-row-${asset.coin}`} className="hover:bg-gray-50 border-b">
                                 <td className="px-4 py-3 font-medium">{normalizeSymbol(asset.coin || '')}</td>
                                 <td className="px-4 py-3 text-right">{formatNumber(asset.balance ?? (asset.available_qty + asset.reserved_qty), asset.coin)}</td>
                                 <td className="px-4 py-3 text-right">{formatNumber(asset.reserved_qty ?? 0, asset.coin)}</td>
@@ -9687,6 +9722,7 @@ ${marginText}
                           
                           return (
                             <button
+                              data-testid={`alert-master-${coin.instrument_name}`}
                               onClick={() => handleMasterAlertToggle(coin.instrument_name)}
                               className={`px-2 py-1 rounded text-xs font-semibold ${
                                 masterAlertEnabled ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-500 hover:bg-gray-600 text-white'

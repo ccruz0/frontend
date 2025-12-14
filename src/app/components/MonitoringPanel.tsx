@@ -837,9 +837,7 @@ export default function MonitoringPanel({
                   </td>
                   <td className="px-4 py-3">
                     <a 
-                      href="https://github.com/ccruz0/crypto-2.0/actions/workflows/dashboard-data-integrity.yml" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
+                      href="/reports/dashboard-data-integrity"
                       className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 underline"
                     >
                       <img 
@@ -862,9 +860,9 @@ export default function MonitoringPanel({
                         href="https://github.com/ccruz0/crypto-2.0/actions/workflows/dashboard-data-integrity.yml"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-3 py-1 bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs font-medium rounded transition-colors text-center"
+                        className="px-3 py-1 bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs font-medium rounded transition-colors text-center text-xs"
                       >
-                        GitHub Actions
+                        GitHub (Details)
                       </a>
                     </div>
                   </td>

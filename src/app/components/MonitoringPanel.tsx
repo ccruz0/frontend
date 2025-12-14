@@ -89,6 +89,11 @@ function WorkflowRow({
     if (reportPath.startsWith('http://') || reportPath.startsWith('https://')) {
       return reportPath;
     }
+    // Skip if reportPath looks like a message instead of a file path
+    // Messages typically contain spaces and don't have file extensions
+    if (!reportPath.includes('/') && !reportPath.includes('.md') && !reportPath.includes('.html') && !reportPath.includes('.txt')) {
+      return null; // This is likely a message, not a report path
+    }
     // If it's a relative path, construct URL
     // Reports are typically in docs/monitoring/, accessible via the backend
     const apiUrl = getApiUrl();

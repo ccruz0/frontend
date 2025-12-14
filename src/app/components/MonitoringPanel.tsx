@@ -851,14 +851,22 @@ export default function MonitoringPanel({
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-500">—</td>
                   <td className="px-4 py-3">
-                    <a
-                      href="https://github.com/ccruz0/crypto-2.0/actions/workflows/dashboard-data-integrity.yml"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors"
-                    >
-                      View Reports
-                    </a>
+                    <div className="flex flex-col gap-2">
+                      <a
+                        href="/reports/dashboard-data-integrity"
+                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors text-center"
+                      >
+                        View Report
+                      </a>
+                      <a
+                        href="https://github.com/ccruz0/crypto-2.0/actions/workflows/dashboard-data-integrity.yml"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1 bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs font-medium rounded transition-colors text-center"
+                      >
+                        GitHub Actions
+                      </a>
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-500">—</td>
                 </tr>

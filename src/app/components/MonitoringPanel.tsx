@@ -103,6 +103,9 @@ function WorkflowRow({
   };
 
   const reportUrl = getReportUrl(workflow.last_report);
+  
+  // Special handling for Dashboard Data Integrity workflow
+  const isDashboardDataIntegrity = workflow.id === "dashboard_data_integrity";
 
   return (
     <tr className="hover:bg-gray-50">
@@ -110,9 +113,22 @@ function WorkflowRow({
       <td className="px-4 py-3 text-sm text-gray-600">{workflow.description}</td>
       <td className="px-4 py-3 text-sm text-gray-500">{workflow.schedule}</td>
       <td className="px-4 py-3">
-        <span className={`px-2 py-1 text-xs font-semibold rounded-full border ${statusBadge}`}>
-          {workflow.last_status || 'unknown'}
-        </span>
+        {isDashboardDataIntegrity ? (
+          <a 
+            href="/reports/dashboard-data-integrity"
+            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 underline"
+          >
+            <img 
+              src="https://github.com/ccruz0/crypto-2.0/actions/workflows/dashboard-data-integrity.yml/badge.svg" 
+              alt="Dashboard Data Integrity Status"
+              className="h-4"
+            />
+          </a>
+        ) : (
+          <span className={`px-2 py-1 text-xs font-semibold rounded-full border ${statusBadge}`}>
+            {workflow.last_status || 'unknown'}
+          </span>
+        )}
       </td>
       <td className="px-4 py-3 text-sm text-gray-600">
         {formatLastExecution(workflow.last_execution)}
@@ -130,7 +146,24 @@ function WorkflowRow({
           ) : (
             <span className="text-xs text-gray-400">Automated only</span>
           )}
-          {reportUrl && (
+          {isDashboardDataIntegrity ? (
+            <>
+              <a
+                href="/reports/dashboard-data-integrity"
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors text-center"
+              >
+                View Report
+              </a>
+              <a
+                href="https://github.com/ccruz0/crypto-2.0/actions/workflows/dashboard-data-integrity.yml"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1 bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs font-medium rounded transition-colors text-center text-xs"
+              >
+                GitHub (Details)
+              </a>
+            </>
+          ) : reportUrl ? (
             <a
               href={reportUrl}
               target="_blank"
@@ -139,7 +172,7 @@ function WorkflowRow({
             >
               Open report
             </a>
-          )}
+          ) : null}
         </div>
       </td>
       <td className="px-4 py-3">
@@ -826,48 +859,6 @@ export default function MonitoringPanel({
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {workflowRows}
-                {/* GitHub Actions Data Integrity Workflow */}
-                <tr className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-medium">Dashboard Data Integrity</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    Validates UI vs backend data integrity for watchlist, portfolio, and monitoring tabs
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">
-                    On push/PR to frontend
-                  </td>
-                  <td className="px-4 py-3">
-                    <a 
-                      href="/reports/dashboard-data-integrity"
-                      className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 underline"
-                    >
-                      <img 
-                        src="https://github.com/ccruz0/crypto-2.0/actions/workflows/dashboard-data-integrity.yml/badge.svg" 
-                        alt="Dashboard Data Integrity Status"
-                        className="h-4"
-                      />
-                    </a>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">—</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-2">
-                      <a
-                        href="/reports/dashboard-data-integrity"
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors text-center"
-                      >
-                        View Report
-                      </a>
-                      <a
-                        href="https://github.com/ccruz0/crypto-2.0/actions/workflows/dashboard-data-integrity.yml"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1 bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs font-medium rounded transition-colors text-center text-xs"
-                      >
-                        GitHub (Details)
-                      </a>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">—</td>
-                </tr>
               </tbody>
             </table>
           </div>

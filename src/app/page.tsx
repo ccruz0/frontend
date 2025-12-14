@@ -6448,16 +6448,31 @@ function resolveDecisionIndexColor(value: number): string {
                           }
                           const coinUpper = (coinAsset || '').toUpperCase();
                           // Filter orders matching the symbol
-                          // If coinAsset contains underscore (e.g., DOGE_USDT), require exact match
+                          // If coinAsset contains underscore (e.g., BTC_USDT), match exact or USD/USDT variant
                           // Otherwise, match base currency (e.g., DOGE matches DOGE_USD and DOGE_USDT)
                           const matchingOrders = openOrders.filter(order => {
                             // Use instrument_name (which contains the symbol like BTC_USDT)
                             const orderSymbol = (order.instrument_name || (order as ExtendedOpenOrder).symbol || '').toUpperCase();
                             if (!orderSymbol) return false;
                             
-                            // If coinAsset has underscore (e.g., DOGE_USDT), require exact match
+                            // If coinAsset has underscore (e.g., BTC_USDT), match exact or USD/USDT variant
                             if (coinUpper.includes('_')) {
-                              return orderSymbol === coinUpper;
+                              // Exact match
+                              if (orderSymbol === coinUpper) return true;
+                              
+                              // USD and USDT are equivalent - check if base currency matches
+                              const coinBase = coinUpper.split('_')[0];
+                              const orderBase = orderSymbol.split('_')[0];
+                              if (coinBase === orderBase) {
+                                // Check if both end with USD or USDT (they're equivalent)
+                                const coinSuffix = coinUpper.split('_')[1];
+                                const orderSuffix = orderSymbol.split('_')[1];
+                                if ((coinSuffix === 'USD' || coinSuffix === 'USDT') && 
+                                    (orderSuffix === 'USD' || orderSuffix === 'USDT')) {
+                                  return true;
+                                }
+                              }
+                              return false;
                             }
                             
                             // Otherwise, match exact symbol or base currency
@@ -6502,15 +6517,18 @@ function resolveDecisionIndexColor(value: number): string {
                             }
                             
                             // Identify TP orders (check order_type, trigger_type/order_role, and raw metadata)
-                            const triggerType = ((order as any).trigger_type || '').toUpperCase();
+                            // Use comprehensive check matching the tooltip logic
+                            const triggerType = ((order.trigger_type || (order as any).trigger_type || '').toUpperCase()).trim();
                             const rawOrder = (order as any).raw || (order as any).metadata || {};
-                            const rawOrderType = (rawOrder.order_type || rawOrder.type || '').toUpperCase();
-                            const rawOrderRole = (rawOrder.order_role || '').toUpperCase();
+                            const rawOrderType = ((rawOrder.order_type || rawOrder.type || '').toUpperCase()).trim();
+                            const rawOrderRole = ((rawOrder.order_role || '').toUpperCase()).trim();
+                            const isTrigger = order.is_trigger || (order as any).is_trigger || false;
                             
                             const isTP = 
                               orderType.includes('TAKE_PROFIT') || 
                               orderType === 'TAKE_PROFIT_LIMIT' || 
                               triggerType === 'TAKE_PROFIT' ||
+                              (isTrigger && triggerType && triggerType.includes('TAKE_PROFIT')) ||
                               rawOrderType.includes('TAKE_PROFIT') ||
                               rawOrderRole === 'TAKE_PROFIT';
                             const isSL = 

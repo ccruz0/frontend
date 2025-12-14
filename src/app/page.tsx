@@ -9933,12 +9933,16 @@ ${marginText}
                               return;
                             }
                             
+                            // Get trade_enabled from dashboard (coinTradeStatus)
+                            const tradeEnabled = coinTradeStatus[symbol] === true;
+                            
                             // Confirm test action
                             const sideLabel = testSide === 'BUY' ? 'BUY' : 'SELL';
                             const confirmMessage = `🧪 ¿Simular alerta ${sideLabel} para ${symbol}?\n\n` +
                               `Esto enviará notificaciones de Telegram y creará órdenes automáticamente si Trade=YES.\n\n` +
                               `Lado simulado: ${sideLabel}\n` +
-                              `💰 Amount: $${amountUSD.toFixed(2)} USD`;
+                              `💰 Amount: $${amountUSD.toFixed(2)} USD\n` +
+                              `📊 Trade: ${tradeEnabled ? 'YES' : 'NO'}`;
                             if (!window.confirm(confirmMessage)) {
                               return;
                             }
@@ -9950,13 +9954,14 @@ ${marginText}
                               console.log(`[TEST_BUTTON] Calling simulateAlert`, { 
                                 symbol, 
                                 testSide, 
-                                amountUSD, 
+                                amountUSD,
+                                tradeEnabled,
                                 endpoint: '/api/test/simulate-alert',
                                 method: 'POST',
-                                payload: { symbol, signal_type: testSide, force_order: true, trade_amount_usd: amountUSD }
+                                payload: { symbol, signal_type: testSide, force_order: true, trade_amount_usd: amountUSD, trade_enabled: tradeEnabled }
                               });
-                              console.log(`🧪 Simulando alerta ${testSide} para ${symbol} con amount=${amountUSD}...`);
-                              const testResult = await simulateAlert(symbol, testSide, true, amountUSD);
+                              console.log(`🧪 Simulando alerta ${testSide} para ${symbol} con amount=${amountUSD}, trade_enabled=${tradeEnabled}...`);
+                              const testResult = await simulateAlert(symbol, testSide, true, amountUSD, tradeEnabled);
                               results.push({ type: testSide, result: testResult });
                               
                               // Build summary message

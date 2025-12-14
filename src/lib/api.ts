@@ -1933,13 +1933,14 @@ export interface SimulateAlertResponse {
   order_error?: string; // Add order_error property
 }
 
-export async function simulateAlert(symbol: string, signalType: 'BUY' | 'SELL', forceOrder: boolean = false, tradeAmountUsd?: number): Promise<SimulateAlertResponse> {
+export async function simulateAlert(symbol: string, signalType: 'BUY' | 'SELL', forceOrder: boolean = false, tradeAmountUsd?: number, tradeEnabled?: boolean): Promise<SimulateAlertResponse> {
   try {
     const payload: {
       symbol: string;
       signal_type: 'BUY' | 'SELL';
       force_order: boolean;
       trade_amount_usd?: number;
+      trade_enabled?: boolean;
     } = {
       symbol,
       signal_type: signalType,
@@ -1949,6 +1950,11 @@ export async function simulateAlert(symbol: string, signalType: 'BUY' | 'SELL', 
     // Only include trade_amount_usd if provided (optional - backend will use watchlist value if available)
     if (tradeAmountUsd && tradeAmountUsd > 0) {
       payload.trade_amount_usd = tradeAmountUsd;
+    }
+    
+    // Include trade_enabled if provided (allows overriding database value)
+    if (tradeEnabled !== undefined) {
+      payload.trade_enabled = tradeEnabled;
     }
     
     const data = await fetchAPI<SimulateAlertResponse>('/test/simulate-alert', {

@@ -907,8 +907,8 @@ export default function MonitoringPanel({
       <div className="bg-white rounded-lg shadow border border-gray-200 mb-6">
         <div className="p-4 border-b border-gray-200 flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold">Signal Throttle</h3>
-            <p className="text-xs text-gray-500">Latest throttle decisions per symbol/strategy</p>
+            <h3 className="text-lg font-semibold">Throttle (Mensajes Enviados)</h3>
+            <p className="text-xs text-gray-500">Mensajes throttled que fueron enviados a Telegram</p>
           </div>
           <button
             onClick={fetchThrottle}
@@ -1005,7 +1005,7 @@ export default function MonitoringPanel({
             className="flex items-center justify-between w-full text-left"
           >
             <h3 className="text-lg font-semibold">
-              Telegram Messages ({safeTelegramMessages.length})
+              Telegram (Mensajes Bloqueados) ({safeTelegramMessages.length})
               {safeCoinFilter.trim() && (
                 <span className="ml-2 text-sm font-normal text-gray-500">
                   (showing {filteredTelegramMessages.length})
@@ -1036,7 +1036,7 @@ export default function MonitoringPanel({
                 </div>
               ) : telegramItems.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
-                  {safeCoinFilter.trim() ? `No messages found for "${safeCoinFilter}"` : 'No Telegram messages yet'}
+                  {safeCoinFilter.trim() ? `No blocked messages found for "${safeCoinFilter}"` : 'No blocked messages yet'}
                 </div>
               ) : (
                 <div className="divide-y divide-gray-200">

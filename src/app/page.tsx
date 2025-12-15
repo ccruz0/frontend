@@ -843,6 +843,25 @@ const VERSION_HISTORY = [
   - Production workflow
   - Comandos canónicos para todas las operaciones
   - Sección explícita sobre prohibición de Telegram local`
+  },
+  {
+    version: '0.46',
+    date: '2025-12-15',
+    change: 'Monitoring hooks fix & cache bust',
+    details: `🚀 VERSIÓN 0.46 - FIX MONITORING HOOKS
+
+📋 **Cambios**
+• Reconstrucción forzada del frontend para tomar el fix de hooks
+• Evita React error #310 en el tab Monitoring
+• Limpieza de caché y despliegue completo
+
+🔧 **Notas Técnicas**
+• useMemo movido antes de cualquier return condicional
+• Hooks alineados para cumplir las reglas de React
+• Nueva versión para bust de caché en build
+
+---
+`
   }
 ];
 

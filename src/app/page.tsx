@@ -1676,38 +1676,6 @@ function DashboardPageContent() {
     });
   }, [portfolio, portfolioSort, sortData]);
 
-  // Sorted watchlist data
-  const sortedWatchlistData = useMemo(() => {
-    if (!visibleWatchlistCoins || visibleWatchlistCoins.length === 0) {
-      return [];
-    }
-    
-    if (!watchlistSort.field) {
-      return visibleWatchlistCoins;
-    }
-    
-    return sortData(visibleWatchlistCoins, watchlistSort.field, watchlistSort.direction, (item, field) => {
-      switch (field) {
-        case 'symbol':
-          return item.instrument_name || '';
-        case 'last_price':
-          return item.current_price ?? 0;
-        case 'amount_usd':
-          return parseFloat(coinAmounts[normalizeSymbolKey(item.instrument_name)] || '0');
-        case 'rsi':
-          return signals[item.instrument_name]?.rsi ?? 0;
-        case 'atr':
-          return signals[item.instrument_name]?.atr ?? 0;
-        case 'sl_price':
-          return calculatedSL[item.instrument_name] ?? 0;
-        case 'tp_price':
-          return calculatedTP[item.instrument_name] ?? 0;
-        default:
-          return 0;
-      }
-    });
-  }, [visibleWatchlistCoins, watchlistSort, sortData, coinAmounts, signals, calculatedSL, calculatedTP]);
-
   // Sorted open orders data
   const sortedOpenOrdersData = useMemo(() => {
     if (!filteredOpenOrders || filteredOpenOrders.length === 0) {
@@ -1840,6 +1808,38 @@ function DashboardPageContent() {
     },
     [orderedWatchlistCoins, watchlistFilter]
   );
+
+  // Sorted watchlist data (depends on visibleWatchlistCoins)
+  const sortedWatchlistData = useMemo(() => {
+    if (!visibleWatchlistCoins || visibleWatchlistCoins.length === 0) {
+      return [];
+    }
+    
+    if (!watchlistSort.field) {
+      return visibleWatchlistCoins;
+    }
+    
+    return sortData(visibleWatchlistCoins, watchlistSort.field, watchlistSort.direction, (item, field) => {
+      switch (field) {
+        case 'symbol':
+          return item.instrument_name || '';
+        case 'last_price':
+          return item.current_price ?? 0;
+        case 'amount_usd':
+          return parseFloat(coinAmounts[normalizeSymbolKey(item.instrument_name)] || '0');
+        case 'rsi':
+          return signals[item.instrument_name]?.rsi ?? 0;
+        case 'atr':
+          return signals[item.instrument_name]?.atr ?? 0;
+        case 'sl_price':
+          return calculatedSL[item.instrument_name] ?? 0;
+        case 'tp_price':
+          return calculatedTP[item.instrument_name] ?? 0;
+        default:
+          return 0;
+      }
+    });
+  }, [visibleWatchlistCoins, watchlistSort, sortData, coinAmounts, signals, calculatedSL, calculatedTP]);
 
   const moveCoin = useCallback((symbol: string, direction: -1 | 1) => {
     if (!symbol || !orderedWatchlistCoins.length) {

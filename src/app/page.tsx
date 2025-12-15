@@ -933,6 +933,95 @@ function DashboardPageContent() {
   const [tpSlOrderValues, setTpSlOrderValues] = useState<TPSLOrderValues>({});
   const [watchlistFilter, setWatchlistFilter] = useState<string>('');
 
+  // Sorting state for each tab
+  const [portfolioSort, setPortfolioSort] = useState<{ field: string | null; direction: 'asc' | 'desc' }>({ field: null, direction: 'asc' });
+  const [watchlistSort, setWatchlistSort] = useState<{ field: string | null; direction: 'asc' | 'desc' }>({ field: null, direction: 'asc' });
+  const [openOrdersSort, setOpenOrdersSort] = useState<{ field: string | null; direction: 'asc' | 'desc' }>({ field: null, direction: 'asc' });
+  const [expectedTPSort, setExpectedTPSort] = useState<{ field: string | null; direction: 'asc' | 'desc' }>({ field: null, direction: 'asc' });
+  const [executedOrdersSort, setExecutedOrdersSort] = useState<{ field: string | null; direction: 'asc' | 'desc' }>({ field: null, direction: 'asc' });
+
+  // Sorting utility function
+  const handleSort = useCallback((
+    field: string,
+    sortState: { field: string | null; direction: 'asc' | 'desc' },
+    setSortState: React.Dispatch<React.SetStateAction<{ field: string | null; direction: 'asc' | 'desc' }>>
+  ) => {
+    if (sortState.field === field) {
+      // Toggle direction if same field
+      setSortState({ field, direction: sortState.direction === 'asc' ? 'desc' : 'asc' });
+    } else {
+      // New field, start with ascending
+      setSortState({ field, direction: 'asc' });
+    }
+  }, []);
+
+  // Generic sorting function
+  const sortData = useCallback(<T,>(
+    data: T[],
+    field: string | null,
+    direction: 'asc' | 'desc',
+    getValue: (item: T, field: string) => any
+  ): T[] => {
+    if (!field) return data;
+    
+    return [...data].sort((a, b) => {
+      const aVal = getValue(a, field);
+      const bVal = getValue(b, field);
+      
+      // Handle null/undefined values
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
+      
+      // Handle numbers
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return direction === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      
+      // Handle strings
+      const aStr = String(aVal).toLowerCase();
+      const bStr = String(bVal).toLowerCase();
+      if (direction === 'asc') {
+        return aStr < bStr ? -1 : aStr > bStr ? 1 : 0;
+      } else {
+        return aStr > bStr ? -1 : aStr < bStr ? 1 : 0;
+      }
+    });
+  }, []);
+
+  // Sortable header component
+  const SortableHeader = ({ 
+    field, 
+    children, 
+    sortState, 
+    setSortState, 
+    className = '' 
+  }: { 
+    field: string; 
+    children: React.ReactNode; 
+    sortState: { field: string | null; direction: 'asc' | 'desc' };
+    setSortState: React.Dispatch<React.SetStateAction<{ field: string | null; direction: 'asc' | 'desc' }>>;
+    className?: string;
+  }) => {
+    const isActive = sortState.field === field;
+    const direction = isActive ? sortState.direction : null;
+    
+    return (
+      <th 
+        className={`${className} cursor-pointer select-none hover:bg-gray-600 transition-colors`}
+        onClick={() => handleSort(field, sortState, setSortState)}
+        title={`Click to sort by ${field}`}
+      >
+        <div className="flex items-center gap-1">
+          <span>{children}</span>
+          {direction === 'asc' && <span className="text-xs">▲</span>}
+          {direction === 'desc' && <span className="text-xs">▼</span>}
+          {!isActive && <span className="text-xs text-gray-400">⇅</span>}
+        </div>
+      </th>
+    );
+  };
+
   const persistAlertFlag = useCallback(
     (
       setter: React.Dispatch<React.SetStateAction<Record<string, boolean>>>,
@@ -1537,6 +1626,168 @@ function DashboardPageContent() {
       return acc;
     }, {});
   }, [orderedWatchlistCoins]);
+
+  // Sorted portfolio data
+  const sortedPortfolioData = useMemo(() => {
+    if (!portfolio || !portfolio.assets || portfolio.assets.length === 0) {
+      return [];
+    }
+    
+    if (!portfolioSort.field) {
+      // Default sort by USD value descending (original behavior)
+      return [...portfolio.assets].sort((a, b) => (b.value_usd ?? 0) - (a.value_usd ?? 0));
+    }
+    
+    return sortData(portfolio.assets, portfolioSort.field, portfolioSort.direction, (item, field) => {
+      switch (field) {
+        case 'coin':
+          return item.coin || '';
+        case 'balance':
+          return item.balance ?? 0;
+        case 'reserved':
+          return item.reserved_qty ?? 0;
+        case 'usd_value':
+          return item.value_usd ?? 0;
+        case 'percent':
+          const totalValue = portfolio.total_value_usd ?? 0;
+          return totalValue > 0 ? ((item.value_usd ?? 0) / totalValue) * 100 : 0;
+        default:
+          return 0;
+      }
+    });
+  }, [portfolio, portfolioSort, sortData]);
+
+  // Sorted watchlist data
+  const sortedWatchlistData = useMemo(() => {
+    if (!visibleWatchlistCoins || visibleWatchlistCoins.length === 0) {
+      return [];
+    }
+    
+    if (!watchlistSort.field) {
+      return visibleWatchlistCoins;
+    }
+    
+    return sortData(visibleWatchlistCoins, watchlistSort.field, watchlistSort.direction, (item, field) => {
+      switch (field) {
+        case 'symbol':
+          return item.instrument_name || '';
+        case 'last_price':
+          return item.current_price ?? 0;
+        case 'amount_usd':
+          return parseFloat(coinAmounts[normalizeSymbolKey(item.instrument_name)] || '0');
+        case 'rsi':
+          return signals[item.instrument_name]?.rsi ?? 0;
+        case 'atr':
+          return signals[item.instrument_name]?.atr ?? 0;
+        case 'sl_price':
+          return calculatedSL[item.instrument_name] ?? 0;
+        case 'tp_price':
+          return calculatedTP[item.instrument_name] ?? 0;
+        default:
+          return 0;
+      }
+    });
+  }, [visibleWatchlistCoins, watchlistSort, sortData, coinAmounts, signals, calculatedSL, calculatedTP]);
+
+  // Sorted open orders data
+  const sortedOpenOrdersData = useMemo(() => {
+    if (!filteredOpenOrders || filteredOpenOrders.length === 0) {
+      return [];
+    }
+    
+    if (!openOrdersSort.field) {
+      return filteredOpenOrders;
+    }
+    
+    return sortData(filteredOpenOrders, openOrdersSort.field, openOrdersSort.direction, (item, field) => {
+      switch (field) {
+        case 'created_date':
+          return item.create_time ?? 0;
+        case 'symbol':
+          return item.instrument_name || '';
+        case 'side':
+          return item.side || '';
+        case 'type':
+          return item.order_type || '';
+        case 'quantity':
+          return parseFloat(item.quantity || '0');
+        case 'price':
+          return parseFloat(item.price || '0');
+        case 'status':
+          return item.status || '';
+        default:
+          return 0;
+      }
+    });
+  }, [filteredOpenOrders, openOrdersSort, sortData]);
+
+  // Sorted expected TP data
+  const sortedExpectedTPData = useMemo(() => {
+    if (!expectedTPSummary || expectedTPSummary.length === 0) {
+      return [];
+    }
+    
+    if (!expectedTPSort.field) {
+      return expectedTPSummary;
+    }
+    
+    return sortData(expectedTPSummary, expectedTPSort.field, expectedTPSort.direction, (item, field) => {
+      switch (field) {
+        case 'symbol':
+          return item.symbol || '';
+        case 'net_qty':
+          return item.net_qty ?? 0;
+        case 'current_price':
+          return item.current_price ?? 0;
+        case 'position_value':
+          return item.position_value ?? 0;
+        case 'covered_qty':
+          return item.covered_qty ?? 0;
+        case 'uncovered_qty':
+          return item.uncovered_qty ?? 0;
+        case 'expected_profit':
+          return item.total_expected_profit ?? 0;
+        case 'coverage':
+          return item.net_qty > 0 ? (item.covered_qty / item.net_qty) * 100 : 0;
+        default:
+          return 0;
+      }
+    });
+  }, [expectedTPSummary, expectedTPSort, sortData]);
+
+  // Sorted executed orders data
+  const sortedExecutedOrdersData = useMemo(() => {
+    if (!filteredExecutedOrders || filteredExecutedOrders.length === 0) {
+      return [];
+    }
+    
+    if (!executedOrdersSort.field) {
+      return filteredExecutedOrders;
+    }
+    
+    return sortData(filteredExecutedOrders, executedOrdersSort.field, executedOrdersSort.direction, (item, field) => {
+      switch (field) {
+        case 'symbol':
+          return item.instrument_name || '';
+        case 'side':
+          return item.side || '';
+        case 'type':
+          return item.order_type || '';
+        case 'quantity':
+          return parseFloat(item.quantity || '0');
+        case 'price':
+          return parseFloat(item.price || '0');
+        case 'total_value':
+          return parseFloat(item.quantity || '0') * parseFloat(item.price || '0');
+        case 'execution_time':
+          return item.update_time ?? item.create_time ?? 0;
+        case 'status':
+          return item.status || '';
+        default:
+          return 0;
+      }
+    });
+  }, [filteredExecutedOrders, executedOrdersSort, sortData]);
 
   const visibleWatchlistCoins = useMemo(
     () => {
@@ -5997,11 +6248,11 @@ function resolveDecisionIndexColor(value: number): string {
                 <Table>
                   <thead className="sticky top-0 z-10">
                     <tr className="bg-gradient-to-r from-gray-800 to-gray-700 text-white">
-                      <th className="px-4 py-3 text-left font-semibold">Coin</th>
-                      <th className="px-4 py-3 text-right font-semibold">Balance</th>
-                      <th className="px-4 py-3 text-right font-semibold">Reserved</th>
-                      <th className="px-4 py-3 text-right font-semibold">USD Value</th>
-                      <th className="px-4 py-3 text-right font-semibold">% Portfolio</th>
+                      <SortableHeader field="coin" sortState={portfolioSort} setSortState={setPortfolioSort} className="px-4 py-3 text-left font-semibold">Coin</SortableHeader>
+                      <SortableHeader field="balance" sortState={portfolioSort} setSortState={setPortfolioSort} className="px-4 py-3 text-right font-semibold">Balance</SortableHeader>
+                      <SortableHeader field="reserved" sortState={portfolioSort} setSortState={setPortfolioSort} className="px-4 py-3 text-right font-semibold">Reserved</SortableHeader>
+                      <SortableHeader field="usd_value" sortState={portfolioSort} setSortState={setPortfolioSort} className="px-4 py-3 text-right font-semibold">USD Value</SortableHeader>
+                      <SortableHeader field="percent" sortState={portfolioSort} setSortState={setPortfolioSort} className="px-4 py-3 text-right font-semibold">% Portfolio</SortableHeader>
                       <th className="px-4 py-3 text-center font-semibold">Open Orders</th>
                       <th className="px-4 py-3 text-center font-semibold">TP</th>
                       <th className="px-4 py-3 text-center font-semibold">SL</th>
@@ -6356,7 +6607,49 @@ function resolveDecisionIndexColor(value: number): string {
                             }
                           };
                         })
-                        .sort((a, b) => b.displayValueUsd - a.displayValueUsd) // Sort by USD value descending
+                        .sort((a, b) => {
+                          // Apply sorting based on portfolioSort state
+                          if (!portfolioSort.field) {
+                            // Default sort by USD value descending
+                            return b.displayValueUsd - a.displayValueUsd;
+                          }
+                          
+                          const getValue = (item: typeof a, field: string) => {
+                            switch (field) {
+                              case 'coin':
+                                return (item.balance.asset || '').toUpperCase();
+                              case 'balance':
+                                return item.balance.balance ?? 0;
+                              case 'reserved':
+                                return item.balance.locked ?? 0;
+                              case 'usd_value':
+                                return item.displayValueUsd;
+                              case 'percent':
+                                return parseFloat(item.percentOfPortfolio) || 0;
+                              default:
+                                return 0;
+                            }
+                          };
+                          
+                          const aVal = getValue(a, portfolioSort.field);
+                          const bVal = getValue(b, portfolioSort.field);
+                          
+                          if (aVal == null && bVal == null) return 0;
+                          if (aVal == null) return 1;
+                          if (bVal == null) return -1;
+                          
+                          if (typeof aVal === 'number' && typeof bVal === 'number') {
+                            return portfolioSort.direction === 'asc' ? aVal - bVal : bVal - aVal;
+                          }
+                          
+                          const aStr = String(aVal).toLowerCase();
+                          const bStr = String(bVal).toLowerCase();
+                          if (portfolioSort.direction === 'asc') {
+                            return aStr < bStr ? -1 : aStr > bStr ? 1 : 0;
+                          } else {
+                            return aStr > bStr ? -1 : aStr < bStr ? 1 : 0;
+                          }
+                        })
                         .map(({ balance, displayValueUsd, percentOfPortfolio, orderValues: _orderValues, openOrdersInfo }) => (
                           <tr key={balance.asset} data-testid={`portfolio-row-${balance.asset}`} className="hover:bg-gray-50 border-b">
                             <td className="px-4 py-3 font-medium">{normalizeSymbol(balance.asset || '')}</td>
@@ -8025,19 +8318,19 @@ function resolveDecisionIndexColor(value: number): string {
               <thead className="sticky top-0 z-10">
                 <tr className="bg-gradient-to-r from-gray-800 to-gray-700 text-white">
                   <th className="px-1 py-3 text-center font-semibold w-8">#</th>
-                  <th className="px-2 py-3 text-left font-semibold w-20">Symbol</th>
+                  <SortableHeader field="symbol" sortState={watchlistSort} setSortState={setWatchlistSort} className="px-2 py-3 text-left font-semibold w-20">Symbol</SortableHeader>
                   <th className="px-1 py-3 text-center font-semibold w-16">Actions</th>
-                  <th className="px-2 py-3 text-right font-semibold w-24">Last Price</th>
+                  <SortableHeader field="last_price" sortState={watchlistSort} setSortState={setWatchlistSort} className="px-2 py-3 text-right font-semibold w-24">Last Price</SortableHeader>
                   <th className="px-2 py-3 text-right font-semibold w-24">Last Updated</th>
                   <th className="px-1 py-3 text-center font-semibold w-20">Preset</th>
                   <th className="px-1 py-3 text-center font-semibold w-14">Trade</th>
-                  <th className="px-2 py-3 text-right font-semibold w-32 min-w-[120px]">Amount USD</th>
+                  <SortableHeader field="amount_usd" sortState={watchlistSort} setSortState={setWatchlistSort} className="px-2 py-3 text-right font-semibold w-32 min-w-[120px]">Amount USD</SortableHeader>
                   <th className="px-1 py-3 text-center font-semibold w-16">Margin</th>
                   <th className="px-1 py-3 text-center font-semibold w-16">RISK</th>
-                  <th className="px-2 py-3 text-right font-semibold w-20">SL Price</th>
-                  <th className="px-2 py-3 text-right font-semibold w-20">TP Price</th>
-                  <th className="px-1 py-3 text-center font-semibold w-16">RSI</th>
-                  <th className="px-1 py-3 text-center font-semibold w-16">ATR</th>
+                  <SortableHeader field="sl_price" sortState={watchlistSort} setSortState={setWatchlistSort} className="px-2 py-3 text-right font-semibold w-20">SL Price</SortableHeader>
+                  <SortableHeader field="tp_price" sortState={watchlistSort} setSortState={setWatchlistSort} className="px-2 py-3 text-right font-semibold w-20">TP Price</SortableHeader>
+                  <SortableHeader field="rsi" sortState={watchlistSort} setSortState={setWatchlistSort} className="px-1 py-3 text-center font-semibold w-16">RSI</SortableHeader>
+                  <SortableHeader field="atr" sortState={watchlistSort} setSortState={setWatchlistSort} className="px-1 py-3 text-center font-semibold w-16">ATR</SortableHeader>
                   <th className="px-2 py-3 text-right font-semibold w-24">Res Up</th>
                   <th className="px-2 py-3 text-right font-semibold w-24">Res Down</th>
                   <th className="px-2 py-3 text-right font-semibold w-18">MA50</th>
@@ -8078,7 +8371,7 @@ function resolveDecisionIndexColor(value: number): string {
                       <td className="px-2 py-3 text-center"><SkeletonBlock className="h-4 w-16 mx-auto" /></td>
                     </tr>
                   ))}
-                {visibleWatchlistCoins.length > 0 && visibleWatchlistCoins
+                {sortedWatchlistData.length > 0 && sortedWatchlistData
                   .filter((coin) => {
                     // Defensive: skip malformed coins that would crash rendering
                     if (!coin || !coin.instrument_name) {
@@ -10297,22 +10590,22 @@ ${marginText}
                 ))}
               </tbody>
             </Table>
-          ) : filteredOpenOrders.length > 0 ? (
+          ) : sortedOpenOrdersData.length > 0 ? (
             <Table>
               <thead>
                 <tr className="bg-gradient-to-r from-gray-800 to-gray-700 text-white">
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Created Date</th>
-                  <th className="px-4 py-3 text-left font-semibold">Symbol</th>
-                  <th className="px-4 py-3 text-left font-semibold">Side</th>
-                  <th className="px-4 py-3 text-left font-semibold">Type</th>
-                  <th className="px-4 py-3 text-right font-semibold">Quantity</th>
-                  <th className="px-4 py-3 text-right font-semibold">Price</th>
+                  <SortableHeader field="created_date" sortState={openOrdersSort} setSortState={setOpenOrdersSort} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Created Date</SortableHeader>
+                  <SortableHeader field="symbol" sortState={openOrdersSort} setSortState={setOpenOrdersSort} className="px-4 py-3 text-left font-semibold">Symbol</SortableHeader>
+                  <SortableHeader field="side" sortState={openOrdersSort} setSortState={setOpenOrdersSort} className="px-4 py-3 text-left font-semibold">Side</SortableHeader>
+                  <SortableHeader field="type" sortState={openOrdersSort} setSortState={setOpenOrdersSort} className="px-4 py-3 text-left font-semibold">Type</SortableHeader>
+                  <SortableHeader field="quantity" sortState={openOrdersSort} setSortState={setOpenOrdersSort} className="px-4 py-3 text-right font-semibold">Quantity</SortableHeader>
+                  <SortableHeader field="price" sortState={openOrdersSort} setSortState={setOpenOrdersSort} className="px-4 py-3 text-right font-semibold">Price</SortableHeader>
                   <th className="px-4 py-3 text-right font-semibold">Wallet Balance</th>
-                  <th className="px-4 py-3 text-left font-semibold">Status</th>
+                  <SortableHeader field="status" sortState={openOrdersSort} setSortState={setOpenOrdersSort} className="px-4 py-3 text-left font-semibold">Status</SortableHeader>
                 </tr>
               </thead>
               <tbody>
-                {filteredOpenOrders.map((order, index) => {
+                {sortedOpenOrdersData.map((order, index) => {
                   // Extract base asset from instrument_name (e.g., "BTC_USDT" -> "BTC")
                   const baseAsset = order.instrument_name.split('_')[0]?.toUpperCase() || '';
                   
@@ -10448,19 +10741,19 @@ ${marginText}
               <table className="min-w-full bg-white border border-gray-200 rounded-lg">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Net Qty</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Current Price</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Position Value</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Covered Qty</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Uncovered Qty</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Expected Profit</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Coverage</th>
+                    <SortableHeader field="symbol" sortState={expectedTPSort} setSortState={setExpectedTPSort} className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</SortableHeader>
+                    <SortableHeader field="net_qty" sortState={expectedTPSort} setSortState={setExpectedTPSort} className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Net Qty</SortableHeader>
+                    <SortableHeader field="current_price" sortState={expectedTPSort} setSortState={setExpectedTPSort} className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Current Price</SortableHeader>
+                    <SortableHeader field="position_value" sortState={expectedTPSort} setSortState={setExpectedTPSort} className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Position Value</SortableHeader>
+                    <SortableHeader field="covered_qty" sortState={expectedTPSort} setSortState={setExpectedTPSort} className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Covered Qty</SortableHeader>
+                    <SortableHeader field="uncovered_qty" sortState={expectedTPSort} setSortState={setExpectedTPSort} className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Uncovered Qty</SortableHeader>
+                    <SortableHeader field="expected_profit" sortState={expectedTPSort} setSortState={setExpectedTPSort} className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Expected Profit</SortableHeader>
+                    <SortableHeader field="coverage" sortState={expectedTPSort} setSortState={setExpectedTPSort} className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Coverage</SortableHeader>
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {expectedTPSummary.map((item) => {
+                  {sortedExpectedTPData.map((item) => {
                     const coveragePercent = item.net_qty > 0 ? (item.covered_qty / item.net_qty) * 100 : 0;
                     const coverageStatus = coveragePercent >= 100 ? 'full' : coveragePercent > 0 ? 'partial' : 'none';
                     
@@ -10987,23 +11280,23 @@ ${marginText}
                 ))}
               </tbody>
             </Table>
-          ) : filteredExecutedOrders.length > 0 ? (
+          ) : sortedExecutedOrdersData.length > 0 ? (
             <Table>
               <thead>
                 <tr className="bg-gradient-to-r from-gray-800 to-gray-700 text-white">
-                  <th className="px-4 py-3 text-left font-semibold">Symbol</th>
-                  <th className="px-4 py-3 text-left font-semibold">Side</th>
-                  <th className="px-4 py-3 text-left font-semibold">Type</th>
-                  <th className="px-4 py-3 text-right font-semibold">Quantity</th>
-                  <th className="px-4 py-3 text-right font-semibold">Price</th>
-                  <th className="px-4 py-3 text-right font-semibold">Total Value</th>
+                  <SortableHeader field="symbol" sortState={executedOrdersSort} setSortState={setExecutedOrdersSort} className="px-4 py-3 text-left font-semibold">Symbol</SortableHeader>
+                  <SortableHeader field="side" sortState={executedOrdersSort} setSortState={setExecutedOrdersSort} className="px-4 py-3 text-left font-semibold">Side</SortableHeader>
+                  <SortableHeader field="type" sortState={executedOrdersSort} setSortState={setExecutedOrdersSort} className="px-4 py-3 text-left font-semibold">Type</SortableHeader>
+                  <SortableHeader field="quantity" sortState={executedOrdersSort} setSortState={setExecutedOrdersSort} className="px-4 py-3 text-right font-semibold">Quantity</SortableHeader>
+                  <SortableHeader field="price" sortState={executedOrdersSort} setSortState={setExecutedOrdersSort} className="px-4 py-3 text-right font-semibold">Price</SortableHeader>
+                  <SortableHeader field="total_value" sortState={executedOrdersSort} setSortState={setExecutedOrdersSort} className="px-4 py-3 text-right font-semibold">Total Value</SortableHeader>
                   <th className="px-4 py-3 text-right font-semibold">P/L</th>
-                  <th className="px-4 py-3 text-left font-semibold">Execution Time</th>
-                  <th className="px-4 py-3 text-left font-semibold">Status</th>
+                  <SortableHeader field="execution_time" sortState={executedOrdersSort} setSortState={setExecutedOrdersSort} className="px-4 py-3 text-left font-semibold">Execution Time</SortableHeader>
+                  <SortableHeader field="status" sortState={executedOrdersSort} setSortState={setExecutedOrdersSort} className="px-4 py-3 text-left font-semibold">Status</SortableHeader>
                 </tr>
               </thead>
               <tbody>
-                {filteredExecutedOrders.map((order, index) => {
+                {sortedExecutedOrdersData.map((order, index) => {
                   // Format execution time - prioritize timestamps for accurate timezone conversion
                   let execTimeStr = '—';
                   // Prefer update_time (timestamp) for accurate UTC to local conversion

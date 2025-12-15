@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   getMonitoringSummary,
   getSignalThrottleState,
@@ -191,10 +191,11 @@ function WorkflowRow({
 
 export default function MonitoringPanel({
   refreshInterval = 20000,
-  telegramMessages,
-  telegramMessagesLoading,
+  telegramMessages = [],
+  telegramMessagesLoading = false,
   onRequestTelegramRefresh,
 }: MonitoringPanelProps) {
+  // All hooks must be called unconditionally before any early returns
   const [data, setData] = useState<MonitoringSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -322,6 +323,22 @@ export default function MonitoringPanel({
 
     return () => clearInterval(interval);
   }, [fetchData, fetchThrottle, fetchWorkflows, refreshInterval]);
+
+  // Filter telegram messages by coin/symbol - must be called before any conditional logic
+  // Ensure telegramMessages is always an array and coinFilter is always a string
+  const safeTelegramMessages = Array.isArray(telegramMessages) ? telegramMessages : [];
+  const safeCoinFilter = typeof coinFilter === 'string' ? coinFilter : '';
+  const filteredTelegramMessages = useMemo(() => {
+    const trimmedFilter = safeCoinFilter.trim();
+    if (!trimmedFilter) {
+      return safeTelegramMessages;
+    }
+    const filterUpper = trimmedFilter.toUpperCase();
+    return safeTelegramMessages.filter(msg => {
+      if (!msg || !msg.symbol) return false;
+      return msg.symbol.toUpperCase().includes(filterUpper);
+    });
+  }, [safeTelegramMessages, safeCoinFilter]);
 
   const formatTimestamp = (ts: string): string => {
     try {
@@ -498,6 +515,8 @@ export default function MonitoringPanel({
     }
   };
 
+  // Early returns AFTER all hooks but BEFORE data processing
+  // This ensures all hooks are called consistently while allowing early exit for loading/error states
   if (loading && !data) {
     return (
       <div className="py-8 text-center">
@@ -522,22 +541,48 @@ export default function MonitoringPanel({
   }
 
   // Ensure all arrays are initialized to prevent initialization errors
-  const monitoringData = data ? {
-    ...data,
-    errors: Array.isArray(data.errors) ? data.errors : [],
-    alerts: Array.isArray(data.alerts) ? data.alerts : [],
-  } : {
-    active_alerts: 0,
-    backend_health: 'error',
-    last_sync_seconds: null,
-    portfolio_state_duration: 0,
-    open_orders: 0,
-    balances: 0,
-    scheduler_ticks: 0,
-    errors: [],
-    last_backend_restart: null,
-    alerts: []
-  };
+  // Use defensive programming to handle any data structure issues
+  let monitoringData;
+  try {
+    monitoringData = data ? {
+      ...data,
+      errors: Array.isArray(data.errors) ? data.errors : [],
+      alerts: Array.isArray(data.alerts) ? data.alerts : [],
+      active_alerts: typeof data.active_alerts === 'number' ? data.active_alerts : 0,
+      backend_health: typeof data.backend_health === 'string' ? data.backend_health : 'error',
+      last_sync_seconds: data.last_sync_seconds ?? null,
+      portfolio_state_duration: typeof data.portfolio_state_duration === 'number' ? data.portfolio_state_duration : 0,
+      open_orders: typeof data.open_orders === 'number' ? data.open_orders : 0,
+      balances: typeof data.balances === 'number' ? data.balances : 0,
+      scheduler_ticks: typeof data.scheduler_ticks === 'number' ? data.scheduler_ticks : 0,
+      last_backend_restart: data.last_backend_restart ?? null,
+    } : {
+      active_alerts: 0,
+      backend_health: 'error',
+      last_sync_seconds: null,
+      portfolio_state_duration: 0,
+      open_orders: 0,
+      balances: 0,
+      scheduler_ticks: 0,
+      errors: [],
+      last_backend_restart: null,
+      alerts: []
+    };
+  } catch (err) {
+    console.error('Error processing monitoring data:', err);
+    monitoringData = {
+      active_alerts: 0,
+      backend_health: 'error',
+      last_sync_seconds: null,
+      portfolio_state_duration: 0,
+      open_orders: 0,
+      balances: 0,
+      scheduler_ticks: 0,
+      errors: [],
+      last_backend_restart: null,
+      alerts: []
+    };
+  }
 
   // Build error items array
   const errorItems: React.ReactNode[] = [];
@@ -655,87 +700,80 @@ export default function MonitoringPanel({
     return 'text-blue-700 font-medium';
   };
 
-  // Filter telegram messages by coin/symbol
-  const filteredTelegramMessages = React.useMemo(() => {
-    if (!coinFilter.trim()) {
-      return telegramMessages;
-    }
-    const filterUpper = coinFilter.trim().toUpperCase();
-    return telegramMessages.filter(msg => {
-      if (!msg.symbol) return false;
-      return msg.symbol.toUpperCase().includes(filterUpper);
-    });
-  }, [telegramMessages, coinFilter]);
-
   // Build telegram message items array
   const telegramItems: React.ReactNode[] = [];
-  if (Array.isArray(filteredTelegramMessages) && filteredTelegramMessages.length > 0) {
-    for (let idx = 0; idx < filteredTelegramMessages.length; idx++) {
-      const msg = filteredTelegramMessages[idx];
-      // Determine status label: order_skipped takes precedence over blocked
-      let statusLabel: string;
-      if (msg.order_skipped) {
-        statusLabel = 'ORDER SKIPPED';
-      } else if (msg.throttle_status) {
-        statusLabel = msg.throttle_status.toUpperCase();
-      } else if (msg.blocked) {
-        statusLabel = 'BLOCKED';
-      } else {
-        statusLabel = 'SENT';
-      }
-      // Background color: order_skipped gets yellow/orange, blocked gets gray, sent gets blue
-      const bgColor = msg.order_skipped 
-        ? 'bg-yellow-50' 
-        : msg.blocked 
-        ? 'bg-gray-50' 
-        : 'bg-blue-50';
-      telegramItems.push(
-        <div
-          key={idx}
-          className={`p-4 ${bgColor}`}
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <p
-                className={`text-sm ${getMessageTextColor(msg.message || '', msg.order_skipped || false, msg.blocked || false)}`}
-              >
-                {msg.message}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span
-                  className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${
-                    msg.order_skipped
-                      ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
-                      : getThrottleStatusStyles(statusLabel)
-                  }`}
+  try {
+    if (Array.isArray(filteredTelegramMessages) && filteredTelegramMessages.length > 0) {
+      for (let idx = 0; idx < filteredTelegramMessages.length; idx++) {
+        const msg = filteredTelegramMessages[idx];
+        if (!msg) continue;
+        // Determine status label: order_skipped takes precedence over blocked
+        let statusLabel: string;
+        if (msg.order_skipped) {
+          statusLabel = 'ORDER SKIPPED';
+        } else if (msg.throttle_status) {
+          statusLabel = msg.throttle_status.toUpperCase();
+        } else if (msg.blocked) {
+          statusLabel = 'BLOCKED';
+        } else {
+          statusLabel = 'SENT';
+        }
+        // Background color: order_skipped gets yellow/orange, blocked gets gray, sent gets blue
+        const bgColor = msg.order_skipped 
+          ? 'bg-yellow-50' 
+          : msg.blocked 
+          ? 'bg-gray-50' 
+          : 'bg-blue-50';
+        telegramItems.push(
+          <div
+            key={idx}
+            className={`p-4 ${bgColor}`}
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <p
+                  className={`text-sm ${getMessageTextColor(msg.message || '', msg.order_skipped || false, msg.blocked || false)}`}
                 >
-                  {statusLabel}
-                </span>
+                  {msg.message}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span
+                    className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${
+                      msg.order_skipped
+                        ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                        : getThrottleStatusStyles(statusLabel)
+                    }`}
+                  >
+                    {statusLabel}
+                  </span>
+                  {msg.symbol && (
+                    <span className="text-xs text-gray-600 font-medium">{msg.symbol}</span>
+                  )}
+                </div>
+                {msg.throttle_reason && (
+                  <p
+                    className="text-xs text-gray-500 mt-1 line-clamp-2"
+                    title={msg.throttle_reason}
+                  >
+                    {msg.throttle_reason}
+                  </p>
+                )}
                 {msg.symbol && (
-                  <span className="text-xs text-gray-600 font-medium">{msg.symbol}</span>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Symbol: {msg.symbol}
+                  </p>
                 )}
               </div>
-              {msg.throttle_reason && (
-                <p
-                  className="text-xs text-gray-500 mt-1 line-clamp-2"
-                  title={msg.throttle_reason}
-                >
-                  {msg.throttle_reason}
-                </p>
-              )}
-              {msg.symbol && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Symbol: {msg.symbol}
-                </p>
-              )}
-            </div>
-            <div className="ml-4 text-xs text-gray-400">
-              {formatTimestamp(msg.timestamp)}
+              <div className="ml-4 text-xs text-gray-400">
+                {formatTimestamp(msg.timestamp)}
+              </div>
             </div>
           </div>
-        </div>
-      );
+        );
+      }
     }
+  } catch (err) {
+    console.error('Error building telegram items:', err);
   }
 
   return (
@@ -960,15 +998,15 @@ export default function MonitoringPanel({
             onClick={() => {
               const nextState = !showTelegramMessages;
               setShowTelegramMessages(nextState);
-              if (nextState && telegramMessages.length === 0) {
+              if (nextState && safeTelegramMessages.length === 0) {
                 onRequestTelegramRefresh?.();
               }
             }}
             className="flex items-center justify-between w-full text-left"
           >
             <h3 className="text-lg font-semibold">
-              Telegram Messages ({telegramMessages.length})
-              {coinFilter.trim() && (
+              Telegram Messages ({safeTelegramMessages.length})
+              {safeCoinFilter.trim() && (
                 <span className="ml-2 text-sm font-normal text-gray-500">
                   (showing {filteredTelegramMessages.length})
                 </span>
@@ -985,8 +1023,8 @@ export default function MonitoringPanel({
               <input
                 type="text"
                 placeholder="Filter by coin/symbol (e.g., BTC, ALGO)"
-                value={coinFilter}
-                onChange={(e) => setCoinFilter(e.target.value)}
+                value={safeCoinFilter}
+                onChange={(e) => setCoinFilter(e.target.value || '')}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -998,7 +1036,7 @@ export default function MonitoringPanel({
                 </div>
               ) : telegramItems.length === 0 ? (
                 <div className="p-8 text-center text-gray-500">
-                  {coinFilter.trim() ? `No messages found for "${coinFilter}"` : 'No Telegram messages yet'}
+                  {safeCoinFilter.trim() ? `No messages found for "${safeCoinFilter}"` : 'No Telegram messages yet'}
                 </div>
               ) : (
                 <div className="divide-y divide-gray-200">

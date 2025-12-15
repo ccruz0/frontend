@@ -413,6 +413,77 @@ export default function MonitoringPanel({
     return validParts.join(' / ') || key;
   };
 
+  const formatEmitReason = (reason: string | null | undefined): string => {
+    if (!reason) return '—';
+    
+    const reasonLower = reason.toLowerCase();
+    
+    // First alert
+    if (reasonLower.includes('no previous') || reasonLower.includes('first signal')) {
+      return '🆕 First alert';
+    }
+    
+    // Strategy change / Force reset
+    if (reasonLower.includes('forced_after_toggle_reset') || reasonLower.includes('forced')) {
+      return '🔄 Strategy changed / Manual reset';
+    }
+    
+    // Side change
+    if (reasonLower.includes('opposite-side') || reasonLower.includes('side change')) {
+      if (reasonLower.includes('sell') && reasonLower.includes('buy')) {
+        return '🔄 Side change (SELL→BUY)';
+      } else if (reasonLower.includes('buy') && reasonLower.includes('sell')) {
+        return '🔄 Side change (BUY→SELL)';
+      }
+      return '🔄 Side change';
+    }
+    
+    // Blocked
+    if (reasonLower.includes('blocked') || reasonLower.includes('throttled')) {
+      if (reasonLower.includes('min_time')) {
+        return '⏸️ Throttled: Cooldown';
+      }
+      if (reasonLower.includes('min_change')) {
+        return '⏸️ Throttled: Price change';
+      }
+      return '⏸️ Throttled';
+    }
+    
+    // Price change and/or time elapsed
+    if (reason.includes('Δt=') || reason.includes('|Δp|=')) {
+      const parts: string[] = [];
+      // Extract time info
+      const timeMatch = reason.match(/Δt=([\d.]+)m/);
+      if (timeMatch) {
+        const elapsed = parseFloat(timeMatch[1]);
+        parts.push(`⏱️ Cooldown (${elapsed.toFixed(1)}m)`);
+      }
+      // Extract price change info
+      const priceMatch = reason.match(/\|Δp\|=([↑↓→]?)\s*([\d.]+)%/);
+      if (priceMatch) {
+        const direction = priceMatch[1] || '→';
+        const changePct = parseFloat(priceMatch[2]);
+        const directionEmoji = direction === '↑' ? '↑' : direction === '↓' ? '↓' : '→';
+        parts.push(`💹 Price change (${directionEmoji}${changePct.toFixed(2)}%)`);
+      }
+      if (parts.length > 0) {
+        return parts.join(' | ');
+      }
+    }
+    
+    // No previous limits
+    if (reasonLower.includes('no previous limits')) {
+      return '✅ No limits configured';
+    }
+    
+    // Default: simplify the reason
+    return reason
+      .replace(/THROTTLED_/g, '')
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, char => char.toUpperCase())
+      .substring(0, 60); // Limit length
+  };
+
   const getSeverityColor = (severity: string): string => {
     switch (severity.toUpperCase()) {
       case 'ERROR':
@@ -522,6 +593,9 @@ export default function MonitoringPanel({
           </td>
           <td className={`px-4 py-3 text-sm font-medium ${priceChangeColor}`}>
             {priceChangeDisplay}
+          </td>
+          <td className="px-4 py-3 text-sm text-gray-600 max-w-xs" title={entry.emit_reason || undefined}>
+            <span className="block truncate">{formatEmitReason(entry.emit_reason)}</span>
           </td>
           <td className="px-4 py-3 text-sm text-gray-600">
             {entry.last_time ? formatTimestamp(entry.last_time) : 'N/A'}
@@ -817,6 +891,7 @@ export default function MonitoringPanel({
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Side</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Price</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price Change %</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Reason</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Event</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ago</th>
                 </tr>

@@ -200,6 +200,7 @@ export default function MonitoringPanel({
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [showTelegramMessages, setShowTelegramMessages] = useState(false);
+  const [coinFilter, setCoinFilter] = useState<string>('');
   const [throttleEntries, setThrottleEntries] = useState<SignalThrottleEntry[]>([]);
   const [throttleLoading, setThrottleLoading] = useState(true);
   const [throttleError, setThrottleError] = useState<string | null>(null);
@@ -654,11 +655,23 @@ export default function MonitoringPanel({
     return 'text-blue-700 font-medium';
   };
 
+  // Filter telegram messages by coin/symbol
+  const filteredTelegramMessages = React.useMemo(() => {
+    if (!coinFilter.trim()) {
+      return telegramMessages;
+    }
+    const filterUpper = coinFilter.trim().toUpperCase();
+    return telegramMessages.filter(msg => {
+      if (!msg.symbol) return false;
+      return msg.symbol.toUpperCase().includes(filterUpper);
+    });
+  }, [telegramMessages, coinFilter]);
+
   // Build telegram message items array
   const telegramItems: React.ReactNode[] = [];
-  if (Array.isArray(telegramMessages) && telegramMessages.length > 0) {
-    for (let idx = 0; idx < telegramMessages.length; idx++) {
-      const msg = telegramMessages[idx];
+  if (Array.isArray(filteredTelegramMessages) && filteredTelegramMessages.length > 0) {
+    for (let idx = 0; idx < filteredTelegramMessages.length; idx++) {
+      const msg = filteredTelegramMessages[idx];
       // Determine status label: order_skipped takes precedence over blocked
       let statusLabel: string;
       if (msg.order_skipped) {
@@ -955,6 +968,11 @@ export default function MonitoringPanel({
           >
             <h3 className="text-lg font-semibold">
               Telegram Messages ({telegramMessages.length})
+              {coinFilter.trim() && (
+                <span className="ml-2 text-sm font-normal text-gray-500">
+                  (showing {filteredTelegramMessages.length})
+                </span>
+              )}
             </h3>
             <span className={`transform transition-transform ${showTelegramMessages ? 'rotate-180' : ''}`}>
               ▼
@@ -962,21 +980,32 @@ export default function MonitoringPanel({
           </button>
         </div>
         {showTelegramMessages && (
-          <div className="max-h-96 overflow-y-auto">
-            {telegramMessagesLoading ? (
-              <div className="p-8 text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-500">Loading Telegram messages...</p>
-              </div>
-            ) : telegramItems.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                No Telegram messages yet
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-200">
-                {telegramItems}
-              </div>
-            )}
+          <div>
+            <div className="p-4 border-b border-gray-200">
+              <input
+                type="text"
+                placeholder="Filter by coin/symbol (e.g., BTC, ALGO)"
+                value={coinFilter}
+                onChange={(e) => setCoinFilter(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div className="max-h-96 overflow-y-auto">
+              {telegramMessagesLoading ? (
+                <div className="p-8 text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-500">Loading Telegram messages...</p>
+                </div>
+              ) : telegramItems.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  {coinFilter.trim() ? `No messages found for "${coinFilter}"` : 'No Telegram messages yet'}
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-200">
+                  {telegramItems}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

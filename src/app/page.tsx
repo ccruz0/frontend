@@ -931,6 +931,7 @@ function DashboardPageContent() {
   const [watchlistOrder, setWatchlistOrder] = useState<Record<string, number>>({});
   const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([]);
   const [tpSlOrderValues, setTpSlOrderValues] = useState<TPSLOrderValues>({});
+  const [watchlistFilter, setWatchlistFilter] = useState<string>('');
 
   const persistAlertFlag = useCallback(
     (
@@ -1551,12 +1552,23 @@ function DashboardPageContent() {
         }
       })();
       
-      return orderedWatchlistCoins.filter(coin => {
+      const filtered = orderedWatchlistCoins.filter(coin => {
         const coinName = coin.instrument_name.toUpperCase();
         return !deletedCoins.some(deleted => deleted.toUpperCase() === coinName);
       });
+      
+      // Apply search filter if provided
+      if (watchlistFilter.trim()) {
+        const filterUpper = watchlistFilter.trim().toUpperCase();
+        return filtered.filter(coin => {
+          const coinName = coin.instrument_name.toUpperCase();
+          return coinName.includes(filterUpper);
+        });
+      }
+      
+      return filtered;
     },
-    [orderedWatchlistCoins]
+    [orderedWatchlistCoins, watchlistFilter]
   );
 
   const moveCoin = useCallback((symbol: string, direction: -1 | 1) => {
@@ -7973,6 +7985,41 @@ function resolveDecisionIndexColor(value: number): string {
         </div>
     </div>
           )}
+
+          {/* Filter Input */}
+          <div className="mb-4">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="🔍 Filter coins by symbol (e.g., BTC, ETH, TON)..."
+                value={watchlistFilter}
+                onChange={(e) => setWatchlistFilter(e.target.value)}
+                className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                title="Filter coins by symbol name"
+              />
+              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              {watchlistFilter && (
+                <button
+                  onClick={() => setWatchlistFilter('')}
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
+                  title="Clear filter"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            {watchlistFilter && (
+              <div className="mt-2 text-sm text-gray-600">
+                Showing {visibleWatchlistCoins.length} of {orderedWatchlistCoins.length} coin{orderedWatchlistCoins.length !== 1 ? 's' : ''}
+              </div>
+            )}
+          </div>
 
           <Table>
               <thead className="sticky top-0 z-10">

@@ -388,6 +388,12 @@ function formatNumber(num: number | null | undefined, symbol?: string): string {
   return addThousandSeparators(formatted);
 }
 
+// Fixed-decimal formatter for P/L summary cards
+function formatPLSummaryNumber(num: number | null | undefined): string {
+  if (num === null || num === undefined) return '-';
+  return addThousandSeparators((num ?? 0).toFixed(1));
+}
+
 const HANDLED_ERROR_SUPPRESSION_MS = 30000;
 const handledErrorTimestamps = new Map<string, number>();
 
@@ -6205,21 +6211,21 @@ function resolveDecisionIndexColor(value: number): string {
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                     <div className="text-sm text-gray-600 mb-1">Realized P/L</div>
                     <div className={`text-2xl font-bold ${(plSummary?.realizedPL ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {(plSummary?.realizedPL ?? 0) >= 0 ? '+' : ''}${formatNumber(plSummary?.realizedPL ?? 0)}
+                      {(plSummary?.realizedPL ?? 0) >= 0 ? '+' : ''}${formatPLSummaryNumber(plSummary?.realizedPL ?? 0)}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">Executed orders</div>
                   </div>
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <div className="text-sm text-gray-600 mb-1">Potential P/L</div>
                     <div className={`text-2xl font-bold ${(plSummary?.potentialPL ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {(plSummary?.potentialPL ?? 0) >= 0 ? '+' : ''}${formatNumber(plSummary?.potentialPL ?? 0)}
+                      {(plSummary?.potentialPL ?? 0) >= 0 ? '+' : ''}${formatPLSummaryNumber(plSummary?.potentialPL ?? 0)}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">Unrealized (current price)</div>
                   </div>
                   <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
                     <div className="text-sm text-gray-600 mb-1">Total P/L</div>
                     <div className={`text-2xl font-bold ${(plSummary?.totalPL ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {(plSummary?.totalPL ?? 0) >= 0 ? '+' : ''}${formatNumber(plSummary?.totalPL ?? 0)}
+                      {(plSummary?.totalPL ?? 0) >= 0 ? '+' : ''}${formatPLSummaryNumber(plSummary?.totalPL ?? 0)}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">Realized + Potential</div>
                   </div>

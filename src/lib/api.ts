@@ -1345,6 +1345,113 @@ export async function getOrderHistory(limit: number = 100, offset: number = 0): 
 }
 }
 
+export async function syncOrderHistory(): Promise<{ ok: boolean; message?: string }> {
+  try {
+    const data = await fetchAPI<{ ok: boolean; message?: string }>('/orders/sync-history', {
+      method: 'POST',
+    });
+    return data;
+  } catch (error) {
+    logRequestIssue(
+      'syncOrderHistory',
+      'Failed to sync order history from exchange',
+      error,
+      'warn'
+    );
+    throw error;
+  }
+}
+
+export async function deleteOrder(orderId: string): Promise<{ ok: boolean; message?: string; deleted_order?: any }> {
+  try {
+    const data = await fetchAPI<{ ok: boolean; message?: string; deleted_order?: any }>(`/orders/${orderId}`, {
+      method: 'DELETE',
+    });
+    return data;
+  } catch (error) {
+    logRequestIssue(
+      'deleteOrder',
+      'Failed to delete order',
+      error,
+      'warn'
+    );
+    throw error;
+  }
+}
+
+export async function deleteOrderByCriteria(params: {
+  symbol?: string;
+  side?: string;
+  price?: number;
+  quantity?: number;
+  date?: string;
+}): Promise<{ ok: boolean; message?: string; deleted_count?: number; deleted_orders?: any[] }> {
+  try {
+    const queryParams = new URLSearchParams();
+    if (params.symbol) queryParams.append('symbol', params.symbol);
+    if (params.side) queryParams.append('side', params.side);
+    if (params.price !== undefined) queryParams.append('price', params.price.toString());
+    if (params.quantity !== undefined) queryParams.append('quantity', params.quantity.toString());
+    if (params.date) queryParams.append('date', params.date);
+    
+    const data = await fetchAPI<{ ok: boolean; message?: string; deleted_count?: number; deleted_orders?: any[] }>(`/orders/by-criteria?${queryParams.toString()}`, {
+      method: 'DELETE',
+    });
+    return data;
+  } catch (error) {
+    logRequestIssue(
+      'deleteOrderByCriteria',
+      'Failed to delete orders by criteria',
+      error,
+      'warn'
+    );
+    throw error;
+  }
+}
+
+export async function updateOrderTime(
+  orderId: string,
+  updateTime?: string,
+  createTime?: string
+): Promise<{ ok: boolean; message?: string; updated_fields?: string[]; order?: any }> {
+  try {
+    const body: any = {};
+    if (updateTime) body.update_time = updateTime;
+    if (createTime) body.create_time = createTime;
+    
+    const data = await fetchAPI<{ ok: boolean; message?: string; updated_fields?: string[]; order?: any }>(`/orders/${orderId}/update-time`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+    return data;
+  } catch (error) {
+    logRequestIssue(
+      'updateOrderTime',
+      'Failed to update order time',
+      error,
+      'warn'
+    );
+    throw error;
+  }
+}
+
+export async function syncOrderFromExchange(orderId: string): Promise<{ ok: boolean; message?: string; order?: any }> {
+  try {
+    const data = await fetchAPI<{ ok: boolean; message?: string; order?: any }>(`/orders/${orderId}/sync-from-exchange`, {
+      method: 'POST',
+    });
+    return data;
+  } catch (error) {
+    logRequestIssue(
+      'syncOrderFromExchange',
+      'Failed to sync order from Crypto.com exchange',
+      error,
+      'warn'
+    );
+    throw error;
+  }
+}
+
 // Trading
 export async function executeManualTrade(trade: ManualTradeRequest): Promise<unknown> {
   const data = await fetchAPI<unknown>('/manual-trade', {

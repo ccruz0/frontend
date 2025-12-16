@@ -2,7 +2,7 @@
 
 import '@/lib/polyfill';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { getDashboard, getOpenOrders, getOrderHistory, getTopCoins, saveCoinSettings, getTradingSignals, getDataSourcesStatus, getTradingConfig, saveTradingConfig, updateCoinConfig, addCustomTopCoin, removeCustomTopCoin, getDashboardState, getDashboardSnapshot, quickOrder, updateWatchlistAlert, updateBuyAlert, updateSellAlert, simulateAlert, deleteDashboardItemBySymbol, toggleLiveTrading, getTPSLOrderValues, getOpenOrdersSummary, dashboardBalancesToPortfolioAssets, getExpectedTakeProfitSummary, getExpectedTakeProfitDetails, getTelegramMessages, syncOrderHistory, deleteOrder, deleteOrderByCriteria, updateOrderTime, syncOrderFromExchange, DashboardState, DashboardBalance, WatchlistItem, OpenOrder, PortfolioAsset, TradingSignals, TopCoin, DataSourceStatus, TradingConfig, CoinSettings, TPSLOrderValues, UnifiedOpenOrder, OpenPosition, ExpectedTPSummary, ExpectedTPDetails, SimulateAlertResponse, TelegramMessage, StrategyDecision } from '@/lib/api';
+import { getDashboard, getOpenOrders, getOrderHistory, getTopCoins, saveCoinSettings, getTradingSignals, getDataSourcesStatus, getTradingConfig, saveTradingConfig, updateCoinConfig, addCustomTopCoin, removeCustomTopCoin, getDashboardState, getDashboardSnapshot, quickOrder, updateWatchlistAlert, updateBuyAlert, updateSellAlert, simulateAlert, deleteDashboardItemBySymbol, toggleLiveTrading, getTPSLOrderValues, getOpenOrdersSummary, dashboardBalancesToPortfolioAssets, getExpectedTakeProfitSummary, getExpectedTakeProfitDetails, getTelegramMessages, DashboardState, DashboardBalance, WatchlistItem, OpenOrder, PortfolioAsset, TradingSignals, TopCoin, DataSourceStatus, TradingConfig, CoinSettings, TPSLOrderValues, UnifiedOpenOrder, OpenPosition, ExpectedTPSummary, ExpectedTPDetails, SimulateAlertResponse, TelegramMessage, StrategyDecision } from '@/lib/api';
 import { getApiUrl } from '@/lib/environment';
 import { MonitoringNotificationsProvider, useMonitoringNotifications } from '@/app/context/MonitoringNotificationsContext';
 
@@ -3589,10 +3589,29 @@ function resolveDecisionIndexColor(value: number): string {
       return true;
     });
     
-    // REMOVED: Deduplication logic that was filtering out BTC_USDT when BTC_USD exists
-    // Both BTC_USD and BTC_USDT should be visible in the watchlist
-    // The previous logic was incorrectly treating them as duplicates
-    const finalCoins: TopCoin[] = cleaned;
+    // Also remove coins that are too similar (e.g., BTC_USD and BTC_USDT) for major bases only
+    const dedupeByQuoteBases = new Set(['BTC', 'ETH']);
+    const finalCoins: TopCoin[] = [];
+    for (const coin of cleaned) {
+      const [base, quote] = coin.instrument_name.split('_');
+      const shouldCheckSimilar = base ? dedupeByQuoteBases.has(base.toUpperCase()) : false;
+      const isDuplicate = finalCoins.some(existing => {
+        const [existingBase, existingQuote] = existing.instrument_name.split('_');
+        if (!shouldCheckSimilar) {
+          return false;
+        }
+        return existingBase === base && 
+               (existingQuote === quote || 
+                (existingQuote === 'USDT' && quote === 'USD') ||
+                (existingQuote === 'USD' && quote === 'USDT'));
+      });
+      
+      if (isDuplicate) {
+        console.log(`🔄 Removing similar coin: ${coin.instrument_name} (similar to existing)`);
+      } else {
+        finalCoins.push(coin);
+      }
+    }
     
     console.log(`✅ Duplicate removal: ${coins.length} → ${finalCoins.length} coins`);
     return finalCoins;
@@ -11050,36 +11069,7 @@ ${marginText}
                 </>
               )}
               <button
-                onClick={async () => {
-                  setExecutedOrdersLoading(true);
-                  setExecutedOrdersError(null);
-                  try {
-                    // First sync from Crypto.com exchange
-                    console.log('🔄 Syncing order history from Crypto.com exchange...');
-                    await syncOrderHistory();
-                    console.log('✅ Order history synced from exchange');
-                    
-                    // Then fetch updated orders from database
-                    await fetchExecutedOrders({ showLoader: false });
-                    console.log('✅ Executed orders refreshed');
-                  } catch (err) {
-                    logHandledError(
-                      'refreshExecutedOrders',
-                      'Failed to refresh executed orders',
-                      err
-                    );
-                    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-                    if (errorMsg.includes('timeout') || errorMsg.includes('Timeout')) {
-                      setExecutedOrdersError('Request timeout - the server may be processing. Please try again.');
-                    } else if (errorMsg.includes('Failed to fetch') || errorMsg.includes('Network')) {
-                      setExecutedOrdersError('Network error - please check your connection and try again.');
-                    } else {
-                      setExecutedOrdersError(`Error refreshing orders: ${errorMsg}`);
-                    }
-                  } finally {
-                    setExecutedOrdersLoading(false);
-                  }
-                }}
+                onClick={() => fetchExecutedOrders({ showLoader: true })}
                 disabled={executedOrdersLoading}
                 className={`px-4 py-2 rounded-lg font-medium transition-all ${
                   executedOrdersLoading
@@ -11472,47 +11462,6 @@ ${marginText}
                           {order.status}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex gap-2 justify-center">
-                          <button
-                            onClick={async () => {
-                              try {
-                                await syncOrderFromExchange(order.order_id);
-                                // Refresh executed orders after sync
-                                await fetchExecutedOrders({ showLoader: false });
-                                alert('✅ Order synced from Crypto.com successfully. Date and data updated.');
-                              } catch (err) {
-                                console.error('Error syncing order from exchange:', err);
-                                alert(`Failed to sync order from Crypto.com: ${err instanceof Error ? err.message : 'Unknown error'}`);
-                              }
-                            }}
-                            className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                            title="Sync this order from Crypto.com to update date and data"
-                          >
-                            🔄 Sync from Crypto.com
-                          </button>
-                          <button
-                            onClick={async () => {
-                              if (!confirm(`Are you sure you want to delete this order?\n\n${order.instrument_name} ${order.side} ${order.order_type}\nOrder ID: ${order.order_id}`)) {
-                                return;
-                              }
-                              try {
-                                await deleteOrder(order.order_id);
-                                // Refresh executed orders after deletion
-                                await fetchExecutedOrders({ showLoader: false });
-                                alert('Order deleted successfully');
-                              } catch (err) {
-                                console.error('Error deleting order:', err);
-                                alert(`Failed to delete order: ${err instanceof Error ? err.message : 'Unknown error'}`);
-                              }
-                            }}
-                            className="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-                            title="Delete this order"
-                          >
-                            🗑️ Delete
-                          </button>
-                        </div>
-                      </td>
                     </tr>
                   );
                 })}
@@ -11530,40 +11479,10 @@ ${marginText}
                     </p>
                   )}
                   <button
-                    onClick={async () => {
-                      setExecutedOrdersLoading(true);
-                      setExecutedOrdersError(null);
-                      try {
-                        // First sync from Crypto.com exchange
-                        console.log('🔄 Syncing order history from Crypto.com exchange...');
-                        await syncOrderHistory();
-                        console.log('✅ Order history synced from exchange');
-                        
-                        // Then fetch updated orders from database
-                        await fetchExecutedOrders({ showLoader: false });
-                        console.log('✅ Executed orders refreshed');
-                      } catch (err) {
-                        logHandledError(
-                          'refreshExecutedOrders',
-                          'Failed to refresh executed orders',
-                          err
-                        );
-                        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-                        if (errorMsg.includes('timeout') || errorMsg.includes('Timeout')) {
-                          setExecutedOrdersError('Request timeout - the server may be processing. Please try again.');
-                        } else if (errorMsg.includes('Failed to fetch') || errorMsg.includes('Network')) {
-                          setExecutedOrdersError('Network error - please check your connection and try again.');
-                        } else {
-                          setExecutedOrdersError(`Error refreshing orders: ${errorMsg}`);
-                        }
-                      } finally {
-                        setExecutedOrdersLoading(false);
-                      }
-                    }}
-                    disabled={executedOrdersLoading}
-                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    onClick={() => fetchExecutedOrders({ showLoader: true })}
+                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
-                    {executedOrdersLoading ? '🔄 Updating...' : 'Try Again'}
+                    Try Again
                   </button>
                 </div>
               ) : (

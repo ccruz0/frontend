@@ -1765,6 +1765,8 @@ function DashboardPageContent() {
     
     return sortData(filteredExecutedOrders, executedOrdersSort.field, executedOrdersSort.direction, (item, field) => {
       switch (field) {
+        case 'created_date':
+          return item.create_time ?? 0;
         case 'symbol':
           return item.instrument_name || '';
         case 'side':
@@ -11289,6 +11291,7 @@ ${marginText}
             <Table>
               <thead>
                 <tr className="bg-gradient-to-r from-gray-800 to-gray-700 text-white">
+                  <th className="px-4 py-3 text-left font-semibold">Created</th>
                   <th className="px-4 py-3 text-left font-semibold">Symbol</th>
                   <th className="px-4 py-3 text-left font-semibold">Side</th>
                   <th className="px-4 py-3 text-left font-semibold">Type</th>
@@ -11303,6 +11306,7 @@ ${marginText}
               <tbody>
                 {Array.from({ length: 5 }).map((_, idx) => (
                   <tr key={`executed-order-skeleton-${idx}`} className="border-b">
+                    <td className="px-4 py-3"><SkeletonBlock className="h-4 w-32" /></td>
                     <td className="px-4 py-3"><SkeletonBlock className="h-4 w-32" /></td>
                     <td className="px-4 py-3"><SkeletonBlock className="h-4 w-16" /></td>
                     <td className="px-4 py-3"><SkeletonBlock className="h-4 w-20" /></td>
@@ -11320,6 +11324,7 @@ ${marginText}
             <Table>
               <thead>
                 <tr className="bg-gradient-to-r from-gray-800 to-gray-700 text-white">
+                  <SortableHeader field="created_date" sortState={executedOrdersSort} setSortState={setExecutedOrdersSort} className="px-4 py-3 text-left font-semibold">Created</SortableHeader>
                   <SortableHeader field="symbol" sortState={executedOrdersSort} setSortState={setExecutedOrdersSort} className="px-4 py-3 text-left font-semibold">Symbol</SortableHeader>
                   <SortableHeader field="side" sortState={executedOrdersSort} setSortState={setExecutedOrdersSort} className="px-4 py-3 text-left font-semibold">Side</SortableHeader>
                   <SortableHeader field="type" sortState={executedOrdersSort} setSortState={setExecutedOrdersSort} className="px-4 py-3 text-left font-semibold">Type</SortableHeader>
@@ -11333,6 +11338,13 @@ ${marginText}
               </thead>
               <tbody>
                 {sortedExecutedOrdersData.map((order, index) => {
+                  // Format created time
+                  const createdTimeStr = order.create_time
+                    ? formatTimestamp(order.create_time)
+                    : ((order as unknown as { create_datetime?: string }).create_datetime
+                      ? formatTimestamp((order as unknown as { create_datetime?: string }).create_datetime)
+                      : 'N/A');
+
                   // Format execution time - prioritize timestamps for accurate timezone conversion
                   let execTimeStr = '—';
                   // Prefer update_time (timestamp) for accurate UTC to local conversion
@@ -11376,6 +11388,7 @@ ${marginText}
                       key={order.order_id} 
                       className={`border-b ${hasYellowBackground ? 'bg-yellow-100 hover:bg-yellow-200' : 'hover:bg-gray-50'}`}
                     >
+                      <td className="px-4 py-3 text-sm text-gray-600 font-mono">{createdTimeStr}</td>
                       <td className="px-4 py-3 font-medium">{order.instrument_name}</td>
                       <td className="px-4 py-3">
                         <Badge variant={order.side === 'BUY' ? 'success' : 'danger'}>

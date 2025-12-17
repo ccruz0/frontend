@@ -2137,7 +2137,7 @@ function resolveDecisionIndexColor(value: number): string {
     
     // BUY Criteria - CANONICAL: Use backend reasons for status, show values for context
     lines.push('🟢 CRITERIOS BUY (todos deben cumplirse):');
-    const buyBelow = rules.rsi?.buyBelow || 40;
+    const buyBelow = rules.rsi?.buyBelow ?? 40;
     // CANONICAL: Use backend buy_rsi_ok for status, not local calculation
     const buyRsiOk = strategyReasons.buy_rsi_ok;
     const rsiBuyStatus = buyRsiOk === true ? '✓' : buyRsiOk === false ? '✗' : '?';
@@ -2230,9 +2230,11 @@ function resolveDecisionIndexColor(value: number): string {
     } else {
       lines.push('🔴 CRITERIOS SELL:');
     }
-    const sellAbove = rules.rsi?.sellAbove || 70;
-    const rsiSellStatus = (rsi !== undefined && rsi !== null) ? (rsi > sellAbove ? '✓' : '✗') : '?';
-    lines.push(`  • RSI > ${sellAbove} ${(rsi !== undefined && rsi !== null) ? `(actual: ${rsi.toFixed(2)}${rsiSellStatus})` : ''}`);
+    const sellAbove = rules.rsi?.sellAbove ?? 70;
+    // CANONICAL: Use backend sell_rsi_ok for status, not local calculation
+    const sellRsiOk = strategyReasons.sell_rsi_ok;
+    const rsiSellStatus = sellRsiOk === true ? '✓' : sellRsiOk === false ? '✗' : '?';
+    lines.push(`  • RSI > ${sellAbove} ${(rsi !== undefined && rsi !== null) ? `(actual: ${rsi.toFixed(2)}${rsiSellStatus})` : rsiSellStatus}`);
     
     if (rules.maChecks?.ma50 && ma50 !== undefined && ema10 !== undefined) {
       // Calculate percentage difference
@@ -9952,7 +9954,13 @@ ${marginText}
                                 safeGetStrategyDecision(coin.strategy) ||
                                 undefined;
                               
-                              const preset = coinPresets[normalizeSymbolKey(coin.instrument_name)] || 'swing';
+                              // Prefer backend-resolved strategy profile to avoid UI/backend mismatches
+                              // (e.g., RSI threshold shown for Conservative while backend is evaluating Aggressive).
+                              const backendProfile = (coin as unknown as { strategy_profile?: { preset?: string; approach?: string } }).strategy_profile;
+                              const preset =
+                                backendProfile?.preset && backendProfile?.approach
+                                  ? `${backendProfile.preset}-${backendProfile.approach}`
+                                  : (coinPresets[normalizeSymbolKey(coin.instrument_name)] || 'swing');
                               let presetType: Preset;
                               let riskMode: RiskMode;
                               

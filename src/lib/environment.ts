@@ -46,39 +46,63 @@ class EnvironmentManager {
     const protocol = window.location.protocol; // http: or https:
     const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
     const isHiloVivo = hostname.includes('hilovivo.com') || hostname.includes('hilovivo');
-    const isAWS = hostname.includes('54.254.150.31') || hostname.includes('175.41.189.249') || hostname.includes('ec2');
+    const isAWS = hostname.includes('47.130.143.159') || hostname.includes('175.41.189.249') || hostname.includes('ec2');
 
     // Check if NEXT_PUBLIC_API_URL was set at build time (compiled into bundle)
-    // This will be http://backend-aws:8002/api when built in Docker
+    // This will be '/api' when built with docker-compose.yml frontend-aws settings
     const compiledApiUrl = process.env.NEXT_PUBLIC_API_URL;
 
     console.log('🔍 Environment detection (client):', { hostname, protocol, isLocalhost, isAWS, isHiloVivo, compiledApiUrl });
+    // Always log to help debug
+    console.log('[ENV DEBUG] window.location:', { hostname: window.location.hostname, href: window.location.href, protocol: window.location.protocol });
 
+    // Handle relative paths (like '/api') - convert to absolute URL based on current hostname
+    if (compiledApiUrl && compiledApiUrl.startsWith('/') && !compiledApiUrl.startsWith('//')) {
+      const config = {
+        apiUrl: `${protocol}//${hostname}${compiledApiUrl}`,
+        environment: (isHiloVivo || isAWS) ? 'aws' as const : 'local' as const,
+        isLocal: !isHiloVivo && !isAWS,
+        isAWS: isHiloVivo || isAWS
+      };
+      console.log('✅ Using relative API URL converted to absolute:', config);
+      return config;
+    }
+
+    // Only use compiledApiUrl if it's a valid, browser-accessible URL (not Docker service name)
+    // Docker service names like 'backend-aws' cannot be resolved by browsers
     if (compiledApiUrl && compiledApiUrl.startsWith('http')) {
       try {
         const parsed = new URL(compiledApiUrl);
-        const forcedConfig = {
-          apiUrl: compiledApiUrl,
-          environment: 'aws' as const,
-          isLocal: false,
-          isAWS: true
-        };
-        console.log('🔍 Using forced API URL from NEXT_PUBLIC_API_URL:', forcedConfig);
-        return forcedConfig;
+        // Skip Docker service names - browsers can't resolve them
+        const isDockerServiceName = parsed.hostname === 'backend-aws' || parsed.hostname.includes('backend-aws');
+        
+        if (!isDockerServiceName) {
+          const forcedConfig = {
+            apiUrl: compiledApiUrl,
+            environment: 'aws' as const,
+            isLocal: false,
+            isAWS: true
+          };
+          console.log('🔍 Using forced API URL from NEXT_PUBLIC_API_URL:', forcedConfig);
+          return forcedConfig;
+        } else {
+          console.log('🔍 Skipping Docker service name in NEXT_PUBLIC_API_URL, using hostname detection');
+        }
       } catch (parseErr) {
         console.warn('Invalid NEXT_PUBLIC_API_URL provided:', compiledApiUrl, parseErr);
       }
     }
 
     if (isHiloVivo) {
-      // Production domain - use same domain for API (Nginx will proxy /api to backend)
+      // Production domain - use relative path /api (works with current domain)
+      // Nginx will proxy /api to backend on port 8002
       const config = {
-        apiUrl: `${protocol}//${hostname}/api`,
+        apiUrl: '/api',  // Relative path - browser will use current domain automatically
         environment: 'aws' as const,
         isLocal: false,
         isAWS: true
       };
-      console.log('🔍 Using Hilo Vivo domain config:', config);
+      console.log('✅ Using Hilo Vivo domain config (relative /api):', config);
       return config;
     } else if (isLocalhost) {
       // Local browser access (user accessing http://localhost:3000 from their Mac)

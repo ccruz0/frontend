@@ -594,7 +594,11 @@ export async function getTPSLOrderValues(): Promise<TPSLOrderValues> {
   }
 }
 
-export async function getOrderHistory(limit: number = 100, offset: number = 0): Promise<{ 
+export async function getOrderHistory(
+  limit: number = 100,
+  offset: number = 0,
+  sync: boolean = false
+): Promise<{ 
   orders: OpenOrder[], 
   count: number,
   total?: number,
@@ -605,6 +609,9 @@ export async function getOrderHistory(limit: number = 100, offset: number = 0): 
       limit: limit.toString(),
       offset: offset.toString()
     });
+    if (sync) {
+      params.set('sync', 'true');
+    }
     const data = await fetchAPI<{ 
       orders?: OpenOrder[]; 
       count?: number;

@@ -18,6 +18,11 @@ type ExtendedOpenOrder = OpenOrder & {
   order_value?: number | string;
   cumulative_quantity?: number | string;
   avg_price?: number | string;
+  // UnifiedOpenOrder/metadata fields that may exist depending on endpoint/source
+  trigger_type?: string | null;
+  is_trigger?: boolean;
+  raw?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 };
 
 // Transform UnifiedOpenOrder[] to OpenPosition[]
@@ -985,7 +990,7 @@ function DashboardPageContent() {
     data: T[],
     field: string | null,
     direction: 'asc' | 'desc',
-    getValue: (item: T, field: string) => any
+    getValue: (item: T, field: string) => unknown
   ): T[] => {
     if (!field) return data;
     
@@ -4504,7 +4509,9 @@ function resolveDecisionIndexColor(value: number): string {
       // Load all pages if loadAll is true, otherwise just load one page
       while (hasMore && (loadAll || pageCount === 0) && pageCount < maxPages) {
         try {
-          const response = await getOrderHistory(pageLimit, currentOffset);
+          // Only sync from exchange on-demand (first page) when user explicitly refreshes (showLoader=true).
+          const shouldSync = pageCount === 0 && showLoader;
+          const response = await getOrderHistory(pageLimit, currentOffset, shouldSync);
           const pageOrders = response.orders || [];
           
           if (pageOrders.length === 0) {
@@ -4540,24 +4547,28 @@ function resolveDecisionIndexColor(value: number): string {
       
       console.log(`📥 Fetched ${allNewOrders.length} executed orders from ${pageCount} page(s)`);
       
-      // Get existing order IDs to avoid duplicates using functional update
+      // Merge by order_id (update existing + add new) using functional update
       setExecutedOrders(prevOrders => {
-        const existingOrderIds = new Set(prevOrders.map(o => o.order_id));
-        
-        // Only add orders that don't exist yet
-        const ordersToAdd = allNewOrders.filter(order => !existingOrderIds.has(order.order_id));
-        
-        if (ordersToAdd.length > 0) {
-          // Add new orders to the existing list (prepend to show newest first)
-          const newTotal = ordersToAdd.length + prevOrders.length;
-          console.log(`✅ Added ${ordersToAdd.length} new executed orders (${prevOrders.length} existing, ${newTotal} total)`);
-          setExecutedOrdersLastUpdate(new Date()); // Set last update timestamp
-          return [...ordersToAdd, ...prevOrders];
-        } else {
-          console.log(`📋 No new executed orders to add (${prevOrders.length} existing)`);
-          setExecutedOrdersLastUpdate(new Date()); // Set last update timestamp even if no new orders
-          return prevOrders; // No changes
+        const merged = new Map(prevOrders.map(o => [o.order_id, o] as const));
+        let addedCount = 0;
+        let updatedCount = 0;
+
+        for (const order of allNewOrders) {
+          if (merged.has(order.order_id)) {
+            updatedCount += 1;
+          } else {
+            addedCount += 1;
+          }
+          merged.set(order.order_id, order);
         }
+
+        const mergedOrders = Array.from(merged.values());
+        // Keep newest first (fall back safely if update_time is missing).
+        mergedOrders.sort((a, b) => (Number(b.update_time || 0) - Number(a.update_time || 0)));
+
+        setExecutedOrdersLastUpdate(new Date());
+        console.log(`✅ Executed orders merged: +${addedCount} new, ~${updatedCount} updated, total=${mergedOrders.length}`);
+        return mergedOrders;
       });
       setExecutedOrdersError(null);
     } catch (err) {
@@ -6467,11 +6478,11 @@ function resolveDecisionIndexColor(value: number): string {
                             
                             // Identify TP orders (check order_type, trigger_type/order_role, and raw metadata)
                             // Use comprehensive check matching the tooltip logic
-                            const triggerType = ((order.trigger_type || (order as any).trigger_type || '').toUpperCase()).trim();
-                            const rawOrder = (order as any).raw || (order as any).metadata || {};
+                            const triggerType = (((extendedOrder.trigger_type ?? (order as any).trigger_type ?? '') as string).toUpperCase()).trim();
+                            const rawOrder = extendedOrder.raw || extendedOrder.metadata || (order as any).raw || (order as any).metadata || {};
                             const rawOrderType = ((rawOrder.order_type || rawOrder.type || '').toUpperCase()).trim();
                             const rawOrderRole = ((rawOrder.order_role || '').toUpperCase()).trim();
-                            const isTrigger = order.is_trigger || (order as any).is_trigger || false;
+                            const isTrigger = Boolean(extendedOrder.is_trigger ?? (order as any).is_trigger ?? false);
                             
                             const isTP = 
                               orderType.includes('TAKE_PROFIT') || 
@@ -6848,11 +6859,11 @@ function resolveDecisionIndexColor(value: number): string {
                             
                             // Identify TP orders (check order_type, trigger_type/order_role, and raw metadata)
                             // Use comprehensive check matching the tooltip logic
-                            const triggerType = ((order.trigger_type || (order as any).trigger_type || '').toUpperCase()).trim();
-                            const rawOrder = (order as any).raw || (order as any).metadata || {};
+                            const triggerType = (((extendedOrder.trigger_type ?? (order as any).trigger_type ?? '') as string).toUpperCase()).trim();
+                            const rawOrder = extendedOrder.raw || extendedOrder.metadata || (order as any).raw || (order as any).metadata || {};
                             const rawOrderType = ((rawOrder.order_type || rawOrder.type || '').toUpperCase()).trim();
                             const rawOrderRole = ((rawOrder.order_role || '').toUpperCase()).trim();
-                            const isTrigger = order.is_trigger || (order as any).is_trigger || false;
+                            const isTrigger = Boolean(extendedOrder.is_trigger ?? (order as any).is_trigger ?? false);
                             
                             const isTP = 
                               orderType.includes('TAKE_PROFIT') || 

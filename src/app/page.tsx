@@ -1203,13 +1203,22 @@ function DashboardPageContent() {
       setIsUpdating(false);
     }
   }, []);
-  // Helper function to check if an order status is cancelled
+  // Helper function to check if an order status is cancelled, rejected, expired, or filled
   // Must be defined before useMemo hooks that use it to avoid TDZ (Temporal Dead Zone) errors
   // Wrapped in useCallback to ensure stable reference for dependency arrays
   const isCancelledStatus = useCallback((status: string | null | undefined): boolean => {
     if (!status) return false;
     const normalized = status.toUpperCase();
-    return normalized === 'CANCELLED' || normalized === 'CANCELED';
+    // Include all statuses that should be hidden when "Ocultar Canceladas" is ON:
+    // - CANCELLED/CANCELED: explicitly cancelled orders
+    // - REJECTED: orders that were rejected by the exchange
+    // - EXPIRED: orders that expired
+    // - FILLED: orders that were filled (shouldn't be in "open orders" anyway)
+    return normalized === 'CANCELLED' || 
+           normalized === 'CANCELED' || 
+           normalized === 'REJECTED' || 
+           normalized === 'EXPIRED' || 
+           normalized === 'FILLED';
   }, []);
 
   const coinMembershipSignature = useMemo(
@@ -6485,6 +6494,8 @@ function resolveDecisionIndexColor(value: number): string {
                             const triggerType = (((extendedOrder.trigger_type ?? (order as any).trigger_type ?? '') as string).toUpperCase()).trim();
                             const rawOrder = extendedOrder.raw || extendedOrder.metadata || (order as any).raw || (order as any).metadata || {};
                             const rawOrderType = ((rawOrder.order_type || rawOrder.type || '').toUpperCase()).trim();
+                            // Check order_role at top level first (from backend), then in raw/metadata
+                            const orderRole = ((order.order_role ?? extendedOrder.order_role ?? rawOrder.order_role ?? '') as string).toUpperCase().trim();
                             const rawOrderRole = ((rawOrder.order_role || '').toUpperCase()).trim();
                             const isTrigger = Boolean(extendedOrder.is_trigger ?? (order as any).is_trigger ?? false);
                             
@@ -6494,6 +6505,7 @@ function resolveDecisionIndexColor(value: number): string {
                               triggerType === 'TAKE_PROFIT' ||
                               (isTrigger && triggerType && triggerType.includes('TAKE_PROFIT')) ||
                               rawOrderType.includes('TAKE_PROFIT') ||
+                              orderRole === 'TAKE_PROFIT' ||
                               rawOrderRole === 'TAKE_PROFIT';
                             const isSL = 
                               orderType.includes('STOP_LOSS') || 
@@ -6501,6 +6513,7 @@ function resolveDecisionIndexColor(value: number): string {
                               triggerType === 'STOP_LOSS' ||
                               (isTrigger && triggerType && triggerType.includes('STOP_LOSS')) ||
                               rawOrderType.includes('STOP_LOSS') ||
+                              orderRole === 'STOP_LOSS' ||
                               rawOrderRole === 'STOP_LOSS';
                             
                             if (isTP) {
@@ -6866,6 +6879,8 @@ function resolveDecisionIndexColor(value: number): string {
                             const triggerType = (((extendedOrder.trigger_type ?? (order as any).trigger_type ?? '') as string).toUpperCase()).trim();
                             const rawOrder = extendedOrder.raw || extendedOrder.metadata || (order as any).raw || (order as any).metadata || {};
                             const rawOrderType = ((rawOrder.order_type || rawOrder.type || '').toUpperCase()).trim();
+                            // Check order_role at top level first (from backend), then in raw/metadata
+                            const orderRole = ((order.order_role ?? extendedOrder.order_role ?? rawOrder.order_role ?? '') as string).toUpperCase().trim();
                             const rawOrderRole = ((rawOrder.order_role || '').toUpperCase()).trim();
                             const isTrigger = Boolean(extendedOrder.is_trigger ?? (order as any).is_trigger ?? false);
                             
@@ -6875,12 +6890,14 @@ function resolveDecisionIndexColor(value: number): string {
                               triggerType === 'TAKE_PROFIT' ||
                               (isTrigger && triggerType && triggerType.includes('TAKE_PROFIT')) ||
                               rawOrderType.includes('TAKE_PROFIT') ||
+                              orderRole === 'TAKE_PROFIT' ||
                               rawOrderRole === 'TAKE_PROFIT';
                             const isSL = 
                               orderType.includes('STOP_LOSS') || 
                               orderType === 'STOP_LOSS_LIMIT' || 
                               triggerType === 'STOP_LOSS' ||
                               rawOrderType.includes('STOP_LOSS') ||
+                              orderRole === 'STOP_LOSS' ||
                               rawOrderRole === 'STOP_LOSS';
                             
                             if (isTP) {
@@ -8471,7 +8488,7 @@ function resolveDecisionIndexColor(value: number): string {
                           </button>
                         </div>
                       <a 
-                        href={`https://crypto.com/exchange/trade/${(coin.instrument_name || '').replace(/_/g, '/')}`}
+                        href={`https://crypto.com/exchange/trade/${coin.instrument_name || ''}`}
             target="_blank"
             rel="noopener noreferrer"
                         className="text-blue-600 hover:text-blue-800 underline"

@@ -65,6 +65,7 @@ export type OpenOrder = {
   quantity: string;
   price: string;
   status: string;
+  order_role?: string | null; // STOP_LOSS, TAKE_PROFIT, etc.
   create_time: number;
   update_time: number;
   imported_at?: number | null; // Timestamp when order was imported from CSV
@@ -2370,6 +2371,8 @@ export interface MonitoringSummary {
   scheduler_ticks: number;
   errors: string[];
   last_backend_restart: number | null;
+  backend_restart_status?: 'restarting' | 'restarted' | 'failed' | null;
+  backend_restart_timestamp?: number | null;
   alerts: Array<{
     type: string;
     symbol: string;
@@ -2428,6 +2431,8 @@ export async function getMonitoringSummary(): Promise<MonitoringSummary> {
       scheduler_ticks: 0,
       errors: [errorMsg],
       last_backend_restart: null,
+      backend_restart_status: null,
+      backend_restart_timestamp: null,
       alerts: []
     };
   }
@@ -2479,5 +2484,30 @@ export async function getSignalThrottleState(limit = 200): Promise<SignalThrottl
     const errorMsg = error instanceof Error ? error.message : String(error);
     console.error('❌ getSignalThrottleState: Error fetching throttle data:', errorMsg);
     return [];
+  }
+}
+
+export interface RestartBackendResponse {
+  ok: boolean;
+  status: 'restarting' | 'restarted' | 'failed';
+  message: string;
+}
+
+export async function restartBackend(): Promise<RestartBackendResponse> {
+  try {
+    const data = await fetchAPI<RestartBackendResponse>('/monitoring/backend/restart', {
+      method: 'POST',
+    });
+    return data;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ restartBackend: Error restarting backend:', errorMsg);
+    logRequestIssue(
+      'restartBackend',
+      `Backend restart failure: ${errorMsg}`,
+      error,
+      'error'
+    );
+    throw error;
   }
 }

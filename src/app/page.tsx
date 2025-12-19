@@ -892,7 +892,7 @@ function DashboardPageContent() {
   const [openOrdersLoading, setOpenOrdersLoading] = useState(true);
   const [openOrdersLastUpdate, setOpenOrdersLastUpdate] = useState<Date | null>(null);
   const [openOrdersError, setOpenOrdersError] = useState<string | null>(null);
-  const [executedOrdersLoading, setExecutedOrdersLoading] = useState(true);
+  const [executedOrdersLoading, setExecutedOrdersLoading] = useState(true); // Start as true to show loading on initial page load
   const [executedOrdersLastUpdate, setExecutedOrdersLastUpdate] = useState<Date | null>(null);
   const [executedOrdersError, setExecutedOrdersError] = useState<string | null>(null);
   const [portfolioError, setPortfolioError] = useState<string | null>(null);
@@ -1446,9 +1446,17 @@ function DashboardPageContent() {
     // Defensive check: ensure executedOrders is an array
     if (!Array.isArray(executedOrders)) return [];
     const filtered = executedOrders.filter(order => {
-      // Filter out cancelled orders if hideCancelled is true
-      if (hideCancelled && isCancelledStatus(order.status)) {
-        return false;
+      // Filter out cancelled/rejected/expired orders if hideCancelled is true
+      // BUT NOT FILLED orders - those are the main executed orders we want to show
+      if (hideCancelled && order.status) {
+        const normalized = order.status.toUpperCase();
+        // Only hide CANCELLED, REJECTED, EXPIRED - NOT FILLED
+        if (normalized === 'CANCELLED' || 
+            normalized === 'CANCELED' || 
+            normalized === 'REJECTED' || 
+            normalized === 'EXPIRED') {
+          return false;
+        }
       }
       
       const matchesSymbol = !orderFilter.symbol || order.instrument_name.toLowerCase().includes(orderFilter.symbol.toLowerCase());
@@ -3374,7 +3382,7 @@ function resolveDecisionIndexColor(value: number): string {
   const fetchPortfolioRef = useRef<(() => Promise<void>) | null>(null);
   const fetchOpenOrdersRef = useRef<(() => Promise<void>) | null>(null);
   const fetchOpenOrdersSummaryRef = useRef<((options?: { showLoader?: boolean; backgroundRefresh?: boolean }) => Promise<void>) | null>(null);
-  const fetchExecutedOrdersRef = useRef<(() => Promise<void>) | null>(null);
+  const fetchExecutedOrdersRef = useRef<((options?: { showLoader?: boolean; limit?: number; offset?: number; loadAll?: boolean }) => Promise<void>) | null>(null);
   const fetchSignalsRef = useRef<((symbol: string) => Promise<void>) | null>(null);
 
   const runSlowTick = useCallback(async () => {
@@ -3388,7 +3396,7 @@ function resolveDecisionIndexColor(value: number): string {
     await Promise.allSettled([
       fetchPortfolioFn(),
       fetchOpenOrdersFn(),
-      fetchExecutedOrdersFn(),
+      fetchExecutedOrdersFn({ showLoader: false }),
     ]);
     
     // Update top coins data for Trade NO coins (less frequent updates)
@@ -4506,12 +4514,17 @@ function resolveDecisionIndexColor(value: number): string {
 
   // Fetch executed orders - loads all orders with pagination
   const fetchExecutedOrders = useCallback(async (options: { showLoader?: boolean; limit?: number; offset?: number; loadAll?: boolean } = {}) => {
-    const { showLoader = false, limit = 500, offset = 0, loadAll = true } = options; // Load all pages by default
-    if (showLoader) {
-      setExecutedOrdersLoading(true);
-    }
+    // Use smaller limit for initial load to avoid backend overload (500 orders can be heavy)
+    // Only use large limit when explicitly refreshing
+    const { showLoader = false, limit = showLoader ? 500 : 50, offset = 0, loadAll = showLoader } = options;
+    console.log('🔄 fetchExecutedOrders called with options:', { showLoader, limit, offset, loadAll });
+    
+    // Always set loading to true when function is called (whether initial load or manual refresh)
+    // This ensures loading state is shown during fetch
+    setExecutedOrdersLoading(true);
     setExecutedOrdersError(null);
     try {
+      console.log('📡 Starting to fetch executed orders...');
       let allNewOrders: OpenOrder[] = [];
       let currentOffset = offset;
       const pageLimit = limit;
@@ -4524,7 +4537,9 @@ function resolveDecisionIndexColor(value: number): string {
         try {
           // Only sync from exchange on-demand (first page) when user explicitly refreshes (showLoader=true).
           const shouldSync = pageCount === 0 && showLoader;
+          console.log(`📥 Fetching page ${pageCount + 1} (offset=${currentOffset}, limit=${pageLimit}, sync=${shouldSync})`);
           const response = await getOrderHistory(pageLimit, currentOffset, shouldSync);
+          console.log(`✅ Received response: ${response.orders?.length || 0} orders, has_more=${response.has_more}`);
           const pageOrders = response.orders || [];
           
           if (pageOrders.length === 0) {
@@ -4548,9 +4563,14 @@ function resolveDecisionIndexColor(value: number): string {
           }
         } catch (pageError) {
           console.error(`Error loading page ${pageCount + 1} of executed orders:`, pageError);
-          // If first page fails, throw error; otherwise continue with what we have
-          if (pageCount === 0) {
+          // If first page fails and we have no orders yet, throw error
+          // But if we already have some orders, continue with what we have
+          if (pageCount === 0 && allNewOrders.length === 0) {
             throw pageError;
+          }
+          // If we have some orders already, log warning but continue
+          if (allNewOrders.length > 0) {
+            console.warn(`⚠️ Page ${pageCount + 1} failed, but continuing with ${allNewOrders.length} orders already loaded`);
           }
           // Stop pagination if a page fails (but keep what we've loaded so far)
           hasMore = false;
@@ -4585,6 +4605,7 @@ function resolveDecisionIndexColor(value: number): string {
       });
       setExecutedOrdersError(null);
     } catch (err) {
+      console.error('❌ Error in fetchExecutedOrders:', err);
       logHandledError(
         'fetchExecutedOrders',
         'Failed to fetch executed orders (request will retry on next tick)',
@@ -4599,6 +4620,9 @@ function resolveDecisionIndexColor(value: number): string {
         setExecutedOrdersError(`Error loading orders: ${errorMsg}`);
       }
     } finally {
+      // CRITICAL: Always set loading to false, even if there was an error
+      // This ensures the button is never permanently disabled
+      console.log('✅ fetchExecutedOrders completed, setting loading to false');
       setExecutedOrdersLoading(false);
     }
   }, []); // Remove executedOrders from dependencies to avoid infinite loops
@@ -5560,7 +5584,15 @@ function resolveDecisionIndexColor(value: number): string {
           }
           throw err;
         }),
-        fetchExecutedOrdersFn().then(() => console.log('✅ Executed orders fetched from backend')),
+        fetchExecutedOrdersFn({ showLoader: false, limit: 50, loadAll: false }).then(() => console.log('✅ Executed orders fetched from backend')).catch(err => {
+          console.warn('⚠️ Initial executed orders fetch failed (will retry):', err);
+          // Retry once after a short delay if initial fetch fails
+          setTimeout(() => {
+            fetchExecutedOrdersFn({ showLoader: false, limit: 50, loadAll: false }).catch(retryErr => {
+              console.error('❌ Retry also failed:', retryErr);
+            });
+          }, 2000);
+        }),
         fetchDataSourceStatusFn().then(() => console.log('✅ Data source status fetched from backend')),
         fetchTradingConfigFn().then(() => console.log('✅ Trading config fetched from backend'))
       ]);
@@ -11535,13 +11567,30 @@ ${marginText}
                   </button>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <p className="text-gray-500">No executed orders found.</p>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-gray-500 font-medium">No executed orders found.</p>
+                    <p className="text-sm text-gray-500 mt-2">
+                      This could mean:
+                    </p>
+                    <ul className="text-sm text-gray-500 mt-2 list-disc list-inside text-left max-w-md mx-auto">
+                      <li>No orders have been executed yet</li>
+                      <li>Orders need to be synced from the exchange</li>
+                      <li>Orders exist but are filtered out</li>
+                    </ul>
+                  </div>
                   {executedOrdersLastUpdate && (
                     <p className="text-xs text-gray-400">
                       Last updated: {formatDateTime(executedOrdersLastUpdate)}
                     </p>
                   )}
+                  <button
+                    onClick={() => fetchExecutedOrders({ showLoader: true, loadAll: true })}
+                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    disabled={executedOrdersLoading}
+                  >
+                    {executedOrdersLoading ? '🔄 Syncing from Exchange...' : '🔄 Sync from Exchange'}
+                  </button>
                 </div>
               )}
             </div>

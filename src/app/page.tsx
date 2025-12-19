@@ -4522,8 +4522,9 @@ function resolveDecisionIndexColor(value: number): string {
   // Fetch executed orders - loads all orders with pagination
   const fetchExecutedOrders = useCallback(async (options: { showLoader?: boolean; limit?: number; offset?: number; loadAll?: boolean } = {}) => {
     // Use smaller limit for initial load to avoid backend overload (500 orders can be heavy)
+    // But ensure we load enough to find FILLED orders even if first pages are CANCELLED
     // Only use large limit when explicitly refreshing
-    const { showLoader = false, limit = showLoader ? 500 : 50, offset = 0, loadAll = showLoader } = options;
+    const { showLoader = false, limit = showLoader ? 500 : 200, offset = 0, loadAll = showLoader } = options;
     console.log('🔄 fetchExecutedOrders called with options:', { showLoader, limit, offset, loadAll });
     
     // Always set loading to true when function is called (whether initial load or manual refresh)
@@ -5614,12 +5615,12 @@ function resolveDecisionIndexColor(value: number): string {
           }
           throw err;
         }),
-        fetchExecutedOrdersFn({ showLoader: false, limit: 50, loadAll: false }).then(() => console.log('✅ Executed orders fetched from backend')).catch(err => {
+        fetchExecutedOrdersFn({ showLoader: false, limit: 200, loadAll: false }).then(() => console.log('✅ Executed orders fetched from backend')).catch(err => {
           console.warn('⚠️ Initial executed orders fetch failed (will retry):', err);
           // Retry once after a short delay if initial fetch fails
           // Use a separate timeout to avoid blocking the Promise.allSettled
           setTimeout(() => {
-            fetchExecutedOrdersFn({ showLoader: false, limit: 50, loadAll: false }).catch(retryErr => {
+            fetchExecutedOrdersFn({ showLoader: false, limit: 200, loadAll: false }).catch(retryErr => {
               console.error('❌ Retry also failed:', retryErr);
               // Ensure loading state is cleared even if retry fails
               // The finally block in fetchExecutedOrders should handle this, but be explicit

@@ -1445,19 +1445,21 @@ function DashboardPageContent() {
   const filteredExecutedOrders = useMemo(() => {
     // Defensive check: ensure executedOrders is an array
     if (!Array.isArray(executedOrders)) return [];
+    
     const filtered = executedOrders.filter(order => {
       // CRITICAL: Filter out cancelled/rejected/expired orders if hideCancelled is true
       // BUT NEVER filter out FILLED orders - those are the main executed orders we want to show
       if (hideCancelled && order.status) {
         const normalized = order.status.toUpperCase();
         // Only hide CANCELLED, REJECTED, EXPIRED - NEVER FILLED
+        // IMPORTANT: FILLED orders should ALWAYS pass through this filter
         if (normalized === 'CANCELLED' || 
             normalized === 'CANCELED' || 
             normalized === 'REJECTED' || 
             normalized === 'EXPIRED') {
           return false; // Filter out cancelled/rejected/expired
         }
-        // For all other statuses (including FILLED), continue to other filters
+        // For FILLED and all other statuses, continue to other filters
       }
       
       // Apply other filters (symbol, status, side, date)
@@ -1503,10 +1505,21 @@ function DashboardPageContent() {
       
       return matchesSymbol && matchesStatus && matchesSide && matchesDate;
     });
+    
     // Debug: Log filtered orders to help diagnose filtering issues
     if (filtered.length === 0 && executedOrders.length > 0) {
-      console.warn(`⚠️ All ${executedOrders.length} executed orders were filtered out. Sample statuses:`, 
-        executedOrders.slice(0, 5).map(o => o.status));
+      const statusBreakdown = executedOrders.reduce((acc, o) => {
+        const status = (o.status || 'UNKNOWN').toUpperCase();
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      console.warn(`⚠️ All ${executedOrders.length} executed orders were filtered out. Status breakdown:`, statusBreakdown);
+      console.warn(`⚠️ Filter settings: hideCancelled=${hideCancelled}, orderFilter:`, orderFilter);
+      console.warn(`⚠️ Sample orders:`, executedOrders.slice(0, 3).map(o => ({
+        order_id: o.order_id,
+        status: o.status,
+        instrument_name: o.instrument_name
+      })));
     }
     return filtered;
   }, [executedOrders, orderFilter, hideCancelled]);
@@ -6710,20 +6723,18 @@ function resolveDecisionIndexColor(value: number): string {
                           // Get open orders info (count, TP value, SL value) for this coin
                           const openOrdersInfo = getOpenOrdersInfo(balance.asset, balance);
                           
-                          // Cap TP/SL values to the holding value (you can't have orders worth more than you own)
-                          const cappedTpValue = Math.min(openOrdersInfo.tpValue, displayValueUsd);
-                          const cappedSlValue = Math.min(openOrdersInfo.slValue, displayValueUsd);
+                          // Get TP/SL prices from portfolio asset or balance
+                          const tpPrice = portfolioAsset?.tp ?? balance.tp ?? null;
+                          const slPrice = portfolioAsset?.sl ?? balance.sl ?? null;
                           
                           return { 
                             balance: { ...balance, balance: displayBalance }, 
                             displayValueUsd, 
                             percentOfPortfolio, 
                             orderValues, 
-                            openOrdersInfo: {
-                              ...openOrdersInfo,
-                              tpValue: cappedTpValue,
-                              slValue: cappedSlValue
-                            }
+                            openOrdersInfo,
+                            tpPrice,
+                            slPrice
                           };
                         })
                         .sort((a, b) => {
@@ -6769,7 +6780,7 @@ function resolveDecisionIndexColor(value: number): string {
                             return aStr > bStr ? -1 : aStr < bStr ? 1 : 0;
                           }
                         })
-                        .map(({ balance, displayValueUsd, percentOfPortfolio, orderValues: _orderValues, openOrdersInfo }) => (
+                        .map(({ balance, displayValueUsd, percentOfPortfolio, orderValues: _orderValues, openOrdersInfo, tpPrice, slPrice }) => (
                           <tr key={balance.asset} data-testid={`portfolio-row-${balance.asset}`} className="hover:bg-gray-50 border-b">
                             <td className="px-4 py-3 font-medium">{normalizeSymbol(balance.asset || '')}</td>
                             <td className="px-4 py-3 text-right">{formatNumber(balance.balance ?? balance.total ?? ((balance.free ?? 0) + (balance.locked ?? 0)), balance.asset)}</td>
@@ -6795,26 +6806,26 @@ function resolveDecisionIndexColor(value: number): string {
                               </span>
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <span className={`px-2 py-1 rounded text-sm font-medium ${
-                                openOrdersInfo.tpValue > 0 && Math.abs(openOrdersInfo.tpValue - displayValueUsd) / displayValueUsd <= 0.05
-                                  ? 'bg-green-100 text-green-800 border border-green-500' 
-                                  : openOrdersInfo.tpValue > 0
-                                    ? 'bg-yellow-100 text-yellow-800 border border-yellow-400'
-                                    : 'bg-gray-100 text-gray-600 border border-gray-300'
-                              }`} title={openOrdersInfo.tpValue > 0 && Math.abs(openOrdersInfo.tpValue - displayValueUsd) / displayValueUsd <= 0.05 ? `TP orders cover portfolio value ($${openOrdersInfo.tpValue.toFixed(2)} ≈ $${formatNumber(displayValueUsd)})` : openOrdersInfo.tpValue > 0 ? `TP orders: $${openOrdersInfo.tpValue.toFixed(2)} (portfolio: $${formatNumber(displayValueUsd)})` : 'No TP orders'}>
-                                ${openOrdersInfo.tpValue.toFixed(2)}
-                              </span>
+                              {tpPrice !== null && tpPrice !== undefined && tpPrice > 0 ? (
+                                <span className="px-2 py-1 rounded text-sm font-medium bg-green-100 text-green-800 border border-green-500" title={`Take Profit price: $${formatNumber(tpPrice)}`}>
+                                  ${formatNumber(tpPrice)}
+                                </span>
+                              ) : (
+                                <span className="px-2 py-1 rounded text-sm font-medium bg-gray-100 text-gray-600 border border-gray-300" title="No TP price set">
+                                  $0.00
+                                </span>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <span className={`px-2 py-1 rounded text-sm font-medium ${
-                                openOrdersInfo.slValue > 0 && Math.abs(openOrdersInfo.slValue - displayValueUsd) / displayValueUsd <= 0.05
-                                  ? 'bg-green-100 text-green-800 border border-green-500' 
-                                  : openOrdersInfo.slValue > 0
-                                    ? 'bg-yellow-100 text-yellow-800 border border-yellow-400'
-                                    : 'bg-gray-100 text-gray-600 border border-gray-300'
-                              }`} title={openOrdersInfo.slValue > 0 && Math.abs(openOrdersInfo.slValue - displayValueUsd) / displayValueUsd <= 0.05 ? `SL orders cover portfolio value ($${openOrdersInfo.slValue.toFixed(2)} ≈ $${formatNumber(displayValueUsd)})` : openOrdersInfo.slValue > 0 ? `SL orders: $${openOrdersInfo.slValue.toFixed(2)} (portfolio: $${formatNumber(displayValueUsd)})` : 'No SL orders'}>
-                                ${openOrdersInfo.slValue.toFixed(2)}
-                              </span>
+                              {slPrice !== null && slPrice !== undefined && slPrice > 0 ? (
+                                <span className="px-2 py-1 rounded text-sm font-medium bg-red-100 text-red-800 border border-red-500" title={`Stop Loss price: $${formatNumber(slPrice)}`}>
+                                  ${formatNumber(slPrice)}
+                                </span>
+                              ) : (
+                                <span className="px-2 py-1 rounded text-sm font-medium bg-gray-100 text-gray-600 border border-gray-300" title="No SL price set">
+                                  $0.00
+                                </span>
+                              )}
                             </td>
                           </tr>
                         )) : (
@@ -7063,26 +7074,26 @@ function resolveDecisionIndexColor(value: number): string {
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-right">
-                                  <span className={`px-2 py-1 rounded text-sm font-medium ${
-                                    cappedOpenOrdersInfo.tpValue > 0 && asset.value_usd && Math.abs(cappedOpenOrdersInfo.tpValue - asset.value_usd) / asset.value_usd <= 0.05
-                                      ? 'bg-green-100 text-green-800 border border-green-500' 
-                                      : cappedOpenOrdersInfo.tpValue > 0
-                                        ? 'bg-yellow-100 text-yellow-800 border border-yellow-400'
-                                        : 'bg-gray-100 text-gray-600 border border-gray-300'
-                                  }`} title={cappedOpenOrdersInfo.tpValue > 0 && asset.value_usd && Math.abs(cappedOpenOrdersInfo.tpValue - asset.value_usd) / asset.value_usd <= 0.05 ? `TP orders cover portfolio value ($${cappedOpenOrdersInfo.tpValue.toFixed(2)} ≈ $${formatNumber(asset.value_usd || 0)})` : cappedOpenOrdersInfo.tpValue > 0 ? `TP orders: $${cappedOpenOrdersInfo.tpValue.toFixed(2)} (portfolio: $${formatNumber(asset.value_usd || 0)})` : 'No TP orders'}>
-                                    ${cappedOpenOrdersInfo.tpValue.toFixed(2)}
-                                  </span>
+                                  {asset.tp !== null && asset.tp !== undefined && asset.tp > 0 ? (
+                                    <span className="px-2 py-1 rounded text-sm font-medium bg-green-100 text-green-800 border border-green-500" title={`Take Profit price: $${formatNumber(asset.tp)}`}>
+                                      ${formatNumber(asset.tp)}
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-1 rounded text-sm font-medium bg-gray-100 text-gray-600 border border-gray-300" title="No TP price set">
+                                      $0.00
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-4 py-3 text-right">
-                                  <span className={`px-2 py-1 rounded text-sm font-medium ${
-                                    cappedOpenOrdersInfo.slValue > 0 && asset.value_usd && Math.abs(cappedOpenOrdersInfo.slValue - asset.value_usd) / asset.value_usd <= 0.05
-                                      ? 'bg-green-100 text-green-800 border border-green-500' 
-                                      : cappedOpenOrdersInfo.slValue > 0
-                                        ? 'bg-yellow-100 text-yellow-800 border border-yellow-400'
-                                        : 'bg-gray-100 text-gray-600 border border-gray-300'
-                                  }`} title={cappedOpenOrdersInfo.slValue > 0 && asset.value_usd && Math.abs(cappedOpenOrdersInfo.slValue - asset.value_usd) / asset.value_usd <= 0.05 ? `SL orders cover portfolio value ($${cappedOpenOrdersInfo.slValue.toFixed(2)} ≈ $${formatNumber(asset.value_usd || 0)})` : cappedOpenOrdersInfo.slValue > 0 ? `SL orders: $${cappedOpenOrdersInfo.slValue.toFixed(2)} (portfolio: $${formatNumber(asset.value_usd || 0)})` : 'No SL orders'}>
-                                    ${cappedOpenOrdersInfo.slValue.toFixed(2)}
-                                  </span>
+                                  {asset.sl !== null && asset.sl !== undefined && asset.sl > 0 ? (
+                                    <span className="px-2 py-1 rounded text-sm font-medium bg-red-100 text-red-800 border border-red-500" title={`Stop Loss price: $${formatNumber(asset.sl)}`}>
+                                      ${formatNumber(asset.sl)}
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-1 rounded text-sm font-medium bg-gray-100 text-gray-600 border border-gray-300" title="No SL price set">
+                                      $0.00
+                                    </span>
+                                  )}
                                 </td>
                               </tr>
                             );
@@ -11074,11 +11085,65 @@ ${marginText}
                             </td>
                                       </tr>
                                     ))}
+                                    {/* Add row for uncovered quantity - always show if there's a difference */}
+                                    {(() => {
+                                      const coveredTotal = expectedTPDetails.matched_lots.reduce((sum, lot) => sum + (lot.lot_qty || 0), 0);
+                                      const uncoveredQty = Math.max(0, expectedTPDetails.net_qty - coveredTotal);
+                                      return uncoveredQty > 0.001 ? (
+                                        <tr key="uncovered" className="hover:bg-gray-50 bg-red-50">
+                                          <td colSpan={3} className="px-3 py-2 text-sm font-semibold text-red-700">
+                                            Sin TP (Uncovered)
+                                          </td>
+                                          <td className="px-3 py-2 text-sm font-mono text-right font-semibold text-red-700">
+                                            {formatNumber(uncoveredQty, expectedTPDetails.symbol.split('_')[0])}
+                                          </td>
+                                          <td colSpan={8} className="px-3 py-2 text-sm text-gray-500 italic text-center">
+                                            No tiene orden de Take Profit
+                                          </td>
+                                        </tr>
+                                      ) : null;
+                                    })()}
+                                    {/* Summary row showing total */}
+                                    {(() => {
+                                      const coveredTotal = expectedTPDetails.matched_lots.reduce((sum, lot) => sum + (lot.lot_qty || 0), 0);
+                                      const uncoveredQty = Math.max(0, expectedTPDetails.net_qty - coveredTotal);
+                                      return (
+                                        <tr className="bg-gray-100 font-semibold">
+                                          <td colSpan={3} className="px-3 py-2 text-sm text-gray-700">
+                                            TOTAL (Portfolio Balance)
+                                          </td>
+                                          <td className="px-3 py-2 text-sm font-mono text-right text-gray-900">
+                                            {formatNumber(expectedTPDetails.net_qty, expectedTPDetails.symbol.split('_')[0])}
+                                          </td>
+                                          <td colSpan={8} className="px-3 py-2 text-sm text-gray-600 text-center">
+                                            Covered: {formatNumber(coveredTotal, expectedTPDetails.symbol.split('_')[0])} + 
+                                            Uncovered: {formatNumber(uncoveredQty, expectedTPDetails.symbol.split('_')[0])} = 
+                                            {formatNumber(coveredTotal + uncoveredQty, expectedTPDetails.symbol.split('_')[0])}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })()}
                                   </tbody>
                                 </table>
                               </div>
                 ) : (
-                  <p className="text-gray-500 text-center py-4">No matched lots found.</p>
+                  <div>
+                    <p className="text-gray-500 text-center py-4">No matched lots found.</p>
+                    {/* Show uncovered quantity even if no matched lots */}
+                    {expectedTPDetails.uncovered_qty > 0 && (
+                      <div className="mt-4 p-4 bg-red-50 border-2 border-red-300 rounded-lg">
+                        <div className="text-center">
+                          <p className="text-red-700 font-semibold mb-2">Uncovered Quantity:</p>
+                          <p className="text-2xl font-mono text-red-600 font-bold">
+                            {formatNumber(expectedTPDetails.uncovered_qty, expectedTPDetails.symbol.split('_')[0])}
+                          </p>
+                          <p className="text-sm text-gray-600 mt-2">
+                            Total Portfolio: {formatNumber(expectedTPDetails.net_qty, expectedTPDetails.symbol.split('_')[0])}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 

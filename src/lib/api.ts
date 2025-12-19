@@ -235,6 +235,8 @@ export interface DashboardBalance {
   quantity?: number;
   max_withdrawal?: number;
   currency?: string;  // Alternative field name for asset (used in some API responses)
+  tp?: number | null;  // Take Profit price from backend
+  sl?: number | null;  // Stop Loss price from backend
 }
 
 type RawPortfolioAsset = Partial<PortfolioAsset> & {
@@ -305,6 +307,9 @@ const normalizePortfolioAsset = (raw: RawPortfolioAsset): PortfolioAsset | null 
     haircut: coerceNumber(raw.haircut, 0),
     value_usd: valueUsd,
     updated_at: raw.updated_at ?? new Date().toISOString(),
+    open_orders_count: raw.open_orders_count,
+    tp: raw.tp !== undefined && raw.tp !== null ? coerceNumber(raw.tp) : null,
+    sl: raw.sl !== undefined && raw.sl !== null ? coerceNumber(raw.sl) : null,
   };
 };
 
@@ -372,6 +377,9 @@ export function dashboardBalancesToPortfolioAssets(balances: DashboardBalance[])
       }
 
       const existing = aggregated.get(coin);
+      const tpPrice = balance.tp !== undefined && balance.tp !== null ? coerceNumber(balance.tp) : undefined;
+      const slPrice = balance.sl !== undefined && balance.sl !== null ? coerceNumber(balance.sl) : undefined;
+      
       if (!existing) {
         aggregated.set(coin, {
         coin,
@@ -381,12 +389,21 @@ export function dashboardBalancesToPortfolioAssets(balances: DashboardBalance[])
         haircut: 0,
         value_usd: valueUsd,
         updated_at: new Date().toISOString(),
+        tp: tpPrice !== undefined ? tpPrice : null,
+        sl: slPrice !== undefined ? slPrice : null,
         });
       } else {
         existing.balance += balanceQty;
         existing.available_qty += availableQty || 0;
         existing.reserved_qty += reservedQty || 0;
         existing.value_usd = (existing.value_usd ?? 0) + valueUsd;
+        // Keep the highest TP and lowest SL if multiple balances exist
+        if (tpPrice !== undefined && (existing.tp === null || existing.tp === undefined || tpPrice > existing.tp)) {
+          existing.tp = tpPrice;
+        }
+        if (slPrice !== undefined && (existing.sl === null || existing.sl === undefined || slPrice < existing.sl)) {
+          existing.sl = slPrice;
+        }
       }
     });
 
@@ -2406,6 +2423,7 @@ export interface SignalThrottleEntry {
   seconds_since_last: number | null;
   price_change_pct: number | null;
   emit_reason: string | null;
+  telegram_message?: string | null;  // Full Telegram message
 }
 
 export async function getMonitoringSummary(): Promise<MonitoringSummary> {

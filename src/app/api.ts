@@ -508,9 +508,46 @@ export async function updateDashboardItem(id: number, item: Partial<WatchlistIte
   return data;
 }
 
-// Re-export saveCoinSettings from the unified API layer
-// This ensures all code uses the same implementation that calls the correct backend endpoint
-export { saveCoinSettings } from '@/lib/api';
+// Save coin settings by symbol
+// Finds the watchlist item by symbol and updates it with the provided settings
+export async function saveCoinSettings(symbol: string, settings: Partial<CoinSettings>): Promise<CoinSettings> {
+  try {
+    // Get dashboard to find the item by symbol
+    const dashboard = await getDashboard();
+    const item = dashboard.find(item => item.symbol === symbol.toUpperCase());
+    
+    if (!item) {
+      throw new Error(`Watchlist item not found for symbol: ${symbol}`);
+    }
+    
+    // Update the item using the existing updateDashboardItem function
+    const updated = await updateDashboardItem(item.id, settings);
+    
+    // Return the updated settings in CoinSettings format
+    return {
+      symbol: updated.symbol,
+      exchange: updated.exchange,
+      trade_enabled: updated.trade_enabled,
+      trade_amount_usd: updated.trade_amount_usd,
+      trade_on_margin: updated.trade_on_margin,
+      alert_enabled: updated.alert_enabled,
+      sl_tp_mode: updated.sl_tp_mode,
+      min_price_change_pct: updated.min_price_change_pct,
+      sl_percentage: updated.sl_percentage,
+      tp_percentage: updated.tp_percentage,
+      sl_price: updated.stop_loss,
+      tp_price: updated.take_profit,
+    };
+  } catch (error) {
+    logRequestIssue(
+      `saveCoinSettings:${symbol}`,
+      'Handled coin settings save failure',
+      error,
+      'warn'
+    );
+    throw error;
+  }
+}
 
 export async function deleteDashboardItem(id: number): Promise<void> {
   await fetchAPI(`/dashboard/${id}`, {

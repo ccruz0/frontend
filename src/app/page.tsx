@@ -2,7 +2,7 @@
 
 import '@/lib/polyfill';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { getDashboard, getOpenOrders, getOrderHistory, getTopCoins, saveCoinSettings, getTradingSignals, getDataSourcesStatus, getTradingConfig, saveTradingConfig, updateCoinConfig, addCustomTopCoin, removeCustomTopCoin, getDashboardState, getDashboardSnapshot, quickOrder, updateWatchlistAlert, updateBuyAlert, updateSellAlert, simulateAlert, deleteDashboardItemBySymbol, toggleLiveTrading, getTPSLOrderValues, getOpenOrdersSummary, dashboardBalancesToPortfolioAssets, getExpectedTakeProfitSummary, getExpectedTakeProfitDetails, getTelegramMessages, DashboardState, DashboardBalance, WatchlistItem, OpenOrder, PortfolioAsset, TradingSignals, TopCoin, DataSourceStatus, TradingConfig, CoinSettings, TPSLOrderValues, UnifiedOpenOrder, OpenPosition, ExpectedTPSummary, ExpectedTPDetails, SimulateAlertResponse, TelegramMessage, StrategyDecision } from '@/lib/api';
+import { getDashboard, getOpenOrders, getOrderHistory, getTopCoins, saveCoinSettings, getTradingSignals, getDataSourcesStatus, getTradingConfig, saveTradingConfig, updateCoinConfig, addCustomTopCoin, removeCustomTopCoin, getDashboardState, getDashboardSnapshot, quickOrder, updateWatchlistAlert, updateBuyAlert, updateSellAlert, simulateAlert, deleteDashboardItemBySymbol, toggleLiveTrading, getTPSLOrderValues, getOpenOrdersSummary, dashboardBalancesToPortfolioAssets, getExpectedTakeProfitSummary, getExpectedTakeProfitDetails, getTelegramMessages, fixBackendHealth, DashboardState, DashboardBalance, WatchlistItem, OpenOrder, PortfolioAsset, TradingSignals, TopCoin, DataSourceStatus, TradingConfig, CoinSettings, TPSLOrderValues, UnifiedOpenOrder, OpenPosition, ExpectedTPSummary, ExpectedTPDetails, SimulateAlertResponse, TelegramMessage, StrategyDecision } from '@/lib/api';
 import { getApiUrl } from '@/lib/environment';
 import { MonitoringNotificationsProvider, useMonitoringNotifications } from '@/app/context/MonitoringNotificationsContext';
 
@@ -11700,8 +11700,34 @@ ${marginText}
       {/* Monitoring Tab */}
       {activeTab === 'monitoring' && (
         <div>
+          <div className="mb-4 flex justify-between items-center">
+            <h2 className="text-xl font-semibold">System Monitoring</h2>
+            <button
+              onClick={async () => {
+                try {
+                  const result = await fixBackendHealth();
+                  if (result.ok) {
+                    alert('✅ Backend health fix initiated! Services are restarting. Please wait a few seconds and refresh the page.');
+                    // Refresh data sources status after a delay
+                    setTimeout(() => {
+                      fetchDataSourceStatus();
+                    }, 3000);
+                  } else {
+                    alert(`❌ Failed to fix backend health: ${result.error || 'Unknown error'}`);
+                  }
+                } catch (error) {
+                  console.error('Error fixing backend health:', error);
+                  alert(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                }
+              }}
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium flex items-center gap-2"
+              title="Restart backend services to fix health issues"
+            >
+              🔧 Fix Backend Health
+            </button>
+          </div>
           <ErrorBoundary>
-            <MonitoringPanel 
+            <MonitoringPanel
               refreshInterval={20000}
               telegramMessages={telegramMessages}
               telegramMessagesLoading={telegramMessagesLoading}

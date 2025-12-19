@@ -1174,11 +1174,28 @@ export async function getLiveTradingStatus(): Promise<LiveTradingStatus> {
   }
 }
 
+export async function fixBackendHealth(): Promise<{ ok: boolean; message?: string; error?: string }> {
+  try {
+    const data = await fetchAPI<{ ok: boolean; message?: string; error?: string }>('/control/health/fix', {
+      method: 'POST',
+    });
+    return data;
+  } catch (error) {
+    logRequestIssue(
+      'fixBackendHealth',
+      'Failed to fix backend health',
+      error,
+      'error'
+    );
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 export async function toggleLiveTrading(enabled: boolean): Promise<LiveTradingStatus> {
   try {
     const apiUrl = typeof window !== 'undefined' ? getApiUrl() : DEFAULT_API_URL;
     const fullUrl = `${apiUrl}/trading/live-toggle`;
-    
+
     console.log('🔄 toggleLiveTrading: Making request to:', fullUrl);
     console.log('🔄 toggleLiveTrading: enabled=', enabled);
     

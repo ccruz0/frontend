@@ -1203,22 +1203,22 @@ function DashboardPageContent() {
       setIsUpdating(false);
     }
   }, []);
-  // Helper function to check if an order status is cancelled, rejected, expired, or filled
+  // Helper function to check if an order status is cancelled, rejected, or expired
+  // NOTE: FILLED orders are NOT considered cancelled - they are valid executed orders
   // Must be defined before useMemo hooks that use it to avoid TDZ (Temporal Dead Zone) errors
   // Wrapped in useCallback to ensure stable reference for dependency arrays
   const isCancelledStatus = useCallback((status: string | null | undefined): boolean => {
     if (!status) return false;
     const normalized = status.toUpperCase();
-    // Include all statuses that should be hidden when "Ocultar Canceladas" is ON:
+    // Include only statuses that should be hidden when "Ocultar Canceladas" is ON:
     // - CANCELLED/CANCELED: explicitly cancelled orders
     // - REJECTED: orders that were rejected by the exchange
     // - EXPIRED: orders that expired
-    // - FILLED: orders that were filled (shouldn't be in "open orders" anyway)
+    // DO NOT include FILLED - those are valid executed orders that should be shown
     return normalized === 'CANCELLED' || 
            normalized === 'CANCELED' || 
            normalized === 'REJECTED' || 
-           normalized === 'EXPIRED' || 
-           normalized === 'FILLED';
+           normalized === 'EXPIRED';
   }, []);
 
   const coinMembershipSignature = useMemo(
@@ -1451,11 +1451,16 @@ function DashboardPageContent() {
       if (hideCancelled && order.status) {
         const normalized = order.status.toUpperCase();
         // Only hide CANCELLED, REJECTED, EXPIRED - NOT FILLED
+        // CRITICAL: FILLED orders should ALWAYS be shown in Executed Orders tab
         if (normalized === 'CANCELLED' || 
             normalized === 'CANCELED' || 
             normalized === 'REJECTED' || 
             normalized === 'EXPIRED') {
-          return false;
+          return false; // Filter out cancelled/rejected/expired
+        }
+        // Explicitly allow FILLED orders to pass through
+        if (normalized === 'FILLED') {
+          return true; // Always show FILLED orders
         }
       }
       
@@ -1500,9 +1505,13 @@ function DashboardPageContent() {
       
       return matchesSymbol && matchesStatus && matchesSide && matchesDate;
     });
-    // Debug: Filtered executed orders (silenced to reduce console noise)
+    // Debug: Log filtered orders to help diagnose filtering issues
+    if (filtered.length === 0 && executedOrders.length > 0) {
+      console.warn(`⚠️ All ${executedOrders.length} executed orders were filtered out. Sample statuses:`, 
+        executedOrders.slice(0, 5).map(o => o.status));
+    }
     return filtered;
-  }, [executedOrders, orderFilter, hideCancelled, isCancelledStatus]);
+  }, [executedOrders, orderFilter, hideCancelled]);
   
   // Calculate total P&L for filtered orders (only SELL orders count as realized P/L)
   const filteredTotalPL = useMemo(() => {
@@ -4523,6 +4532,12 @@ function resolveDecisionIndexColor(value: number): string {
     // This ensures loading state is shown during fetch
     setExecutedOrdersLoading(true);
     setExecutedOrdersError(null);
+    
+    // Safety timeout: ensure loading state is cleared after 60 seconds even if request hangs
+    const loadingTimeout = setTimeout(() => {
+      console.warn('⚠️ fetchExecutedOrders timeout - clearing loading state');
+      setExecutedOrdersLoading(false);
+    }, 60000);
     try {
       console.log('📡 Starting to fetch executed orders...');
       let allNewOrders: OpenOrder[] = [];
@@ -4622,6 +4637,7 @@ function resolveDecisionIndexColor(value: number): string {
     } finally {
       // CRITICAL: Always set loading to false, even if there was an error
       // This ensures the button is never permanently disabled
+      clearTimeout(loadingTimeout);
       console.log('✅ fetchExecutedOrders completed, setting loading to false');
       setExecutedOrdersLoading(false);
     }
@@ -5587,9 +5603,12 @@ function resolveDecisionIndexColor(value: number): string {
         fetchExecutedOrdersFn({ showLoader: false, limit: 50, loadAll: false }).then(() => console.log('✅ Executed orders fetched from backend')).catch(err => {
           console.warn('⚠️ Initial executed orders fetch failed (will retry):', err);
           // Retry once after a short delay if initial fetch fails
+          // Use a separate timeout to avoid blocking the Promise.allSettled
           setTimeout(() => {
             fetchExecutedOrdersFn({ showLoader: false, limit: 50, loadAll: false }).catch(retryErr => {
               console.error('❌ Retry also failed:', retryErr);
+              // Ensure loading state is cleared even if retry fails
+              // The finally block in fetchExecutedOrders should handle this, but be explicit
             });
           }, 2000);
         }),

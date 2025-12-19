@@ -1446,25 +1446,23 @@ function DashboardPageContent() {
     // Defensive check: ensure executedOrders is an array
     if (!Array.isArray(executedOrders)) return [];
     const filtered = executedOrders.filter(order => {
-      // Filter out cancelled/rejected/expired orders if hideCancelled is true
-      // BUT NOT FILLED orders - those are the main executed orders we want to show
+      // CRITICAL: Filter out cancelled/rejected/expired orders if hideCancelled is true
+      // BUT NEVER filter out FILLED orders - those are the main executed orders we want to show
       if (hideCancelled && order.status) {
         const normalized = order.status.toUpperCase();
-        // Only hide CANCELLED, REJECTED, EXPIRED - NOT FILLED
-        // CRITICAL: FILLED orders should ALWAYS be shown in Executed Orders tab
+        // Only hide CANCELLED, REJECTED, EXPIRED - NEVER FILLED
         if (normalized === 'CANCELLED' || 
             normalized === 'CANCELED' || 
             normalized === 'REJECTED' || 
             normalized === 'EXPIRED') {
           return false; // Filter out cancelled/rejected/expired
         }
-        // Explicitly allow FILLED orders to pass through
-        if (normalized === 'FILLED') {
-          return true; // Always show FILLED orders
-        }
+        // For all other statuses (including FILLED), continue to other filters
       }
       
-      const matchesSymbol = !orderFilter.symbol || order.instrument_name.toLowerCase().includes(orderFilter.symbol.toLowerCase());
+      // Apply other filters (symbol, status, side, date)
+      // These filters apply to ALL orders including FILLED
+      const matchesSymbol = !orderFilter.symbol || (order.instrument_name && order.instrument_name.toLowerCase().includes(orderFilter.symbol.toLowerCase()));
       const matchesStatus = !orderFilter.status || order.status === orderFilter.status;
       const matchesSide = !orderFilter.side || order.side === orderFilter.side;
       
@@ -4595,6 +4593,14 @@ function resolveDecisionIndexColor(value: number): string {
       
       console.log(`📥 Fetched ${allNewOrders.length} executed orders from ${pageCount} page(s)`);
       
+      // Debug: Log order statuses to verify FILLED orders are present
+      const statusCounts = allNewOrders.reduce((acc, order) => {
+        const status = (order.status || 'UNKNOWN').toUpperCase();
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      console.log(`📊 Order status breakdown:`, statusCounts);
+      
       // Merge by order_id (update existing + add new) using functional update
       setExecutedOrders(prevOrders => {
         const merged = new Map(prevOrders.map(o => [o.order_id, o] as const));
@@ -4613,6 +4619,14 @@ function resolveDecisionIndexColor(value: number): string {
         const mergedOrders = Array.from(merged.values());
         // Keep newest first (fall back safely if update_time is missing).
         mergedOrders.sort((a, b) => (Number(b.update_time || 0) - Number(a.update_time || 0)));
+
+        // Debug: Log final merged orders status breakdown
+        const finalStatusCounts = mergedOrders.reduce((acc, order) => {
+          const status = (order.status || 'UNKNOWN').toUpperCase();
+          acc[status] = (acc[status] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        console.log(`📊 Final merged orders status breakdown:`, finalStatusCounts);
 
         setExecutedOrdersLastUpdate(new Date());
         console.log(`✅ Executed orders merged: +${addedCount} new, ~${updatedCount} updated, total=${mergedOrders.length}`);

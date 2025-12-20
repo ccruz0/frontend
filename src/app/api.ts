@@ -1579,10 +1579,12 @@ export interface ExpectedTPSummaryItem {
   symbol: string;
   net_qty: number;
   position_value: number;
+  actual_position_value?: number; // Value at buy price (cost basis)
   covered_qty: number;
   uncovered_qty: number;
   total_expected_profit: number;
   current_price?: number;
+  coverage_ratio?: number;
 }
 
 export interface ExpectedTPSummary {

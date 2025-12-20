@@ -189,6 +189,10 @@ export interface StrategyDecision {
   summary?: string;
   reasons?: Record<string, boolean | null | undefined>;
   index?: number | null;
+  should_trade?: boolean;
+  reason?: string;
+  confidence?: number;
+  risk_level?: string;
 }
 
 export interface TopCoin {
@@ -1255,6 +1259,8 @@ export interface ExpectedTPSummary {
 export interface ExpectedTPMatchedLot {
   symbol: string;
   buy_order_id: string;
+  buy_order_ids?: string[]; // For grouped entries
+  buy_order_count?: number; // For grouped entries
   buy_time: string | null;
   buy_price: number;
   lot_qty: number;
@@ -1263,27 +1269,28 @@ export interface ExpectedTPMatchedLot {
   tp_price: number;
   tp_qty: number;
   tp_status: string;
-  match_origin: 'OCO' | 'FIFO';
+  match_origin: 'OCO' | 'FIFO' | string; // Allow string for flexibility
   expected_profit: number;
   expected_profit_pct: number;
+  is_grouped?: boolean; // For grouped entries
 }
 
 export interface ExpectedTPDetails {
   symbol: string;
   net_qty: number;
-  current_price: number;
+  current_price?: number; // Optional for flexibility
   position_value: number;
   actual_position_value?: number;  // Value based on buy prices, not current market price
   covered_qty: number;
   uncovered_qty: number;
   total_expected_profit: number;
   matched_lots: ExpectedTPMatchedLot[];
-  has_uncovered: boolean;
+  has_uncovered?: boolean; // Optional for flexibility
   uncovered_entry?: {
     symbol: string;
     uncovered_qty: number;
     label: string;
-    is_uncovered: true;
+    is_uncovered?: true; // Optional for flexibility
   };
 }
 

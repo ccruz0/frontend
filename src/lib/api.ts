@@ -1269,7 +1269,7 @@ export interface ExpectedTPMatchedLot {
   tp_price: number;
   tp_qty: number;
   tp_status: string;
-  match_origin: 'OCO' | 'FIFO' | string; // Allow string for flexibility
+  match_origin: string;
   expected_profit: number;
   expected_profit_pct: number;
   is_grouped?: boolean; // For grouped entries
@@ -2410,7 +2410,7 @@ export interface TelegramMessage {
   message: string;
   symbol: string | null;
   blocked: boolean;
-  order_skipped?: boolean;
+  order_skipped: boolean;
   timestamp: string;
   throttle_status?: string | null;
   throttle_reason?: string | null;

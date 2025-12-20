@@ -1306,7 +1306,7 @@ export async function getLiveTradingStatus(): Promise<LiveTradingStatus> {
 
 export async function fixBackendHealth(): Promise<{ ok: boolean; message?: string; error?: string }> {
   try {
-    const data = await fetchAPI<{ ok: boolean; message?: string; error?: string }>('/control/health/fix', {
+    const data = await fetchAPI<{ ok: boolean; message?: string; error?: string }>('/health/fix', {
       method: 'POST',
     });
     return data;

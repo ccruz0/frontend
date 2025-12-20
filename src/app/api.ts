@@ -15,6 +15,8 @@ export interface WatchlistItem {
   trade_amount_usd?: number;
   trade_on_margin?: boolean;
   alert_enabled?: boolean;  // Enable automatic alerts and order creation
+  buy_alert_enabled?: boolean;  // Enable BUY alerts specifically
+  sell_alert_enabled?: boolean;  // Enable SELL alerts specifically
   sl_tp_mode?: string;
   min_price_change_pct?: number | null;
   sl_percentage?: number | null;
@@ -65,6 +67,7 @@ export type OpenOrder = {
   trigger_condition?: string | null; // Trigger condition for stop/limit orders
   filled_quantity?: string | null; // Filled quantity for executed orders
   filled_price?: string | null; // Filled price for executed orders
+  order_role?: string;  // Order role (STOP_LOSS, TAKE_PROFIT, etc.)
 }
 
 export interface ManualTradeRequest {
@@ -87,6 +90,8 @@ export interface PortfolioAsset {
   haircut: number;
   value_usd: number;
   updated_at: string;
+  tp?: number;  // Take profit price
+  sl?: number;  // Stop loss price
 }
 
 export interface TopCoin {
@@ -100,18 +105,25 @@ export interface TopCoin {
   is_custom?: boolean;
   source?: string;
   alert_enabled?: boolean;  // Alert enabled status for TRADE ALERT YES
+  buy_alert_enabled?: boolean;  // Enable BUY alerts specifically
+  sell_alert_enabled?: boolean;  // Enable SELL alerts specifically
   // Technical indicators (now included in cache)
   rsi?: number;
   ma50?: number;
   ma200?: number;
   ema10?: number;
+  ma10w?: number;  // 10-week moving average
   atr?: number;
   avg_volume?: number;
   volume_ratio?: number;
   current_volume?: number;
+  volume_avg_periods?: number;  // Volume average periods
   // Resistance levels
   res_up?: number;
   res_down?: number;
+  // Strategy-related fields
+  strategy?: string;  // Strategy type (swing, scalp, etc.)
+  strategy_state?: string;  // Strategy state
 }
 
 // Dashboard State Types (new unified endpoint)
@@ -125,6 +137,9 @@ export interface DashboardBalance {
   market_value?: number;  // Original field name from Crypto.com
   quantity?: number;
   max_withdrawal?: number;
+  currency?: string;  // Currency code
+  tp?: number;  // Take profit price
+  sl?: number;  // Stop loss price
 }
 
 export interface DashboardSignal {
@@ -172,6 +187,7 @@ export interface DashboardState {
   slow_signals: DashboardSignal[];
   open_orders: DashboardOrder[];
   open_position_counts?: { [symbol: string]: number };
+  open_orders_summary?: UnifiedOpenOrder[];  // Open orders summary
   last_sync: string | null;
   portfolio?: {
     assets?: PortfolioAsset[];
@@ -182,6 +198,7 @@ export interface DashboardState {
     status: 'running' | 'stopped';
     reason: string | null;
   };
+  errors?: string[];  // Optional errors array
 }
 
 export interface CoinSettings {
@@ -191,12 +208,17 @@ export interface CoinSettings {
   trade_amount_usd?: number | null;
   trade_on_margin?: boolean;
   alert_enabled?: boolean;
+  buy_alert_enabled?: boolean;
+  sell_alert_enabled?: boolean;
   sl_tp_mode?: string;
   min_price_change_pct?: number | null;
   sl_percentage?: number | null;
   tp_percentage?: number | null;
   sl_price?: number;
   tp_price?: number;
+  alert_cooldown_minutes?: number;  // Alert cooldown in minutes
+  id?: number;  // Optional ID field
+  message?: string;  // Optional message field
 }
 
 // Circuit breaker for signals endpoint
@@ -520,8 +542,31 @@ export async function saveCoinSettings(symbol: string, settings: Partial<CoinSet
       throw new Error(`Watchlist item not found for symbol: ${symbol}`);
     }
     
+    // Convert CoinSettings to WatchlistItem format (handle null values and type mismatches)
+    const watchlistUpdate: Partial<WatchlistItem> = {};
+    
+    // Map only valid WatchlistItem fields
+    if (settings.symbol !== undefined) watchlistUpdate.symbol = settings.symbol;
+    if (settings.exchange !== undefined) watchlistUpdate.exchange = settings.exchange;
+    if (settings.trade_enabled !== undefined) watchlistUpdate.trade_enabled = settings.trade_enabled;
+    if (settings.trade_amount_usd !== undefined && settings.trade_amount_usd !== null) {
+      watchlistUpdate.trade_amount_usd = settings.trade_amount_usd;
+    } else if (settings.trade_amount_usd === null) {
+      watchlistUpdate.trade_amount_usd = undefined;
+    }
+    if (settings.trade_on_margin !== undefined) watchlistUpdate.trade_on_margin = settings.trade_on_margin;
+    if (settings.alert_enabled !== undefined) watchlistUpdate.alert_enabled = settings.alert_enabled;
+    if (settings.buy_alert_enabled !== undefined) watchlistUpdate.buy_alert_enabled = settings.buy_alert_enabled;
+    if (settings.sell_alert_enabled !== undefined) watchlistUpdate.sell_alert_enabled = settings.sell_alert_enabled;
+    if (settings.sl_tp_mode !== undefined) watchlistUpdate.sl_tp_mode = settings.sl_tp_mode;
+    if (settings.min_price_change_pct !== undefined) watchlistUpdate.min_price_change_pct = settings.min_price_change_pct;
+    if (settings.sl_percentage !== undefined) watchlistUpdate.sl_percentage = settings.sl_percentage;
+    if (settings.tp_percentage !== undefined) watchlistUpdate.tp_percentage = settings.tp_percentage;
+    if (settings.sl_price !== undefined) watchlistUpdate.stop_loss = settings.sl_price;
+    if (settings.tp_price !== undefined) watchlistUpdate.take_profit = settings.tp_price;
+    
     // Update the item using the existing updateDashboardItem function
-    const updated = await updateDashboardItem(item.id, settings);
+    const updated = await updateDashboardItem(item.id, watchlistUpdate);
     
     // Return the updated settings in CoinSettings format
     return {
@@ -531,6 +576,8 @@ export async function saveCoinSettings(symbol: string, settings: Partial<CoinSet
       trade_amount_usd: updated.trade_amount_usd,
       trade_on_margin: updated.trade_on_margin,
       alert_enabled: updated.alert_enabled,
+      buy_alert_enabled: updated.buy_alert_enabled,
+      sell_alert_enabled: updated.sell_alert_enabled,
       sl_tp_mode: updated.sl_tp_mode,
       min_price_change_pct: updated.min_price_change_pct,
       sl_percentage: updated.sl_percentage,
@@ -803,6 +850,7 @@ export interface TradingSignals {
   volume_ratio?: number;
   volume_24h?: number;
   current_volume?: number;
+  volume_avg_periods?: number;  // Volume average periods
   res_up: number;
   res_down: number;
   signals: {
@@ -826,6 +874,7 @@ export interface TradingSignals {
   };
   rationale: string[];
   method: string;
+  strategy?: string;  // Strategy type
 }
 
 export async function getTradingSignals(symbol: string, config?: {
@@ -1099,6 +1148,44 @@ export async function updateWatchlistAlert(symbol: string, alertEnabled: boolean
   }
 }
 
+// Update buy_alert_enabled for watchlist item
+export async function updateBuyAlert(symbol: string, buyAlertEnabled: boolean): Promise<{ ok: boolean; symbol: string; buy_alert_enabled: boolean; alert_enabled: boolean; message: string }> {
+  try {
+    const data = await fetchAPI<{ ok: boolean; symbol: string; buy_alert_enabled: boolean; alert_enabled: boolean; message: string }>(`/watchlist/${symbol}/buy-alert`, {
+      method: 'PUT',
+      body: JSON.stringify({ buy_alert_enabled: buyAlertEnabled })
+    });
+    return data;
+  } catch (error) {
+    logRequestIssue(
+      `updateBuyAlert:${symbol}`,
+      'Handled buy alert update failure',
+      error,
+      'warn'
+    );
+    throw error;
+  }
+}
+
+// Update sell_alert_enabled for watchlist item
+export async function updateSellAlert(symbol: string, sellAlertEnabled: boolean): Promise<{ ok: boolean; symbol: string; sell_alert_enabled: boolean; alert_enabled: boolean; message: string }> {
+  try {
+    const data = await fetchAPI<{ ok: boolean; symbol: string; sell_alert_enabled: boolean; alert_enabled: boolean; message: string }>(`/watchlist/${symbol}/sell-alert`, {
+      method: 'PUT',
+      body: JSON.stringify({ sell_alert_enabled: sellAlertEnabled })
+    });
+    return data;
+  } catch (error) {
+    logRequestIssue(
+      `updateSellAlert:${symbol}`,
+      'Handled sell alert update failure',
+      error,
+      'warn'
+    );
+    throw error;
+  }
+}
+
 // Simulate alert for testing
 export interface SimulateAlertResponse {
   ok: boolean;
@@ -1114,22 +1201,28 @@ export interface SimulateAlertResponse {
   order_error?: string; // Add order_error property
 }
 
-export async function simulateAlert(symbol: string, signalType: 'BUY' | 'SELL', forceOrder: boolean = false, tradeAmountUsd?: number): Promise<SimulateAlertResponse> {
+export async function simulateAlert(symbol: string, signalType: 'BUY' | 'SELL', forceOrder: boolean = false, tradeAmountUsd?: number, tradeEnabled?: boolean): Promise<SimulateAlertResponse> {
   try {
     const payload: {
       symbol: string;
       signal_type: 'BUY' | 'SELL';
       force_order: boolean;
       trade_amount_usd?: number;
+      trade_enabled?: boolean;
     } = {
       symbol,
       signal_type: signalType,
       force_order: forceOrder
     };
-    
+
     // Only include trade_amount_usd if provided (optional - backend will use watchlist value if available)
     if (tradeAmountUsd && tradeAmountUsd > 0) {
       payload.trade_amount_usd = tradeAmountUsd;
+    }
+    
+    // Include trade_enabled if provided
+    if (tradeEnabled !== undefined) {
+      payload.trade_enabled = tradeEnabled;
     }
     
     const data = await fetchAPI<SimulateAlertResponse>('/test/simulate-alert', {
@@ -1370,3 +1463,264 @@ export async function getDashboardState(): Promise<DashboardState> {
     };
   }
 }
+
+// Note: UnifiedOpenOrder interface is defined later (around line 1718) with the complete backend type
+
+export interface OpenPosition {
+  symbol: string;
+  baseOrderId: string;
+  baseSide: 'BUY' | 'SELL';
+  baseQuantity: number;
+  basePrice: number | null;
+  baseTotal: number | null;
+  baseCreatedAt: string;
+  netOpenQuantity: number;
+  positionQuantity: number;
+  tpCount: number;
+  slCount: number;
+  tpPrice: number | null;
+  slPrice: number | null;
+  tpProfit: number | null;
+  slProfit: number | null;
+  childOrders: Array<{
+    orderId: string;
+    side: 'BUY' | 'SELL';
+    type: 'TAKE_PROFIT' | 'STOP_LOSS' | 'SELL';
+    quantity: number;
+    price: number | null;
+    createdAt: string;
+  }>;
+}
+
+// Note: ExpectedTPSummary, ExpectedTPDetails, TelegramMessage, and StrategyDecision interfaces
+// are defined later (around line 1600+) with proper implementations that match the API
+
+// Dashboard Snapshot API
+export interface DashboardSnapshot {
+  data: DashboardState;
+  last_updated_at: string | null;
+  stale_seconds: number | null;
+  stale: boolean;
+  empty?: boolean;
+}
+
+export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
+  try {
+    const data = await fetchAPI<DashboardSnapshot>('/dashboard/snapshot');
+    return data;
+  } catch (error) {
+    logRequestIssue(
+      'getDashboardSnapshot',
+      'Handled dashboard snapshot fetch failure',
+      error,
+      'warn'
+    );
+    // Return empty snapshot on error
+    return {
+      data: {
+        balances: [],
+        fast_signals: [],
+        slow_signals: [],
+        open_orders: [],
+        last_sync: null,
+        bot_status: {
+          is_running: false,
+          status: 'stopped',
+          reason: null
+        }
+      },
+      last_updated_at: null,
+      stale_seconds: null,
+      stale: true,
+      empty: true
+    };
+  }
+}
+
+// Open Orders Summary API
+export interface OpenOrdersSummary {
+  orders: UnifiedOpenOrder[];
+  last_updated: string | null;
+  count: number;
+}
+
+export async function getOpenOrdersSummary(): Promise<OpenOrdersSummary> {
+  try {
+    const data = await fetchAPI<OpenOrdersSummary>('/dashboard/open-orders-summary');
+    return data;
+  } catch (error) {
+    logRequestIssue(
+      'getOpenOrdersSummary',
+      'Handled open orders summary fetch failure',
+      error,
+      'warn'
+    );
+    return { orders: [], last_updated: null, count: 0 };
+  }
+}
+
+// Convert dashboard balances to portfolio assets
+export function dashboardBalancesToPortfolioAssets(balances: DashboardBalance[]): PortfolioAsset[] {
+  return balances
+    .filter(balance => balance && balance.asset && (balance.balance || 0) > 0)
+    .map(balance => ({
+      coin: balance.asset,
+      balance: balance.balance || 0,
+      available_qty: balance.free || 0,
+      reserved_qty: balance.locked || 0,
+      haircut: 0,
+      value_usd: balance.usd_value || balance.market_value || 0,
+      updated_at: new Date().toISOString()
+    }));
+}
+
+// Expected Take Profit API
+export interface ExpectedTPSummaryItem {
+  symbol: string;
+  net_qty: number;
+  position_value: number;
+  covered_qty: number;
+  uncovered_qty: number;
+  total_expected_profit: number;
+  current_price?: number;
+}
+
+export interface ExpectedTPSummary {
+  summary: ExpectedTPSummaryItem[];
+  total_symbols: number;
+  last_updated: string | null;
+}
+
+export async function getExpectedTakeProfitSummary(): Promise<ExpectedTPSummary> {
+  try {
+    const data = await fetchAPI<ExpectedTPSummary>('/dashboard/expected-take-profit');
+    return data;
+  } catch (error) {
+    logRequestIssue(
+      'getExpectedTakeProfitSummary',
+      'Handled expected take profit summary fetch failure',
+      error,
+      'warn'
+    );
+    return { summary: [], total_symbols: 0, last_updated: null };
+  }
+}
+
+// Legacy interface - kept for reference but not used
+// export interface ExpectedTPDetailsLot {
+//   lot_id: string;
+//   quantity: number;
+//   entry_price: number;
+//   tp_price: number;
+//   expected_profit: number;
+//   order_id?: string;
+// }
+
+export interface ExpectedTPMatchedLot {
+  symbol: string;
+  buy_order_id: string;
+  buy_order_ids?: string[]; // For grouped entries
+  buy_order_count?: number; // For grouped entries
+  buy_time: string | null;
+  buy_price: number;
+  lot_qty: number;
+  tp_order_id: string;
+  tp_time: string | null;
+  tp_price: number;
+  tp_qty: number;
+  tp_status: string;
+  match_origin: string;
+  expected_profit: number;
+  expected_profit_pct: number;
+  is_grouped?: boolean; // For grouped entries
+}
+
+export interface ExpectedTPDetails {
+  symbol: string;
+  net_qty: number;
+  position_value: number;
+  actual_position_value?: number;
+  covered_qty: number;
+  uncovered_qty: number;
+  total_expected_profit: number;
+  matched_lots: ExpectedTPMatchedLot[]; // Backend returns 'matched_lots', not 'lots'
+  current_price?: number;
+  has_uncovered?: boolean;
+  uncovered_entry?: {
+    symbol: string;
+    uncovered_qty: number;
+    label: string;
+  };
+}
+
+export async function getExpectedTakeProfitDetails(symbol: string): Promise<ExpectedTPDetails> {
+  try {
+    const data = await fetchAPI<ExpectedTPDetails>(`/dashboard/expected-take-profit/${symbol}`);
+    return data;
+  } catch (error) {
+    logRequestIssue(
+      `getExpectedTakeProfitDetails:${symbol}`,
+      'Handled expected take profit details fetch failure',
+      error,
+      'warn'
+    );
+    throw error;
+  }
+}
+
+// Telegram Messages API
+export interface TelegramMessage {
+  message: string;
+  symbol: string | null;
+  blocked: boolean;
+  order_skipped: boolean;
+  timestamp: string;
+  throttle_status?: string | null;
+  throttle_reason?: string | null;
+}
+
+export interface TelegramMessagesResponse {
+  messages: TelegramMessage[];
+  total: number;
+}
+
+export async function getTelegramMessages(): Promise<TelegramMessagesResponse> {
+  try {
+    const data = await fetchAPI<TelegramMessagesResponse>('/monitoring/telegram-messages');
+    return data;
+  } catch (error) {
+    logRequestIssue(
+      'getTelegramMessages',
+      'Handled telegram messages fetch failure',
+      error,
+      'warn'
+    );
+    return { messages: [], total: 0 };
+  }
+}
+
+// Unified Open Order type (from backend)
+export interface UnifiedOpenOrder {
+  order_id: string;
+  symbol: string;
+  side: string;
+  order_type: string;
+  status: string;
+  price: number | null;
+  trigger_price: number | null;
+  quantity: number;
+  is_trigger: boolean;
+  trigger_type: string | null;
+  trigger_condition: string | null;
+  client_oid: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  source: string;
+  metadata?: Record<string, unknown>;
+}
+
+// Note: OpenPosition interface is defined earlier (around line 1469) with the structure
+// used by transformOrdersToPositions function
+
+// Strategy Decision type - re-exported from @/lib/api for consistency
+export type { StrategyDecision } from '@/lib/api';

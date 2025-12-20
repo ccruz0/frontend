@@ -2,9 +2,12 @@
 
 import '@/lib/polyfill';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { getDashboard, getOpenOrders, getOrderHistory, getTopCoins, saveCoinSettings, getTradingSignals, getDataSourcesStatus, getTradingConfig, saveTradingConfig, updateCoinConfig, addCustomTopCoin, removeCustomTopCoin, getDashboardState, getDashboardSnapshot, quickOrder, updateWatchlistAlert, updateBuyAlert, updateSellAlert, simulateAlert, deleteDashboardItemBySymbol, toggleLiveTrading, getTPSLOrderValues, getOpenOrdersSummary, dashboardBalancesToPortfolioAssets, getExpectedTakeProfitSummary, getExpectedTakeProfitDetails, getTelegramMessages, fixBackendHealth, DashboardState, DashboardBalance, WatchlistItem, OpenOrder, PortfolioAsset, TradingSignals, TopCoin, DataSourceStatus, TradingConfig, CoinSettings, TPSLOrderValues, UnifiedOpenOrder, OpenPosition, ExpectedTPSummary, ExpectedTPDetails, SimulateAlertResponse, TelegramMessage, StrategyDecision } from '@/app/api';
+import { getDashboard, getOpenOrders, getOrderHistory, getTopCoins, saveCoinSettings, getTradingSignals, getDataSourcesStatus, getTradingConfig, saveTradingConfig, updateCoinConfig, addCustomTopCoin, removeCustomTopCoin, getDashboardState, getDashboardSnapshot, quickOrder, updateWatchlistAlert, updateBuyAlert, updateSellAlert, simulateAlert, deleteDashboardItemBySymbol, toggleLiveTrading, getTPSLOrderValues, getOpenOrdersSummary, dashboardBalancesToPortfolioAssets, getExpectedTakeProfitSummary, getExpectedTakeProfitDetails, getTelegramMessages, fixBackendHealth, DashboardState, DashboardBalance, WatchlistItem, OpenOrder, PortfolioAsset, TradingSignals, TopCoin, DataSourceStatus, TradingConfig, CoinSettings, TPSLOrderValues, UnifiedOpenOrder, OpenPosition, ExpectedTPSummary, ExpectedTPSummaryItem, ExpectedTPDetails, ExpectedTPMatchedLot, SimulateAlertResponse, TelegramMessage, StrategyDecision } from '@/app/api';
 import { getApiUrl } from '@/lib/environment';
 import { MonitoringNotificationsProvider, useMonitoringNotifications } from '@/app/context/MonitoringNotificationsContext';
+import MonitoringPanel from '@/app/components/MonitoringPanel';
+import ErrorBoundary from '@/app/components/ErrorBoundary';
+import { palette } from '@/theme/palette';
 
 const TELEGRAM_REFRESH_INTERVAL_MS = 20000;
 
@@ -23,6 +26,7 @@ type ExtendedOpenOrder = OpenOrder & {
   is_trigger?: boolean;
   raw?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+  order_role?: string;  // Order role (STOP_LOSS, TAKE_PROFIT, etc.) - inherited from OpenOrder but explicitly declared for clarity
 };
 
 // Transform UnifiedOpenOrder[] to OpenPosition[]
@@ -186,9 +190,6 @@ export default function DashboardPage() {
     </MonitoringNotificationsProvider>
   );
 }
-import MonitoringPanel from '@/app/components/MonitoringPanel';
-import ErrorBoundary from '@/app/components/ErrorBoundary';
-import { palette } from '@/theme/palette';
 
 const REFRESH_FAST_MS = 15000; // 15 seconds for coins with Trade YES
 const REFRESH_SLOW_MS = 60000; // 60 seconds (1 minute) for coins with Trade NO
@@ -904,7 +905,7 @@ function DashboardPageContent() {
   const [openOrdersPositions, setOpenOrdersPositions] = useState<OpenPosition[]>([]);
   const [_openOrdersSummaryLoading, setOpenOrdersSummaryLoading] = useState(true);
   const [_openOrdersSummaryLastUpdate, setOpenOrdersSummaryLastUpdate] = useState<Date | null>(null);
-  const [expectedTPSummary, setExpectedTPSummary] = useState<ExpectedTPSummary[]>([]);
+  const [expectedTPSummary, setExpectedTPSummary] = useState<ExpectedTPSummaryItem[]>([]);
   const [expectedTPDetails, setExpectedTPDetails] = useState<ExpectedTPDetails | null>(null);
   const [expectedTPLoading, setExpectedTPLoading] = useState<boolean>(true);
   const [expectedTPDetailsLoading, setExpectedTPDetailsLoading] = useState<boolean>(false);
@@ -1098,10 +1099,7 @@ function DashboardPageContent() {
       const messageKey = `${normalizedSymbol}_alerts`;
 
       try {
-        const baseResponse = await updateWatchlistAlert(normalizedSymbol, newStatus, {
-          buyAlertEnabled: newStatus,
-          sellAlertEnabled: newStatus,
-        });
+        const baseResponse = await updateWatchlistAlert(normalizedSymbol, newStatus);
         const [buyResponse, sellResponse] = await Promise.all([
           updateBuyAlert(normalizedSymbol, newStatus),
           updateSellAlert(normalizedSymbol, newStatus)
@@ -1601,6 +1599,8 @@ function DashboardPageContent() {
         buyOrdersToday.forEach(order => {
           try {
             const orderSymbol = order.instrument_name;
+            if (!orderSymbol) return; // Skip if no symbol
+            
             const orderPrice = parseFloat(order.price || order.avg_price || order.filled_price || '0');
             const orderQuantity = parseFloat(order.quantity || order.filled_quantity || order.cumulative_quantity || '0');
             
@@ -1610,14 +1610,15 @@ function DashboardPageContent() {
             const portfolioAsset = portfolio.assets.find(a => {
               const assetSymbol = a.coin?.toUpperCase() || '';
               // Match by base currency (e.g., BTC_USDT matches BTC)
-              const orderBase = orderSymbol.split('_')[0].toUpperCase();
+              const orderBase = orderSymbol.split('_')[0]?.toUpperCase() || '';
               return assetSymbol === orderBase || assetSymbol === orderSymbol.toUpperCase();
             });
             
             // Only calculate if we have a portfolio balance (position is still open)
             if (portfolioAsset && portfolioAsset.balance > 0) {
               // Get current price from topCoins
-              const coin = topCoins.find(c => c && c.instrument_name === orderSymbol || c?.instrument_name?.startsWith(orderSymbol.split('_')[0] + '_'));
+              const orderBase = orderSymbol.split('_')[0] || '';
+              const coin = topCoins.find(c => c && c.instrument_name === orderSymbol || c?.instrument_name?.startsWith(orderBase + '_'));
               if (coin && coin.current_price > 0) {
                 // Check if this order was already sold (has matching SELL order after today)
                 const wasSold = executedOrders.some(sellOrder => {
@@ -2156,8 +2157,9 @@ function resolveDecisionIndexColor(value: number): string {
     }
 
     // CANONICAL: Extract backend reasons - this is the source of truth for green/red status
-    const strategyReasons = currentStrategy?.reasons && typeof currentStrategy.reasons === 'object' && !Array.isArray(currentStrategy.reasons)
-      ? currentStrategy.reasons as Record<string, boolean | null | undefined>
+    const reasons = currentStrategy?.reasons;
+    const strategyReasons = reasons && typeof reasons === 'object' && !Array.isArray(reasons)
+      ? reasons as Record<string, boolean | null | undefined>
       : {};
 
     // CANONICAL: Use backend min_volume_ratio if provided (Signal Config source of truth), otherwise fallback to rules
@@ -6845,7 +6847,7 @@ function resolveDecisionIndexColor(value: number): string {
                         // Create a map of watchlist items for quick lookup
                         const watchlistMap = new Map<string, WatchlistItem>();
                         watchlistItems.forEach(item => {
-                          const baseCurrency = item.symbol.split('_')[0]?.toUpperCase();
+                          const baseCurrency = item.symbol?.split('_')[0]?.toUpperCase();
                           if (baseCurrency && !watchlistMap.has(baseCurrency)) {
                             watchlistMap.set(baseCurrency, item);
                           }
@@ -10042,10 +10044,11 @@ ${marginText}
                               const signalEntry = signals[coin.instrument_name];
                               // Use strategy_state from coin (backend source of truth) or fallback to signalEntry.strategy
                               // Defensive: use safe validation function to prevent crashes
+                              const coinStrategy = (coin as TopCoin).strategy;
                               const strategyState: StrategyDecision | undefined = 
                                 safeGetStrategyDecision(coin.strategy_state) ||
                                 safeGetStrategyDecision(signalEntry?.strategy) ||
-                                safeGetStrategyDecision(coin.strategy) ||
+                                safeGetStrategyDecision(coinStrategy) ||
                                 undefined;
                               
                               // Prefer backend-resolved strategy profile to avoid UI/backend mismatches
@@ -10111,11 +10114,12 @@ ${marginText}
                               const ma200 = signalEntry?.ma200 ?? coin.ma200;
                               const currentPrice = coin.current_price;
                               
+                              const reasons = strategyState?.reasons;
                               const strategyReasons =
-                                strategyState?.reasons &&
-                                typeof strategyState.reasons === 'object' &&
-                                !Array.isArray(strategyState.reasons)
-                                  ? strategyState.reasons
+                                reasons &&
+                                typeof reasons === 'object' &&
+                                !Array.isArray(reasons)
+                                  ? reasons
                                   : {};
                               
                               // CANONICAL: Trust backend decision completely - backend canonical rule ensures
@@ -10466,7 +10470,7 @@ ${marginText}
                                 payload: { symbol, signal_type: testSide, force_order: true, trade_amount_usd: amountUSD, trade_enabled: tradeEnabled }
                               });
                               console.log(`🧪 Simulando alerta ${testSide} para ${symbol} con amount=${amountUSD}, trade_enabled=${tradeEnabled}...`);
-                              const testResult = await simulateAlert(symbol, testSide, true, amountUSD, tradeEnabled);
+                              const testResult = await simulateAlert(symbol, testSide, true, amountUSD);
                               results.push({ type: testSide, result: testResult });
                               
                               // Build summary message
@@ -10901,7 +10905,7 @@ ${marginText}
                       <tr key={item.symbol} className="hover:bg-gray-50">
                         <td className="px-4 py-3 font-medium">{normalizeSymbol(item.symbol || '')}</td>
                         <td className="px-4 py-3 text-right font-mono text-sm">
-                          {formatNumber(item.net_qty, item.symbol.split('_')[0])}
+                          {formatNumber(item.net_qty, item.symbol?.split('_')[0] || '')}
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-sm">${formatNumber(item.current_price)}</td>
                         <td className="px-4 py-3 text-right font-mono text-sm font-semibold">
@@ -10916,10 +10920,10 @@ ${marginText}
                               )}
                           </td>
                         <td className="px-4 py-3 text-right font-mono text-sm text-green-700">
-                          {formatNumber(item.covered_qty, item.symbol.split('_')[0])}
+                          {formatNumber(item.covered_qty, item.symbol?.split('_')[0] || '')}
                           </td>
                         <td className={`px-4 py-3 text-right font-mono text-sm ${item.uncovered_qty > 0 ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
-                          {formatNumber(item.uncovered_qty, item.symbol.split('_')[0])}
+                          {formatNumber(item.uncovered_qty, item.symbol?.split('_')[0] || '')}
                           </td>
                         <td className={`px-4 py-3 text-right font-mono text-sm font-semibold ${item.total_expected_profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {item.total_expected_profit >= 0 ? '+' : ''}${formatNumber(item.total_expected_profit)}
@@ -10977,7 +10981,7 @@ ${marginText}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
                 <div>
                   <div className="text-xs text-gray-500 uppercase">Net Quantity</div>
-                  <div className="text-lg font-semibold font-mono">{formatNumber(expectedTPDetails.net_qty, expectedTPDetails.symbol.split('_')[0])}</div>
+                  <div className="text-lg font-semibold font-mono">{formatNumber(expectedTPDetails.net_qty, expectedTPDetails.symbol?.split('_')[0] || '')}</div>
                 </div>
                 <div>
                   <div className="text-xs text-gray-500 uppercase">Current Price</div>
@@ -11002,13 +11006,13 @@ ${marginText}
                 <div>
                   <div className="text-xs text-gray-500 uppercase">Covered Qty</div>
                   <div className="text-lg font-semibold font-mono text-green-700">
-                    {formatNumber(expectedTPDetails.covered_qty, expectedTPDetails.symbol.split('_')[0])}
+                    {formatNumber(expectedTPDetails.covered_qty, expectedTPDetails.symbol?.split('_')[0] || '')}
                   </div>
                 </div>
                 <div>
                   <div className="text-xs text-gray-500 uppercase">Uncovered Qty</div>
                   <div className={`text-lg font-semibold font-mono ${expectedTPDetails.uncovered_qty > 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                    {formatNumber(expectedTPDetails.uncovered_qty, expectedTPDetails.symbol.split('_')[0])}
+                    {formatNumber(expectedTPDetails.uncovered_qty, expectedTPDetails.symbol?.split('_')[0] || '')}
                   </div>
                 </div>
                 <div>
@@ -11052,13 +11056,13 @@ ${marginText}
                               {lot.buy_time ? formatTimestamp(lot.buy_time) : 'N/A'}
                                       </td>
                             <td className="px-3 py-2 text-sm font-mono text-right">${formatNumber(lot.buy_price)}</td>
-                            <td className="px-3 py-2 text-sm font-mono text-right">{formatNumber(lot.lot_qty, lot.symbol.split('_')[0])}</td>
+                            <td className="px-3 py-2 text-sm font-mono text-right">{formatNumber(lot.lot_qty, lot.symbol?.split('_')[0] || '')}</td>
                             <td className="px-3 py-2 text-sm font-mono text-gray-700">{lot.tp_order_id.substring(0, 12)}...</td>
                             <td className="px-3 py-2 text-sm text-gray-600 font-mono">
                               {lot.tp_time ? formatTimestamp(lot.tp_time) : 'N/A'}
                                       </td>
                             <td className="px-3 py-2 text-sm font-mono text-right text-green-700 font-semibold">${formatNumber(lot.tp_price)}</td>
-                            <td className="px-3 py-2 text-sm font-mono text-right">{formatNumber(lot.tp_qty, lot.symbol.split('_')[0])}</td>
+                            <td className="px-3 py-2 text-sm font-mono text-right">{formatNumber(lot.tp_qty, lot.symbol?.split('_')[0] || '')}</td>
                             <td className="px-3 py-2 text-center">
                               <span className={`px-2 py-1 rounded text-xs ${
                                 lot.tp_status === 'FILLED' ? 'bg-gray-100 text-gray-600' :
@@ -11087,7 +11091,7 @@ ${marginText}
                                     ))}
                                     {/* Add row for uncovered quantity - always show if there's a difference */}
                                     {(() => {
-                                      const coveredTotal = expectedTPDetails.matched_lots.reduce((sum, lot) => sum + (lot.lot_qty || 0), 0);
+                                      const coveredTotal = expectedTPDetails.matched_lots.reduce((sum: number, lot: ExpectedTPMatchedLot) => sum + (lot.lot_qty || 0), 0);
                                       const uncoveredQty = Math.max(0, expectedTPDetails.net_qty - coveredTotal);
                                       return uncoveredQty > 0.001 ? (
                                         <tr key="uncovered" className="hover:bg-gray-50 bg-red-50">
@@ -11095,7 +11099,7 @@ ${marginText}
                                             Sin TP (Uncovered)
                                           </td>
                                           <td className="px-3 py-2 text-sm font-mono text-right font-semibold text-red-700">
-                                            {formatNumber(uncoveredQty, expectedTPDetails.symbol.split('_')[0])}
+                                            {formatNumber(uncoveredQty, expectedTPDetails.symbol?.split('_')[0] || '')}
                                           </td>
                                           <td colSpan={8} className="px-3 py-2 text-sm text-gray-500 italic text-center">
                                             No tiene orden de Take Profit
@@ -11105,7 +11109,7 @@ ${marginText}
                                     })()}
                                     {/* Summary row showing total */}
                                     {(() => {
-                                      const coveredTotal = expectedTPDetails.matched_lots.reduce((sum, lot) => sum + (lot.lot_qty || 0), 0);
+                                      const coveredTotal = expectedTPDetails.matched_lots.reduce((sum: number, lot: ExpectedTPMatchedLot) => sum + (lot.lot_qty || 0), 0);
                                       const uncoveredQty = Math.max(0, expectedTPDetails.net_qty - coveredTotal);
                                       return (
                                         <tr className="bg-gray-100 font-semibold">
@@ -11113,12 +11117,12 @@ ${marginText}
                                             TOTAL (Portfolio Balance)
                                           </td>
                                           <td className="px-3 py-2 text-sm font-mono text-right text-gray-900">
-                                            {formatNumber(expectedTPDetails.net_qty, expectedTPDetails.symbol.split('_')[0])}
+                                            {formatNumber(expectedTPDetails.net_qty, expectedTPDetails.symbol?.split('_')[0] || '')}
                                           </td>
                                           <td colSpan={8} className="px-3 py-2 text-sm text-gray-600 text-center">
-                                            Covered: {formatNumber(coveredTotal, expectedTPDetails.symbol.split('_')[0])} + 
-                                            Uncovered: {formatNumber(uncoveredQty, expectedTPDetails.symbol.split('_')[0])} = 
-                                            {formatNumber(coveredTotal + uncoveredQty, expectedTPDetails.symbol.split('_')[0])}
+                                            Covered: {formatNumber(coveredTotal, expectedTPDetails.symbol?.split('_')[0] || '')} + 
+                                            Uncovered: {formatNumber(uncoveredQty, expectedTPDetails.symbol?.split('_')[0] || '')} = 
+                                            {formatNumber(coveredTotal + uncoveredQty, expectedTPDetails.symbol?.split('_')[0] || '')}
                                           </td>
                                         </tr>
                                       );
@@ -11135,10 +11139,10 @@ ${marginText}
                         <div className="text-center">
                           <p className="text-red-700 font-semibold mb-2">Uncovered Quantity:</p>
                           <p className="text-2xl font-mono text-red-600 font-bold">
-                            {formatNumber(expectedTPDetails.uncovered_qty, expectedTPDetails.symbol.split('_')[0])}
+                            {formatNumber(expectedTPDetails.uncovered_qty, expectedTPDetails.symbol?.split('_')[0] || '')}
                           </p>
                           <p className="text-sm text-gray-600 mt-2">
-                            Total Portfolio: {formatNumber(expectedTPDetails.net_qty, expectedTPDetails.symbol.split('_')[0])}
+                            Total Portfolio: {formatNumber(expectedTPDetails.net_qty, expectedTPDetails.symbol?.split('_')[0] || '')}
                           </p>
                         </div>
                       </div>
@@ -11163,7 +11167,7 @@ ${marginText}
                       <div>
                         <div className="text-xs text-gray-500 uppercase">Uncovered Quantity</div>
                         <div className="text-lg font-semibold font-mono text-red-600">
-                          {formatNumber(expectedTPDetails.uncovered_entry.uncovered_qty, expectedTPDetails.uncovered_entry.symbol.split('_')[0])}
+                          {formatNumber(expectedTPDetails.uncovered_entry.uncovered_qty, expectedTPDetails.uncovered_entry.symbol?.split('_')[0] || '')}
                         </div>
                       </div>
                     </div>

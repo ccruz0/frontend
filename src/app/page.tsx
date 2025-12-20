@@ -8,6 +8,7 @@ import { MonitoringNotificationsProvider, useMonitoringNotifications } from '@/a
 import MonitoringPanel from '@/app/components/MonitoringPanel';
 import ErrorBoundary from '@/app/components/ErrorBoundary';
 import { palette } from '@/theme/palette';
+import { logger } from '@/utils/logger';
 
 const TELEGRAM_REFRESH_INTERVAL_MS = 20000;
 
@@ -94,7 +95,7 @@ function transformOrdersToPositions(orders: UnifiedOpenOrder[], portfolioAssets?
     let entryPrice: number | null = null;
     let entryQuantity: number = totalQuantity;
     
-    if (portfolioAssets && portfolioAssets.length > 0) {
+    if (portfolioAssets && portfolioAssets.length > 0 && symbol) {
       // Try to find matching asset in portfolio
       const portfolioAsset = portfolioAssets.find(asset => 
         asset.coin === symbol || asset.coin === symbol.split('_')[0]
@@ -416,11 +417,19 @@ function logHandledError(
   }
   handledErrorTimestamps.set(key, now);
 
-  const logger = level === 'warn' ? console.warn : console.error;
+  // Use centralized logger instead of direct console calls
   if (error instanceof Error) {
-    logger(message, { name: error.name, message: error.message, stack: error.stack });
+    if (level === 'warn') {
+      logger.warn(message, { name: error.name, message: error.message, stack: error.stack });
+    } else {
+      logger.error(message, { name: error.name, message: error.message, stack: error.stack });
+    }
   } else {
-    logger(message, error);
+    if (level === 'warn') {
+      logger.warn(message, error);
+    } else {
+      logger.error(message, error);
+    }
   }
 }
 
@@ -1070,7 +1079,7 @@ function DashboardPageContent() {
         try {
           localStorage.setItem(storageKey, JSON.stringify(updated));
         } catch (err) {
-          console.warn(`Failed to persist ${storageKey}:`, err);
+          logger.warn(`Failed to persist ${storageKey}:`, err);
         }
         return updated;
       });
@@ -1131,7 +1140,7 @@ function DashboardPageContent() {
         }, 2500);
       } catch (error) {
         const errorObj = error as { detail?: string; message?: string };
-        console.error(`❌ Failed to toggle alerts for ${normalizedSymbol}:`, error);
+        logger.error(`❌ Failed to toggle alerts for ${normalizedSymbol}:`, error);
         applyState(previousMaster, previousBuy, previousSell);
         const errorMsg = errorObj.detail || errorObj.message || 'Error desconocido';
         alert(`Error updating alerts for ${normalizedSymbol}: ${errorMsg}`);
@@ -1152,7 +1161,7 @@ function DashboardPageContent() {
         setTelegramMessages(messages);
         handleNewMessages(messages);
       } catch (err) {
-        console.error('Failed to fetch Telegram messages:', err);
+        logger.error('Failed to fetch Telegram messages:', err);
       } finally {
         if (!silent) {
           setTelegramMessagesLoading(false);
@@ -1230,7 +1239,7 @@ function DashboardPageContent() {
           .sort()
           .join('|');
       } catch (err) {
-        console.error('Error in coinMembershipSignature:', err);
+        logger.error('Error in coinMembershipSignature:', err);
         return '';
       }
     },
@@ -1384,7 +1393,7 @@ function DashboardPageContent() {
             if (orderSymbol === 'ETH_USD' && orderPrice === 3649.25) {
               const buyCreateTime = matchedBuyOrder.create_time || matchedBuyOrder.update_time || 0;
               const sellCreateTime = order.create_time || orderTime;
-              console.log(`📊 P/L Calculation for ETH_USD SELL:`, {
+              logger.info(`📊 P/L Calculation for ETH_USD SELL:`, {
                 sellOrder_id: order.order_id,
                 sellQty: orderQuantity,
                 sellPrice: orderPrice,
@@ -1408,7 +1417,7 @@ function DashboardPageContent() {
             // General logging for all SELL orders
             const buyCreateTime = matchedBuyOrder.create_time || matchedBuyOrder.update_time || 0;
             const sellCreateTime = order.create_time || orderTime;
-            console.log(`💰 P/L for ${orderSymbol} SELL (${orderQuantity} @ ${orderPrice}):`, {
+            logger.info(`💰 P/L for ${orderSymbol} SELL (${orderQuantity} @ ${orderPrice}):`, {
               matchType: matchType,
               matchedBuyOrder_id: matchedBuyOrder.order_id,
               buyPrice: buyPrice.toFixed(2),
@@ -1511,9 +1520,9 @@ function DashboardPageContent() {
         acc[status] = (acc[status] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
-      console.warn(`⚠️ All ${executedOrders.length} executed orders were filtered out. Status breakdown:`, statusBreakdown);
-      console.warn(`⚠️ Filter settings: hideCancelled=${hideCancelled}, orderFilter:`, orderFilter);
-      console.warn(`⚠️ Sample orders:`, executedOrders.slice(0, 3).map(o => ({
+      logger.warn(`⚠️ All ${executedOrders.length} executed orders were filtered out. Status breakdown:`, statusBreakdown);
+      logger.warn(`⚠️ Filter settings: hideCancelled=${hideCancelled}, orderFilter:`, orderFilter);
+      logger.warn(`⚠️ Sample orders:`, executedOrders.slice(0, 3).map(o => ({
         order_id: o.order_id,
         status: o.status,
         instrument_name: o.instrument_name
@@ -1647,7 +1656,7 @@ function DashboardPageContent() {
       
       return { realizedPL, potentialPL, totalPL: realizedPL + potentialPL };
     } catch (err) {
-      console.error('Error calculating P/L summary:', err);
+      logger.error('Error calculating P/L summary:', err);
       return { realizedPL: 0, potentialPL: 0, totalPL: 0 };
     }
   }, [plPeriod, selectedMonth, selectedYear, executedOrders, topCoins, calculateProfitLoss]);
@@ -2041,7 +2050,7 @@ function DashboardPageContent() {
           });
         } catch (e) {
           // Silently ignore if reasons is malformed - don't break the tooltip
-          console.debug('Error processing strategy reasons:', e);
+          logger.debug('Error processing strategy reasons:', e);
         }
       }
       if (validStrategy.summary && typeof validStrategy.summary === 'string') {
@@ -2587,8 +2596,8 @@ function resolveDecisionIndexColor(value: number): string {
   }, [lastUpdateTimes]);
 
   const updateTopCoins = useCallback((newCoins: TopCoin[], filterSymbols?: string[]) => {
-    console.log('🔄 updateTopCoins called with', newCoins.length, 'coins', filterSymbols ? `(filtered to ${filterSymbols.length})` : '');
-    console.log('📊 First few coins:', newCoins.slice(0, 3).map(c => c.instrument_name));
+    logger.info('🔄 updateTopCoins called with', newCoins.length, 'coins', filterSymbols ? `(filtered to ${filterSymbols.length})` : '');
+    logger.info('📊 First few coins:', newCoins.slice(0, 3).map(c => c.instrument_name));
     
     // Merge new coins with existing coins, updating only filtered symbols
       // CRITICAL FIX: Always preserve existing coins, even when filtering
@@ -2623,12 +2632,12 @@ function resolveDecisionIndexColor(value: number): string {
           .filter(coin => !filterSymbols.includes(coin.instrument_name))
           .map(coin => coin.instrument_name);
         if (preservedInFilter.length > 0) {
-          console.log(`🛡️ Preserved ${preservedInFilter.length} coins not in filtered response:`, preservedInFilter.slice(0, 5));
+          logger.info(`🛡️ Preserved ${preservedInFilter.length} coins not in filtered response:`, preservedInFilter.slice(0, 5));
         }
         
       topCoinsRef.current = coinsToUpdate;
       setTopCoins(coinsToUpdate);
-        console.log(`✅ Updated ${coinsToUpdate.length} coins (${newCoins.length} filtered, ${preservedInFilter.length} preserved)`);
+        logger.info(`✅ Updated ${coinsToUpdate.length} coins (${newCoins.length} filtered, ${preservedInFilter.length} preserved)`);
       
       // Only update timestamps for filtered coins
       const now = new Date();
@@ -2669,12 +2678,12 @@ function resolveDecisionIndexColor(value: number): string {
         .filter(coin => !newCoinsMap.has(coin.instrument_name))
         .map(coin => coin.instrument_name);
       if (preservedSymbols.length > 0) {
-        console.log(`🛡️ Preserved ${preservedSymbols.length} existing coins not in backend response:`, preservedSymbols);
+        logger.info(`🛡️ Preserved ${preservedSymbols.length} existing coins not in backend response:`, preservedSymbols);
       }
       
       topCoinsRef.current = coinsToUpdate;
       setTopCoins(coinsToUpdate);
-      console.log(`✅ setTopCoins called with ${coinsToUpdate.length} coins (${newCoins.length} from backend, ${preservedSymbols.length} preserved)`);
+      logger.info(`✅ setTopCoins called with ${coinsToUpdate.length} coins (${newCoins.length} from backend, ${preservedSymbols.length} preserved)`);
       
       // Record price update time for all coins
       const now = new Date();
@@ -2754,7 +2763,7 @@ function resolveDecisionIndexColor(value: number): string {
           }
         }));
         
-        console.log(`✅ Extracted indicators for ${coin.instrument_name}:`, {
+        logger.info(`✅ Extracted indicators for ${coin.instrument_name}:`, {
           rsi: coin.rsi,
           atr: coin.atr,
           ma50: coin.ma50,
@@ -2835,7 +2844,7 @@ function resolveDecisionIndexColor(value: number): string {
       return base === asset.toUpperCase() || instrumentBase === asset.toUpperCase();
     });
     if (coin?.current_price && coin.current_price > 0) {
-      console.log(`✅ Found price for ${asset} in topCoins: $${coin.current_price} (source: ${coin.instrument_name})`);
+      logger.info(`✅ Found price for ${asset} in topCoins: $${coin.current_price} (source: ${coin.instrument_name})`);
       return coin.current_price;
     }
     
@@ -2847,14 +2856,14 @@ function resolveDecisionIndexColor(value: number): string {
     if (signalKey) {
       const signal = signals[signalKey];
       if (signal?.price && signal.price > 0) {
-        console.log(`✅ Found price for ${asset} in signals: $${signal.price} (symbol: ${signalKey})`);
+        logger.info(`✅ Found price for ${asset} in signals: $${signal.price} (symbol: ${signalKey})`);
         return signal.price;
       }
     }
     
     // NO external API calls - backend should provide all prices
     // Return 0 if price not found in backend data
-    console.debug(`⚠️ No price found for ${asset} in backend data (topCoins or signals)`);
+    logger.debug(`⚠️ No price found for ${asset} in backend data (topCoins or signals)`);
     return 0;
   }, [topCoins, signals]);
 
@@ -2890,7 +2899,7 @@ function resolveDecisionIndexColor(value: number): string {
         }
       }
       
-      console.log(`🔍 ${source} - dashboardState:`, {
+      logger.info(`🔍 ${source} - dashboardState:`, {
         source: dashboardState.source,
         balancesCount: dashboardState.balances?.length || 0,
         totalUsd: dashboardState.total_usd_value,
@@ -2909,14 +2918,14 @@ function resolveDecisionIndexColor(value: number): string {
       const fallbackToEmbeddedPortfolio = (_reason?: string) => {
         // Silenced verbose warnings - this is expected behavior
         // if (reason) {
-        //   console.warn(reason);
+        //   logger.warn(reason);
         // }
         const fallbackAssets = dashboardState.portfolio?.assets ?? [];
         const fallbackTotal =
           dashboardState.portfolio?.total_value_usd
           ?? dashboardState.total_usd_value
           ?? fallbackAssets.reduce((sum, asset) => sum + (asset.value_usd ?? 0), 0);
-        console.log(`📊 Falling back to embedded portfolio data (${fallbackAssets.length} assets, total=$${fallbackTotal.toFixed(2)})`);
+        logger.info(`📊 Falling back to embedded portfolio data (${fallbackAssets.length} assets, total=$${fallbackTotal.toFixed(2)})`);
         setPortfolio({ assets: fallbackAssets, total_value_usd: fallbackTotal });
         // setPortfolioLastUpdate(new Date()); // Removed - not currently used
         setPortfolioError(dashboardFetchFailed ? PORTFOLIO_UNAVAILABLE_MESSAGE : null);
@@ -2926,7 +2935,7 @@ function resolveDecisionIndexColor(value: number): string {
         const normalizedBalances = dashboardState.balances.filter(bal => bal?.asset);
         setRealBalances(normalizedBalances);
 
-        console.log(`${source} - normalized balance sample:`, normalizedBalances[0]);
+        logger.info(`${source} - normalized balance sample:`, normalizedBalances[0]);
 
         const assetsWithValues = dashboardBalancesToPortfolioAssets(normalizedBalances)
           .filter(asset => asset && asset.coin) // Additional safety filter
@@ -2953,18 +2962,18 @@ function resolveDecisionIndexColor(value: number): string {
             setTotalBorrowed(borrowedAmount);
           }
 
-          console.log(`✅ Processed ${assetsWithValues.length} assets from ${normalizedBalances.length} balances`);
-          console.log(`📊 Total Portfolio Value (backend=${dashboardState.total_usd_value ?? 0}, calculated=${calculatedTotal})`);
+          logger.info(`✅ Processed ${assetsWithValues.length} assets from ${normalizedBalances.length} balances`);
+          logger.info(`📊 Total Portfolio Value (backend=${dashboardState.total_usd_value ?? 0}, calculated=${calculatedTotal})`);
 
           const assetsWithUsd = assetsWithValues.filter(a => (a.value_usd ?? 0) > 0);
           if (assetsWithUsd.length === 0) {
             // Silenced: This is expected when backend hasn't computed USD values yet
-            // console.warn('⚠️ WARNING: Portfolio has balances but USD values are 0. Backend should calculate USD values on next sync.');
+            // logger.warn('⚠️ WARNING: Portfolio has balances but USD values are 0. Backend should calculate USD values on next sync.');
           } else {
             // Silenced verbose logging
-            // console.log(`💰 Assets with USD values (${assetsWithUsd.length}/${assetsWithValues.length}):`);
+            // logger.info(`💰 Assets with USD values (${assetsWithUsd.length}/${assetsWithValues.length}):`);
             assetsWithUsd.slice(0, 10).forEach(asset => {
-              console.log(`   ${asset.coin}: $${asset.value_usd?.toFixed(2) ?? '0.00'} (balance: ${asset.balance.toFixed(8)})`);
+              logger.info(`   ${asset.coin}: $${asset.value_usd?.toFixed(2) ?? '0.00'} (balance: ${asset.balance.toFixed(8)})`);
             });
           }
 
@@ -2986,7 +2995,7 @@ function resolveDecisionIndexColor(value: number): string {
     
     try {
       // STEP 1: Load snapshot FIRST (fast, cached)
-      console.log('📸 Loading dashboard snapshot (fast)...');
+      logger.info('📸 Loading dashboard snapshot (fast)...');
       let snapshotLoaded = false;
       try {
         const snapshot = await getDashboardSnapshot();
@@ -3001,7 +3010,7 @@ function resolveDecisionIndexColor(value: number): string {
         
         // Only update portfolio if snapshot has data and is not empty
         if (!snapshot.empty && dashboardState.balances && dashboardState.balances.length > 0) {
-          console.log(`✅ Snapshot loaded with ${dashboardState.balances.length} balances - displaying immediately`);
+          logger.info(`✅ Snapshot loaded with ${dashboardState.balances.length} balances - displaying immediately`);
           snapshotLoaded = updatePortfolioFromState(dashboardState, 'fetchPortfolio:snapshot');
 
           if (Array.isArray(dashboardState.open_orders_summary)) {
@@ -3048,12 +3057,12 @@ function resolveDecisionIndexColor(value: number): string {
       
       // STEP 2: Background refresh with full state (only if not already doing background refresh)
       if (!backgroundRefresh) {
-        console.log('🔄 Starting background refresh with full dashboard state...');
+        logger.info('🔄 Starting background refresh with full dashboard state...');
         // Don't await - let it run in background without blocking UI
         (async () => {
           try {
             const dashboardState = await getDashboardState();
-            console.log('✅ Background refresh completed - updating portfolio with fresh data');
+            logger.info('✅ Background refresh completed - updating portfolio with fresh data');
             updatePortfolioFromState(dashboardState, 'fetchPortfolio:background');
             if (Array.isArray(dashboardState.open_orders_summary)) {
               setOpenOrdersSummary(dashboardState.open_orders_summary);
@@ -3073,7 +3082,7 @@ function resolveDecisionIndexColor(value: number): string {
               const errorMsg = snapshotErr instanceof Error ? snapshotErr.message : String(snapshotErr);
               // Only log if it's not a network error (those are expected occasionally)
               if (!errorMsg.includes('Failed to fetch') && !errorMsg.includes('NetworkError')) {
-                console.debug('Background snapshot refresh error:', snapshotErr);
+                logger.debug('Background snapshot refresh error:', snapshotErr);
               }
               // Ignore snapshot errors in background refresh - keep showing last good data
             }
@@ -3120,7 +3129,7 @@ function resolveDecisionIndexColor(value: number): string {
     const slOverride = coinSLPercent[coin?.instrument_name];
     const tpOverride = coinTPPercent[coin?.instrument_name];
     
-    console.log(`🔍 Calculating SL/TP for ${coin?.instrument_name}:`, {
+    logger.info(`🔍 Calculating SL/TP for ${coin?.instrument_name}:`, {
       currentPrice,
       hasSignal: !!signal,
       isAggressive,
@@ -3179,9 +3188,9 @@ function resolveDecisionIndexColor(value: number): string {
       tp: tpPrice
     };
     
-    console.log(`✅ Final SL/TP for ${coin.instrument_name}:`, result);
-    console.log(`🔍 SL Price details: ${slPrice} (type: ${typeof slPrice})`);
-    console.log(`🔍 TP Price details: ${tpPrice} (type: ${typeof tpPrice})`);
+    logger.info(`✅ Final SL/TP for ${coin.instrument_name}:`, result);
+    logger.info(`🔍 SL Price details: ${slPrice} (type: ${typeof slPrice})`);
+    logger.info(`🔍 TP Price details: ${tpPrice} (type: ${typeof tpPrice})`);
     return result;
   }, [signals, coinTradeStatus, coinSLPercent, coinTPPercent]);
 
@@ -3215,7 +3224,7 @@ function resolveDecisionIndexColor(value: number): string {
         );
         state.fastBackoffMs = penalty;
         state.fastPausedUntil = Date.now() + penalty;
-        console.warn(`⚠️ Fast queue rate-limited. Backing off to ${penalty}ms`);
+        logger.warn(`⚠️ Fast queue rate-limited. Backing off to ${penalty}ms`);
         setFastQueueRateLimited(true);
       } else if ((apiError?.status ?? 0) >= 500 || !apiError?.status) {
         const penalty = Math.min(
@@ -3224,9 +3233,9 @@ function resolveDecisionIndexColor(value: number): string {
         );
         state.fastBackoffMs = penalty;
         state.fastPausedUntil = Date.now() + penalty;
-        console.warn(`⚠️ Fast queue server error (${apiError?.status ?? 'n/a'}). Backoff=${penalty}ms`);
+        logger.warn(`⚠️ Fast queue server error (${apiError?.status ?? 'n/a'}). Backoff=${penalty}ms`);
       } else {
-        console.warn(`⚠️ Fast queue error without status`, apiError);
+        logger.warn(`⚠️ Fast queue error without status`, apiError);
       }
     } else {
       state.slowErrorCount += 1;
@@ -3235,7 +3244,7 @@ function resolveDecisionIndexColor(value: number): string {
         Math.max(REFRESH_SLOW_MS, state.slowBackoffMs * 1.5)
       );
       state.slowBackoffMs = penalty;
-      console.warn(`⚠️ Slow queue error (${apiError?.status ?? 'n/a'}). Backoff=${penalty}ms`);
+      logger.warn(`⚠️ Slow queue error (${apiError?.status ?? 'n/a'}). Backoff=${penalty}ms`);
     }
   }, [setFastQueueRateLimited]);
 
@@ -3259,11 +3268,11 @@ function resolveDecisionIndexColor(value: number): string {
         }
         setTopCoinsError(null);
         setTopCoinsLoading(false);
-        console.log(`💾 Loaded ${parsed.coins.length} cached top coins snapshot`);
+        logger.info(`💾 Loaded ${parsed.coins.length} cached top coins snapshot`);
         return true;
       }
     } catch (err) {
-      console.warn('Failed to load cached top coins snapshot:', err);
+      logger.warn('Failed to load cached top coins snapshot:', err);
     }
     return false;
   }, [updateTopCoins]);
@@ -3317,9 +3326,9 @@ function resolveDecisionIndexColor(value: number): string {
             updatedSignal = { ...updatedSignal, price: coin.current_price };
           }
           applyPriceToTopCoins(symbol, coin.current_price);
-          console.log(`✅ Found price for ${symbol} in topCoins: $${coin.current_price}`);
+          logger.info(`✅ Found price for ${symbol} in topCoins: $${coin.current_price}`);
         } else {
-          console.debug(`⚠️ No price available for ${symbol} in backend data (signal or topCoins)`);
+          logger.debug(`⚠️ No price available for ${symbol} in backend data (signal or topCoins)`);
         }
       } else {
         applyPriceToTopCoins(symbol, price);
@@ -3342,7 +3351,7 @@ function resolveDecisionIndexColor(value: number): string {
         }
       }));
       
-      console.log(`📊 Updated signals for ${symbol}:`, price || 'no price available');
+      logger.info(`📊 Updated signals for ${symbol}:`, price || 'no price available');
     } catch (err) {
       // Handle circuit breaker errors gracefully - they're protection mechanisms, not real errors
       const error = err as Error & { status?: number; retryAfterMs?: number };
@@ -3351,7 +3360,7 @@ function resolveDecisionIndexColor(value: number): string {
         // Don't log as error, just skip this fetch silently
         // The circuit breaker will auto-reset after timeout
         const retryAfter = error.retryAfterMs ? Math.ceil(error.retryAfterMs / 1000) : 30;
-        console.debug(`⏸️ Signals circuit breaker open for ${symbol}, skipping fetch. Will auto-retry in ~${retryAfter}s`);
+        logger.debug(`⏸️ Signals circuit breaker open for ${symbol}, skipping fetch. Will auto-retry in ~${retryAfter}s`);
         // Don't throw - just silently skip this fetch
         return;
       }
@@ -3378,15 +3387,15 @@ function resolveDecisionIndexColor(value: number): string {
       await fetchTopCoinsFn(true, true);
     } catch (err) {
       // Don't fail the entire fast tick if top coins fetch fails
-      console.warn('⚠️ Failed to fetch top coins (Trade YES) in fast tick:', err);
+      logger.warn('⚠️ Failed to fetch top coins (Trade YES) in fast tick:', err);
       // Update timestamp even on error to show last attempt time
       setLastTopCoinsFetchAt(new Date());
     }
 
-    console.log(`🔄 Fast tick: Processing ${symbols.length} symbols (Trade YES) at ${new Date().toLocaleTimeString()}`);
+    logger.info(`🔄 Fast tick: Processing ${symbols.length} symbols (Trade YES) at ${new Date().toLocaleTimeString()}`);
     for (let i = 0; i < symbols.length; i += FAST_BATCH_SIZE) {
       const batch = symbols.slice(i, i + FAST_BATCH_SIZE);
-      console.log(`📊 Fast batch ${i / FAST_BATCH_SIZE + 1}:`, batch);
+      logger.info(`📊 Fast batch ${i / FAST_BATCH_SIZE + 1}:`, batch);
       const results = await Promise.allSettled(batch.map(symbol => fetchSignals(symbol)));
       const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
       if (failure) {
@@ -3396,7 +3405,7 @@ function resolveDecisionIndexColor(value: number): string {
         await wait(FAST_STAGGER_MS);
       }
     }
-    console.log(`✅ Fast tick completed for ${symbols.length} symbols`);
+    logger.info(`✅ Fast tick completed for ${symbols.length} symbols`);
   }, [fetchSignals]);
 
   // We need to use refs to avoid circular dependency issues
@@ -3429,27 +3438,27 @@ function resolveDecisionIndexColor(value: number): string {
       // This ensures coins without Trade YES/NO status also get price updates
       const slowTickCount = schedulerRef.current.slowTickCount || 0;
       if (slowTickCount % 3 === 0) {
-        console.log('🔄 Fetching ALL coins (no filter) to update all prices');
+        logger.info('🔄 Fetching ALL coins (no filter) to update all prices');
         await fetchTopCoinsFn(true, undefined);
       }
       schedulerRef.current.slowTickCount = slowTickCount + 1;
     } catch (err) {
       // Don't fail the entire slow tick if top coins fetch fails
-      console.warn('⚠️ Failed to fetch top coins (Trade NO) in slow tick:', err);
+      logger.warn('⚠️ Failed to fetch top coins (Trade NO) in slow tick:', err);
       // Update timestamp even on error to show last attempt time
       setLastTopCoinsFetchAt(new Date());
     }
 
     const slowSymbols = slowQueueRef.current;
     if (!slowSymbols.length) {
-      console.log('⏸️ Slow queue empty, skipping signals update');
+      logger.info('⏸️ Slow queue empty, skipping signals update');
       return;
     }
 
-    console.log(`🔄 Slow tick: Processing ${slowSymbols.length} symbols (Trade NO) at ${new Date().toLocaleTimeString()}`);
+    logger.info(`🔄 Slow tick: Processing ${slowSymbols.length} symbols (Trade NO) at ${new Date().toLocaleTimeString()}`);
     for (let i = 0; i < slowSymbols.length; i += SLOW_BATCH_SIZE) {
       const batch = slowSymbols.slice(i, i + SLOW_BATCH_SIZE);
-      console.log(`📊 Slow batch ${i / SLOW_BATCH_SIZE + 1}:`, batch);
+      logger.info(`📊 Slow batch ${i / SLOW_BATCH_SIZE + 1}:`, batch);
       const results = await Promise.allSettled(batch.map(symbol => fetchSignalsFn(symbol)));
       const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
       if (failure) {
@@ -3459,7 +3468,7 @@ function resolveDecisionIndexColor(value: number): string {
         await wait(FAST_STAGGER_MS * 2);
       }
     }
-    console.log(`✅ Slow tick completed for ${slowSymbols.length} symbols`);
+    logger.info(`✅ Slow tick completed for ${slowSymbols.length} symbols`);
   }, []);
 
   const scheduleFastTick = useCallback((delay?: number) => {
@@ -3483,7 +3492,7 @@ function resolveDecisionIndexColor(value: number): string {
       waitMs = Math.max(REFRESH_FAST_MS, waitMs);
     }
     
-    console.log(`⏰ Scheduling fast tick in ${waitMs}ms (${waitMs / 1000}s)`);
+    logger.info(`⏰ Scheduling fast tick in ${waitMs}ms (${waitMs / 1000}s)`);
 
     const tick = async () => {
       markJobStart();
@@ -3519,7 +3528,7 @@ function resolveDecisionIndexColor(value: number): string {
       waitMs = Math.max(REFRESH_SLOW_MS, waitMs);
     }
     
-    console.log(`⏰ Scheduling slow tick in ${waitMs}ms (${waitMs / 1000}s)`);
+    logger.info(`⏰ Scheduling slow tick in ${waitMs}ms (${waitMs / 1000}s)`);
 
     const tick = async () => {
       markJobStart();
@@ -3569,9 +3578,9 @@ function resolveDecisionIndexColor(value: number): string {
     );
     const slowSymbols = Array.from(slowSymbolSet).filter(symbol => !fastSymbolSet.has(symbol));
     
-    console.log(`🔀 Queue separation: Fast (YES)=${fastSymbols.length}, Slow (NO)=${slowSymbols.length}`);
-    if (fastSymbols.length > 0) console.log(`  Fast symbols:`, fastSymbols);
-    if (slowSymbols.length > 0) console.log(`  Slow symbols:`, slowSymbols);
+    logger.info(`🔀 Queue separation: Fast (YES)=${fastSymbols.length}, Slow (NO)=${slowSymbols.length}`);
+    if (fastSymbols.length > 0) logger.info(`  Fast symbols:`, fastSymbols);
+    if (slowSymbols.length > 0) logger.info(`  Slow symbols:`, slowSymbols);
 
     const newFastSignature = fastSymbols.slice().sort().join('|');
     const currentFastSignature = fastQueueRef.current.slice().sort().join('|');
@@ -3603,10 +3612,10 @@ function resolveDecisionIndexColor(value: number): string {
         scheduleSlowTick();
       }
     } else if (!state.slowTimer && coins.length > 0) {
-      console.log('🔄 No slow timer running, scheduling slow tick');
+      logger.info('🔄 No slow timer running, scheduling slow tick');
       scheduleSlowTick();
     } else if (!state.slowTimer && slowSymbols.length > 0) {
-      console.log('🔄 No slow timer running but slow symbols exist, scheduling slow tick');
+      logger.info('🔄 No slow timer running but slow symbols exist, scheduling slow tick');
       scheduleSlowTick();
     }
   }, [coinTradeStatus, coinMembershipSignature, scheduleFastTick, scheduleSlowTick]);
@@ -3630,7 +3639,7 @@ function resolveDecisionIndexColor(value: number): string {
     const cleaned = coins.filter(coin => {
       const key = coin.instrument_name.toLowerCase();
       if (seen.has(key)) {
-        console.log(`🔄 Removing duplicate: ${coin.instrument_name}`);
+        logger.info(`🔄 Removing duplicate: ${coin.instrument_name}`);
         return false;
       }
       seen.add(key);
@@ -3655,13 +3664,13 @@ function resolveDecisionIndexColor(value: number): string {
       });
       
       if (isDuplicate) {
-        console.log(`🔄 Removing similar coin: ${coin.instrument_name} (similar to existing)`);
+        logger.info(`🔄 Removing similar coin: ${coin.instrument_name} (similar to existing)`);
       } else {
         finalCoins.push(coin);
       }
     }
     
-    console.log(`✅ Duplicate removal: ${coins.length} → ${finalCoins.length} coins`);
+    logger.info(`✅ Duplicate removal: ${coins.length} → ${finalCoins.length} coins`);
     return finalCoins;
   }, []);
 
@@ -3672,12 +3681,12 @@ function resolveDecisionIndexColor(value: number): string {
     }
     try {
       const filterType = filterTradeYes === true ? 'Trade YES' : filterTradeYes === false ? 'Trade NO' : 'ALL';
-      console.log(`🔄 fetchTopCoins called (${filterType}), preserveLocalChanges:`, preserveLocalChanges);
+      logger.info(`🔄 fetchTopCoins called (${filterType}), preserveLocalChanges:`, preserveLocalChanges);
       const data = await getTopCoins();
-      console.log('📊 getTopCoins response:', data);
+      logger.info('📊 getTopCoins response:', data);
       let fetchedCoins: TopCoin[] = data.coins || [];
-      console.log('📊 fetchedCoins length (before filter):', fetchedCoins.length);
-      console.log('📊 fetchedCoins symbols (first 10):', fetchedCoins.slice(0, 10).map(c => c.instrument_name));
+      logger.info('📊 fetchedCoins length (before filter):', fetchedCoins.length);
+      logger.info('📊 fetchedCoins symbols (first 10):', fetchedCoins.slice(0, 10).map(c => c.instrument_name));
       
       // Filter coins by Trade YES/NO status if specified
       if (filterTradeYes !== undefined) {
@@ -3685,7 +3694,7 @@ function resolveDecisionIndexColor(value: number): string {
           const isTradeYes = coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] === true;
           return filterTradeYes ? isTradeYes : !isTradeYes;
         });
-        console.log(`📊 Filtered to ${filterType}: ${filteredCoins.length} coins`);
+        logger.info(`📊 Filtered to ${filterType}: ${filteredCoins.length} coins`);
         fetchedCoins = filteredCoins;
       }
       
@@ -3712,7 +3721,7 @@ function resolveDecisionIndexColor(value: number): string {
           // If we removed any protected coins, update localStorage
           if (filteredDeletedList.length !== deletedList.length) {
             const removedCoins = deletedList.filter(coin => !filteredDeletedList.includes(coin));
-            console.log('🛡️ Restored protected coins from deleted list:', removedCoins);
+            logger.info('🛡️ Restored protected coins from deleted list:', removedCoins);
             if (filteredDeletedList.length === 0) {
               localStorage.removeItem('deleted_coins');
             } else {
@@ -3721,7 +3730,7 @@ function resolveDecisionIndexColor(value: number): string {
           }
           
           // Filter fetched coins, but ALWAYS include protected coins even if they're in deleted list
-          console.log('🗑️ Filtering out deleted coins:', filteredDeletedList);
+          logger.info('🗑️ Filtering out deleted coins:', filteredDeletedList);
           const beforeCount = fetchedCoins.length;
           const protectedCoinsSet = new Set(protectedCoins.map(c => c.toUpperCase()));
           const restoredCustomCoins: string[] = [];
@@ -3733,7 +3742,7 @@ function resolveDecisionIndexColor(value: number): string {
             });
             const isCustom = coin.is_custom === true || ('source' in coin && coin.source === 'custom');
             if (isProtected) {
-              console.log(`🛡️ Keeping protected coin: ${coin.instrument_name}`);
+              logger.info(`🛡️ Keeping protected coin: ${coin.instrument_name}`);
               return true; // Always show protected coins
             }
             // Filter out if it's in the deleted list
@@ -3741,7 +3750,7 @@ function resolveDecisionIndexColor(value: number): string {
             // FIX: Always show coins returned by backend, even if they're in deleted list (they were explicitly returned by backend)
             // Only filter out if coin is in deleted list AND it's not a custom coin (custom coins are always restored)
             if (isDeleted && isCustom) {
-              console.log(`🧩 Restoring custom coin previously deleted: ${coin.instrument_name}`);
+              logger.info(`🧩 Restoring custom coin previously deleted: ${coin.instrument_name}`);
               restoredCustomCoins.push(coin.instrument_name);
               return true;
             }
@@ -3749,7 +3758,7 @@ function resolveDecisionIndexColor(value: number): string {
             // The deleted list is only used for coins that are NOT returned by backend
             return true;
           });
-          console.log(`✅ Filtered fetched coins: ${beforeCount} → ${fetchedCoins.length} (removed ${beforeCount - fetchedCoins.length} deleted coins)`);
+          logger.info(`✅ Filtered fetched coins: ${beforeCount} → ${fetchedCoins.length} (removed ${beforeCount - fetchedCoins.length} deleted coins)`);
 
           if (restoredCustomCoins.length > 0) {
             const updatedDeletedList = filteredDeletedList.filter(
@@ -3760,28 +3769,28 @@ function resolveDecisionIndexColor(value: number): string {
             } else {
               localStorage.setItem('deleted_coins', JSON.stringify(updatedDeletedList));
             }
-            console.log(`🧼 Updated deleted coins list after restoring customs:`, restoredCustomCoins);
+            logger.info(`🧼 Updated deleted coins list after restoring customs:`, restoredCustomCoins);
           }
         }
       } catch (err) {
-        console.warn('Failed to check deleted coins:', err);
+        logger.warn('Failed to check deleted coins:', err);
       }
       
       const cleanedCoins = removeDuplicates(fetchedCoins);
-      console.log('🧹 cleanedCoins length:', cleanedCoins.length);
+      logger.info('🧹 cleanedCoins length:', cleanedCoins.length);
       
       // CRITICAL DEBUG: Check if LDO_USD is in the cleaned coins (silenced - not critical)
       // const ldoInCleaned = cleanedCoins.find(c => c.instrument_name.toUpperCase().includes('LDO'));
       // if (ldoInCleaned) {
-      //   console.log(`✅ LDO found in cleanedCoins: ${ldoInCleaned.instrument_name}`);
+      //   logger.info(`✅ LDO found in cleanedCoins: ${ldoInCleaned.instrument_name}`);
       // } else {
-      //   console.warn(`❌ LDO NOT found in cleanedCoins! Total coins: ${cleanedCoins.length}`);
-      //   console.warn(`   First 10 symbols:`, cleanedCoins.slice(0, 10).map(c => c.instrument_name));
+      //   logger.warn(`❌ LDO NOT found in cleanedCoins! Total coins: ${cleanedCoins.length}`);
+      //   logger.warn(`   First 10 symbols:`, cleanedCoins.slice(0, 10).map(c => c.instrument_name));
       // }
       
       // Debug: Log first few coins' prices
       if (cleanedCoins.length > 0) {
-        console.log('💰 First 3 coins prices:', cleanedCoins.slice(0, 3).map(c => ({
+        logger.info('💰 First 3 coins prices:', cleanedCoins.slice(0, 3).map(c => ({
           symbol: c.instrument_name,
           price: c.current_price
         })));
@@ -3794,10 +3803,10 @@ function resolveDecisionIndexColor(value: number): string {
       
       // CRITICAL DEBUG: Verify LDO_USD before calling updateTopCoins
       const ldoBeforeUpdate = cleanedCoins.find(c => c.instrument_name.toUpperCase().includes('LDO'));
-      console.log(`🔍 Before updateTopCoins: LDO_USD ${ldoBeforeUpdate ? 'FOUND' : 'NOT FOUND'} in cleanedCoins`);
+      logger.info(`🔍 Before updateTopCoins: LDO_USD ${ldoBeforeUpdate ? 'FOUND' : 'NOT FOUND'} in cleanedCoins`);
       
       updateTopCoins(cleanedCoins, symbolsToUpdate);
-      console.log(`✅ updateTopCoins called with ${cleanedCoins.length} coins${symbolsToUpdate ? ` (${symbolsToUpdate.length} filtered)` : ''}`);
+      logger.info(`✅ updateTopCoins called with ${cleanedCoins.length} coins${symbolsToUpdate ? ` (${symbolsToUpdate.length} filtered)` : ''}`);
       
       // Initialize alert status from backend data to keep frontend and backend in sync
       const buyAlertStatusFromBackend: Record<string, boolean> = {};
@@ -3812,20 +3821,20 @@ function resolveDecisionIndexColor(value: number): string {
       });
       if (Object.keys(buyAlertStatusFromBackend).length > 0) {
         setCoinBuyAlertStatus(prev => ({ ...prev, ...buyAlertStatusFromBackend }));
-        console.log('✅ Initialized buy_alert_enabled from backend:', Object.keys(buyAlertStatusFromBackend).length, 'coins');
+        logger.info('✅ Initialized buy_alert_enabled from backend:', Object.keys(buyAlertStatusFromBackend).length, 'coins');
       }
       if (Object.keys(sellAlertStatusFromBackend).length > 0) {
         setCoinSellAlertStatus(prev => ({ ...prev, ...sellAlertStatusFromBackend }));
-        console.log('✅ Initialized sell_alert_enabled from backend:', Object.keys(sellAlertStatusFromBackend).length, 'coins');
+        logger.info('✅ Initialized sell_alert_enabled from backend:', Object.keys(sellAlertStatusFromBackend).length, 'coins');
       }
       
       // CRITICAL DEBUG: Verify LDO_USD after updateTopCoins
       setTimeout(() => {
         const currentCoins = topCoinsRef.current;
         const ldoAfterUpdate = currentCoins.find(c => c.instrument_name.toUpperCase().includes('LDO'));
-        console.log(`🔍 After updateTopCoins: LDO_USD ${ldoAfterUpdate ? 'FOUND' : 'NOT FOUND'} in topCoins (total: ${currentCoins.length})`);
+        logger.info(`🔍 After updateTopCoins: LDO_USD ${ldoAfterUpdate ? 'FOUND' : 'NOT FOUND'} in topCoins (total: ${currentCoins.length})`);
         if (!ldoAfterUpdate && ldoBeforeUpdate) {
-          console.error(`❌ LDO_USD DISAPPEARED after updateTopCoins! This is the bug.`);
+          logger.error(`❌ LDO_USD DISAPPEARED after updateTopCoins! This is the bug.`);
         }
       }, 100);
       const fetchedAt = new Date();
@@ -3835,7 +3844,7 @@ function resolveDecisionIndexColor(value: number): string {
           JSON.stringify({ coins: cleanedCoins, fetchedAt: fetchedAt.toISOString() })
         );
       } catch (cacheErr) {
-        console.warn('Failed to persist top coins snapshot:', cacheErr);
+        logger.warn('Failed to persist top coins snapshot:', cacheErr);
       }
       setLastTopCoinsFetchAt(fetchedAt);
       setTopCoinsError(null);
@@ -3859,7 +3868,7 @@ function resolveDecisionIndexColor(value: number): string {
             setCoinTPPercent(prev => ({ ...prev, ...parsedTP }));
           }
         } catch (err) {
-          console.warn('Failed to preserve watchlist values:', err);
+          logger.warn('Failed to preserve watchlist values:', err);
         }
       }
       
@@ -3921,9 +3930,9 @@ function resolveDecisionIndexColor(value: number): string {
             }));
           }
           
-          console.log('✅ Loaded watchlist settings from localStorage');
+          logger.info('✅ Loaded watchlist settings from localStorage');
         } catch (err) {
-          console.warn('Failed to load from localStorage:', err);
+          logger.warn('Failed to load from localStorage:', err);
         }
         
         // SECONDARY: Always load from backend database and update localStorage
@@ -3956,7 +3965,7 @@ function resolveDecisionIndexColor(value: number): string {
             
             dashboardItems.forEach(item => {
               if (item.symbol) {
-                const symbolUpper = item.symbol.toUpperCase();
+                const symbolUpper = item.symbol?.toUpperCase();
                 // Only save non-null values from backend
                 if (item.trade_amount_usd !== undefined && item.trade_amount_usd !== null) {
                   backendAmounts[symbolUpper] = item.trade_amount_usd.toString();
@@ -4084,7 +4093,7 @@ function resolveDecisionIndexColor(value: number): string {
                 localStorage.setItem('watchlist_sell_alert_status', JSON.stringify(backendSellAlertStatus));
               }
               
-              console.log('✅ Updated localStorage from backend:', {
+              logger.info('✅ Updated localStorage from backend:', {
                 amounts: Object.keys(cleanedAmounts).length,
                 tradeStatus: Object.keys(cleanedTradeStatus).length,
                 slPercent: Object.keys(cleanedSLPercent).length,
@@ -4092,7 +4101,7 @@ function resolveDecisionIndexColor(value: number): string {
                 alertStatus: Object.keys(cleanedAlertStatus).length
               });
             } catch (err) {
-              console.warn('Failed to update localStorage from backend:', err);
+              logger.warn('Failed to update localStorage from backend:', err);
             }
             
             // Now load from localStorage (which now has backend values) into state
@@ -4112,14 +4121,14 @@ function resolveDecisionIndexColor(value: number): string {
             // Load saved SL/TP prices
             if (Object.keys(backendSLPrices).length > 0) {
               setCalculatedSL(backendSLPrices);
-              console.log('✅ Loaded saved SL prices from database:', backendSLPrices);
+              logger.info('✅ Loaded saved SL prices from database:', backendSLPrices);
             }
             if (Object.keys(backendTPPrices).length > 0) {
               setCalculatedTP(backendTPPrices);
-              console.log('✅ Loaded saved TP prices from database:', backendTPPrices);
+              logger.info('✅ Loaded saved TP prices from database:', backendTPPrices);
             }
             
-            console.log('✅ Loaded watchlist settings from backend and updated localStorage:', {
+            logger.info('✅ Loaded watchlist settings from backend and updated localStorage:', {
               items: dashboardItems.length,
               amounts: Object.keys(cleanedAmounts).length,
               tradeStatus: Object.keys(cleanedTradeStatus).length,
@@ -4132,7 +4141,7 @@ function resolveDecisionIndexColor(value: number): string {
             // Backend updates localStorage, dashboard reads from localStorage
             // All state is now loaded from localStorage above (lines 3748-3756)
         } catch (err) {
-          console.warn('Failed to load from backend, using localStorage:', err);
+          logger.warn('Failed to load from backend, using localStorage:', err);
         }
       }
     } catch (err) {
@@ -4147,13 +4156,13 @@ function resolveDecisionIndexColor(value: number): string {
       // Update timestamp even on error to show last attempt time
       const errorTimestamp = new Date();
       setLastTopCoinsFetchAt(errorTimestamp);
-      console.warn(`⚠️ fetchTopCoins failed at ${errorTimestamp.toISOString()}: ${errorMessage}`);
+      logger.warn(`⚠️ fetchTopCoins failed at ${errorTimestamp.toISOString()}: ${errorMessage}`);
       
       // Always try to load cached coins on error, even if we already have some
       // This ensures we show as many coins as possible
       const hadCache = loadCachedTopCoins();
       if (!hadCache && topCoinsRef.current.length === 0) {
-        console.warn('⚠️ No cached coins available and fetch failed - watchlist will be empty');
+        logger.warn('⚠️ No cached coins available and fetch failed - watchlist will be empty');
       }
       
       // Don't throw error - let the cached coins display
@@ -4192,7 +4201,7 @@ function resolveDecisionIndexColor(value: number): string {
           const extendedOrder = order as ExtendedOrder;
           
           if (dashboardState.open_orders.indexOf(order) === 0) {
-            console.log(`🔍 ${source} - Raw order from backend:`, {
+            logger.info(`🔍 ${source} - Raw order from backend:`, {
               exchange_order_id: order.exchange_order_id,
               symbol: order.symbol,
               create_time: extendedOrder.create_time,
@@ -4238,13 +4247,13 @@ function resolveDecisionIndexColor(value: number): string {
           
           // DEBUG: Log mapped order
           if (dashboardState.open_orders.indexOf(order) === 0) {
-            console.log(`🔍 ${source} - Mapped order:`, mappedOrder);
+            logger.info(`🔍 ${source} - Mapped order:`, mappedOrder);
           }
           
           return mappedOrder;
         });
         
-        console.log(`📋 ${source} - Loaded ${mappedOrders.length} open orders`);
+        logger.info(`📋 ${source} - Loaded ${mappedOrders.length} open orders`);
         setOpenOrders(mappedOrders);
         setOpenOrdersLastUpdate(new Date());
         setOpenOrdersError(null);
@@ -4255,7 +4264,7 @@ function resolveDecisionIndexColor(value: number): string {
     
     try {
       // STEP 1: Load snapshot FIRST (fast, cached)
-      console.log('📸 Loading open orders from snapshot (fast)...');
+      logger.info('📸 Loading open orders from snapshot (fast)...');
       let snapshotLoaded = false;
         try {
         const snapshot = await getDashboardSnapshot();
@@ -4263,7 +4272,7 @@ function resolveDecisionIndexColor(value: number): string {
         
         // Only update orders if snapshot has data and is not empty
         if (!snapshot.empty && dashboardState.open_orders && dashboardState.open_orders.length > 0) {
-          console.log(`✅ Snapshot loaded with ${dashboardState.open_orders.length} orders - displaying immediately`);
+          logger.info(`✅ Snapshot loaded with ${dashboardState.open_orders.length} orders - displaying immediately`);
           snapshotLoaded = updateOrdersFromState(dashboardState, 'fetchOpenOrders:snapshot');
         } else {
           // Snapshot is empty during initial load, will refresh in background
@@ -4279,18 +4288,18 @@ function resolveDecisionIndexColor(value: number): string {
             'warn'
           );
           } else {
-          console.debug('Open orders snapshot network error (expected occasionally):', errorMsg);
+          logger.debug('Open orders snapshot network error (expected occasionally):', errorMsg);
         }
       }
       
       // STEP 2: Background refresh with full state (only if not already doing background refresh)
       if (!backgroundRefresh) {
-        console.log('🔄 Starting background refresh for open orders...');
+        logger.info('🔄 Starting background refresh for open orders...');
         // Don't await - let it run in background without blocking UI
         (async () => {
           try {
             const dashboardState = await getDashboardState();
-            console.log('✅ Background refresh completed - updating orders with fresh data');
+            logger.info('✅ Background refresh completed - updating orders with fresh data');
             updateOrdersFromState(dashboardState, 'fetchOpenOrders:background');
           } catch (refreshErr) {
       logHandledError(
@@ -4350,7 +4359,7 @@ function resolveDecisionIndexColor(value: number): string {
     }
     
     try {
-      console.log('📸 Loading open orders summary...');
+      logger.info('📸 Loading open orders summary...');
       const response = await getOpenOrdersSummary();
       const orders = response.orders || [];
       
@@ -4362,9 +4371,9 @@ function resolveDecisionIndexColor(value: number): string {
       setOpenOrdersPositions(positions);
       
       setOpenOrdersSummaryLastUpdate(response.last_updated ? new Date(response.last_updated) : new Date());
-      console.log(`✅ Open orders summary loaded: ${orders.length} orders, ${positions.length} positions`);
+      logger.info(`✅ Open orders summary loaded: ${orders.length} orders, ${positions.length} positions`);
       if (orders.length > 0 && positions.length === 0) {
-        console.warn('⚠️ Orders transformed but no positions created. Orders:', orders.slice(0, 3).map(o => ({
+        logger.warn('⚠️ Orders transformed but no positions created. Orders:', orders.slice(0, 3).map(o => ({
           symbol: o.symbol,
           side: o.side,
           client_oid: o.client_oid,
@@ -4372,13 +4381,13 @@ function resolveDecisionIndexColor(value: number): string {
         })));
       }
     } catch (err) {
-      console.error('Failed to fetch open orders summary:', err);
+      logger.error('Failed to fetch open orders summary:', err);
       // Don't clear existing data on error - keep showing last known data
       // Only show error if we don't have any data yet
       if (openOrdersPositions.length === 0) {
-        console.warn('⚠️ No open orders summary data available yet - will retry in background');
+        logger.warn('⚠️ No open orders summary data available yet - will retry in background');
       } else {
-        console.warn('⚠️ Background refresh failed - keeping existing data visible');
+        logger.warn('⚠️ Background refresh failed - keeping existing data visible');
       }
     } finally {
       if (showLoader) {
@@ -4394,9 +4403,9 @@ function resolveDecisionIndexColor(value: number): string {
       const response = await getExpectedTakeProfitSummary();
       setExpectedTPSummary(response.summary || []);
       setExpectedTPLastUpdate(response.last_updated ? new Date(response.last_updated) : new Date());
-      console.log(`✅ Expected take profit summary loaded: ${response.total_symbols} symbols`);
+      logger.info(`✅ Expected take profit summary loaded: ${response.total_symbols} symbols`);
     } catch (err) {
-      console.error('Failed to fetch expected take profit summary:', err);
+      logger.error('Failed to fetch expected take profit summary:', err);
       setExpectedTPSummary([]);
     } finally {
       setExpectedTPLoading(false);
@@ -4412,7 +4421,7 @@ function resolveDecisionIndexColor(value: number): string {
       setExpectedTPDetails(details);
       setShowExpectedTPDetailsDialog(true);
     } catch (err) {
-      console.error(`Failed to fetch expected take profit details for ${symbol}:`, err);
+      logger.error(`Failed to fetch expected take profit details for ${symbol}:`, err);
       setExpectedTPDetails(null);
     } finally {
       setExpectedTPDetailsLoading(false);
@@ -4438,7 +4447,7 @@ function resolveDecisionIndexColor(value: number): string {
     const initialDelay = expectedTPSummary.length > 0 ? 60000 : 0;
     
     const pollInterval = setInterval(() => {
-      console.log('🔄 Background refresh of expected take profit summary...');
+      logger.info('🔄 Background refresh of expected take profit summary...');
       fetchExpectedTakeProfitSummary();
     }, 60000); // Refresh every 60 seconds
 
@@ -4540,7 +4549,7 @@ function resolveDecisionIndexColor(value: number): string {
     // But ensure we load enough to find FILLED orders even if first pages are CANCELLED
     // Only use large limit when explicitly refreshing
     const { showLoader = false, limit = showLoader ? 500 : 200, offset = 0, loadAll = showLoader } = options;
-    console.log('🔄 fetchExecutedOrders called with options:', { showLoader, limit, offset, loadAll });
+    logger.info('🔄 fetchExecutedOrders called with options:', { showLoader, limit, offset, loadAll });
     
     // Always set loading to true when function is called (whether initial load or manual refresh)
     // This ensures loading state is shown during fetch
@@ -4549,11 +4558,11 @@ function resolveDecisionIndexColor(value: number): string {
     
     // Safety timeout: ensure loading state is cleared after 60 seconds even if request hangs
     const loadingTimeout = setTimeout(() => {
-      console.warn('⚠️ fetchExecutedOrders timeout - clearing loading state');
+      logger.warn('⚠️ fetchExecutedOrders timeout - clearing loading state');
       setExecutedOrdersLoading(false);
     }, 60000);
     try {
-      console.log('📡 Starting to fetch executed orders...');
+      logger.info('📡 Starting to fetch executed orders...');
       let allNewOrders: OpenOrder[] = [];
       let currentOffset = offset;
       const pageLimit = limit;
@@ -4566,9 +4575,9 @@ function resolveDecisionIndexColor(value: number): string {
         try {
           // Only sync from exchange on-demand (first page) when user explicitly refreshes (showLoader=true).
           const shouldSync = pageCount === 0 && showLoader;
-          console.log(`📥 Fetching page ${pageCount + 1} (offset=${currentOffset}, limit=${pageLimit}, sync=${shouldSync})`);
+          logger.info(`📥 Fetching page ${pageCount + 1} (offset=${currentOffset}, limit=${pageLimit}, sync=${shouldSync})`);
           const response = await getOrderHistory(pageLimit, currentOffset, shouldSync);
-          console.log(`✅ Received response: ${response.orders?.length || 0} orders, has_more=${response.has_more}`);
+          logger.info(`✅ Received response: ${response.orders?.length || 0} orders, has_more=${response.has_more}`);
           const pageOrders = response.orders || [];
           
           if (pageOrders.length === 0) {
@@ -4591,7 +4600,7 @@ function resolveDecisionIndexColor(value: number): string {
             break;
           }
         } catch (pageError) {
-          console.error(`Error loading page ${pageCount + 1} of executed orders:`, pageError);
+          logger.error(`Error loading page ${pageCount + 1} of executed orders:`, pageError);
           // If first page fails and we have no orders yet, throw error
           // But if we already have some orders, continue with what we have
           if (pageCount === 0 && allNewOrders.length === 0) {
@@ -4599,7 +4608,7 @@ function resolveDecisionIndexColor(value: number): string {
           }
           // If we have some orders already, log warning but continue
           if (allNewOrders.length > 0) {
-            console.warn(`⚠️ Page ${pageCount + 1} failed, but continuing with ${allNewOrders.length} orders already loaded`);
+            logger.warn(`⚠️ Page ${pageCount + 1} failed, but continuing with ${allNewOrders.length} orders already loaded`);
           }
           // Stop pagination if a page fails (but keep what we've loaded so far)
           hasMore = false;
@@ -4607,7 +4616,7 @@ function resolveDecisionIndexColor(value: number): string {
         }
       }
       
-      console.log(`📥 Fetched ${allNewOrders.length} executed orders from ${pageCount} page(s)`);
+      logger.info(`📥 Fetched ${allNewOrders.length} executed orders from ${pageCount} page(s)`);
       
       // Debug: Log order statuses to verify FILLED orders are present
       const statusCounts = allNewOrders.reduce((acc, order) => {
@@ -4615,7 +4624,7 @@ function resolveDecisionIndexColor(value: number): string {
         acc[status] = (acc[status] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
-      console.log(`📊 Order status breakdown:`, statusCounts);
+      logger.info(`📊 Order status breakdown:`, statusCounts);
       
       // Merge by order_id (update existing + add new) using functional update
       setExecutedOrders(prevOrders => {
@@ -4642,15 +4651,15 @@ function resolveDecisionIndexColor(value: number): string {
           acc[status] = (acc[status] || 0) + 1;
           return acc;
         }, {} as Record<string, number>);
-        console.log(`📊 Final merged orders status breakdown:`, finalStatusCounts);
+        logger.info(`📊 Final merged orders status breakdown:`, finalStatusCounts);
 
         setExecutedOrdersLastUpdate(new Date());
-        console.log(`✅ Executed orders merged: +${addedCount} new, ~${updatedCount} updated, total=${mergedOrders.length}`);
+        logger.info(`✅ Executed orders merged: +${addedCount} new, ~${updatedCount} updated, total=${mergedOrders.length}`);
         return mergedOrders;
       });
       setExecutedOrdersError(null);
     } catch (err) {
-      console.error('❌ Error in fetchExecutedOrders:', err);
+      logger.error('❌ Error in fetchExecutedOrders:', err);
       logHandledError(
         'fetchExecutedOrders',
         'Failed to fetch executed orders (request will retry on next tick)',
@@ -4668,7 +4677,7 @@ function resolveDecisionIndexColor(value: number): string {
       // CRITICAL: Always set loading to false, even if there was an error
       // This ensures the button is never permanently disabled
       clearTimeout(loadingTimeout);
-      console.log('✅ fetchExecutedOrders completed, setting loading to false');
+      logger.info('✅ fetchExecutedOrders completed, setting loading to false');
       setExecutedOrdersLoading(false);
     }
   }, []); // Remove executedOrders from dependencies to avoid infinite loops
@@ -4714,7 +4723,7 @@ function resolveDecisionIndexColor(value: number): string {
       // First, try to load from strategy_rules (new format, source of truth)
       if (config?.strategy_rules) {
         // [CONFIG] Log raw backend response
-        console.log('[CONFIG] Raw backend strategy_rules received:', JSON.stringify(config.strategy_rules, null, 2));
+        logger.info('[CONFIG] Raw backend strategy_rules received:', JSON.stringify(config.strategy_rules, null, 2));
         
         Object.entries(config.strategy_rules).forEach(([presetKey, presetData]) => {
           const presetPayload = presetData as { rules?: Record<string, StrategyRules>; notificationProfile?: string } | undefined;
@@ -4730,7 +4739,7 @@ function resolveDecisionIndexColor(value: number): string {
             Object.entries(presetPayload.rules).forEach(([riskMode, rule]) => {
               if (riskMode === 'Conservative' || riskMode === 'Aggressive') {
                 // [CONFIG] Log each rule being loaded
-                console.log('[CONFIG] Loading rule from backend:', {
+                logger.info('[CONFIG] Loading rule from backend:', {
                   preset: presetName,
                   risk: riskMode,
                   volumeMinRatio: rule.volumeMinRatio,
@@ -4758,11 +4767,11 @@ function resolveDecisionIndexColor(value: number): string {
             };
           }
         });
-        console.log('✅ Loaded preset configuration from strategy_rules (new format)');
+        logger.info('✅ Loaded preset configuration from strategy_rules (new format)');
       }
       // Fallback to presets (legacy format) - also check here if strategy_rules is empty
       if (!config?.strategy_rules && config?.presets) {
-        console.log('⚠️ No strategy_rules found, loading from presets (legacy format)');
+        logger.info('⚠️ No strategy_rules found, loading from presets (legacy format)');
         Object.entries(config.presets).forEach(([presetKey, presetData]) => {
           const presetPayload = presetData as { rules?: Record<string, StrategyRules>; notificationProfile?: string } | undefined;
           // Convert backend key (lowercase) to frontend key (capitalized)
@@ -4788,11 +4797,11 @@ function resolveDecisionIndexColor(value: number): string {
             };
             // Debug: log maChecks from presets (legacy)
             Object.entries(presetPayload.rules).forEach(([riskMode, rules]) => {
-              console.log(`📥 Presets (legacy) ${presetName}-${riskMode} maChecks:`, JSON.stringify(rules.maChecks, null, 2));
+              logger.info(`📥 Presets (legacy) ${presetName}-${riskMode} maChecks:`, JSON.stringify(rules.maChecks, null, 2));
             });
           }
         });
-        console.log('✅ Loaded preset configuration from presets (legacy format)');
+        logger.info('✅ Loaded preset configuration from presets (legacy format)');
       }
       
       // Update presetsConfig with backend data - BACKEND IS SOURCE OF TRUTH
@@ -4817,7 +4826,7 @@ function resolveDecisionIndexColor(value: number): string {
           
           // FIX: Add null check to prevent TypeError if merged[presetType] is undefined
           if (!merged[presetType]) {
-            console.warn(`[CONFIG] Missing preset type ${presetType} in merged config, skipping`);
+            logger.warn(`[CONFIG] Missing preset type ${presetType} in merged config, skipping`);
             continue;
           }
           
@@ -4837,7 +4846,7 @@ function resolveDecisionIndexColor(value: number): string {
             
             // FIX: Add null check to prevent TypeError if defaultRules is undefined
             if (!defaultRules) {
-              console.warn(`[CONFIG] Missing default rules for ${presetType}.${riskMode}, skipping merge`);
+              logger.warn(`[CONFIG] Missing default rules for ${presetType}.${riskMode}, skipping merge`);
               continue;
             }
             
@@ -4846,7 +4855,7 @@ function resolveDecisionIndexColor(value: number): string {
             const defaultVol = defaultRules?.volumeMinRatio ?? 0.5;
             const finalVol = backendVol !== undefined && backendVol !== null ? backendVol : defaultVol;
             
-            console.log('[CONFIG] Loading volumeMinRatio on page load:', {
+            logger.info('[CONFIG] Loading volumeMinRatio on page load:', {
               preset: presetType,
               risk: riskMode,
               defaultVolumeMinRatio: defaultVol,
@@ -4871,7 +4880,7 @@ function resolveDecisionIndexColor(value: number): string {
             // [CONFIG] Verify final merged value
             // FIX: Add optional chaining to prevent TypeError if merged structure is incomplete
             const finalMergedVol = merged[presetType]?.rules?.[riskMode]?.volumeMinRatio ?? 0.5;
-            console.log('[CONFIG] ✅ Final loaded volumeMinRatio:', {
+            logger.info('[CONFIG] ✅ Final loaded volumeMinRatio:', {
               preset: presetType,
               risk: riskMode,
               volumeMinRatio: finalMergedVol,
@@ -4885,7 +4894,7 @@ function resolveDecisionIndexColor(value: number): string {
       
       // Mark initial load as complete after backend data is loaded
       isInitialLoadRef.current = false;
-      console.log('✅ Backend config loaded - initial load complete');
+      logger.info('✅ Backend config loaded - initial load complete');
     } catch (err) {
       logHandledError(
         'fetchTradingConfig',
@@ -4895,7 +4904,7 @@ function resolveDecisionIndexColor(value: number): string {
       // Even if backend load fails, mark initial load as complete after a delay
       setTimeout(() => {
         isInitialLoadRef.current = false;
-        console.log('✅ Initial load marked complete (backend load failed)');
+        logger.info('✅ Initial load marked complete (backend load failed)');
       }, 3000);
     }
   }, []);
@@ -4935,13 +4944,13 @@ function resolveDecisionIndexColor(value: number): string {
         if (Object.keys(cleanedAmounts).length !== Object.keys(parsedAmounts).length || 
             Object.keys(cleanedAmounts).some(k => k !== k.toUpperCase())) {
           localStorage.setItem('watchlist_amounts', JSON.stringify(cleanedAmounts));
-          console.log('🧹 Cleaned stale $10 values and normalized keys to uppercase in localStorage on mount');
+          logger.info('🧹 Cleaned stale $10 values and normalized keys to uppercase in localStorage on mount');
         }
         
         // Only load cleaned values (non-$10 values, uppercase keys)
         if (Object.keys(cleanedAmounts).length > 0) {
           setCoinAmounts(cleanedAmounts);
-          console.log('✅ Loaded watchlist amounts from localStorage on mount (cleaned, uppercase keys):', Object.keys(cleanedAmounts).length, 'coins');
+          logger.info('✅ Loaded watchlist amounts from localStorage on mount (cleaned, uppercase keys):', Object.keys(cleanedAmounts).length, 'coins');
         }
       }
       
@@ -4956,7 +4965,7 @@ function resolveDecisionIndexColor(value: number): string {
         setCoinTradeStatus(normalizedTradeStatus);
         // Update localStorage with normalized keys
         localStorage.setItem('watchlist_trade_status', JSON.stringify(normalizedTradeStatus));
-        console.log('✅ Loaded trade status from localStorage on mount (normalized to uppercase):', Object.keys(normalizedTradeStatus).length, 'coins');
+        logger.info('✅ Loaded trade status from localStorage on mount (normalized to uppercase):', Object.keys(normalizedTradeStatus).length, 'coins');
       }
       
       const localAlertStatus = localStorage.getItem('watchlist_alert_status');
@@ -4970,7 +4979,7 @@ function resolveDecisionIndexColor(value: number): string {
         setCoinAlertStatus(normalizedAlertStatus);
         // Update localStorage with normalized keys
         localStorage.setItem('watchlist_alert_status', JSON.stringify(normalizedAlertStatus));
-        console.log('✅ Loaded alert status from localStorage on mount (normalized to uppercase):', Object.keys(normalizedAlertStatus).length, 'coins');
+        logger.info('✅ Loaded alert status from localStorage on mount (normalized to uppercase):', Object.keys(normalizedAlertStatus).length, 'coins');
       }
       
       // Load buy/sell alert status from localStorage
@@ -4986,7 +4995,7 @@ function resolveDecisionIndexColor(value: number): string {
         setCoinBuyAlertStatus(normalizedBuyAlertStatus);
         // Update localStorage with normalized keys
         localStorage.setItem('watchlist_buy_alert_status', JSON.stringify(normalizedBuyAlertStatus));
-        console.log('✅ Loaded buy alert status from localStorage on mount (normalized to uppercase):', Object.keys(normalizedBuyAlertStatus).length, 'coins');
+        logger.info('✅ Loaded buy alert status from localStorage on mount (normalized to uppercase):', Object.keys(normalizedBuyAlertStatus).length, 'coins');
       }
       if (localSellAlertStatus) {
         const parsedSellAlertStatus = JSON.parse(localSellAlertStatus) as Record<string, boolean>;
@@ -4998,7 +5007,7 @@ function resolveDecisionIndexColor(value: number): string {
         setCoinSellAlertStatus(normalizedSellAlertStatus);
         // Update localStorage with normalized keys
         localStorage.setItem('watchlist_sell_alert_status', JSON.stringify(normalizedSellAlertStatus));
-        console.log('✅ Loaded sell alert status from localStorage on mount (normalized to uppercase):', Object.keys(normalizedSellAlertStatus).length, 'coins');
+        logger.info('✅ Loaded sell alert status from localStorage on mount (normalized to uppercase):', Object.keys(normalizedSellAlertStatus).length, 'coins');
       }
       
       const localSLPercent = localStorage.getItem('watchlist_sl_percent');
@@ -5012,7 +5021,7 @@ function resolveDecisionIndexColor(value: number): string {
         setCoinSLPercent(normalizedSLPercent);
         // Update localStorage with normalized keys
         localStorage.setItem('watchlist_sl_percent', JSON.stringify(normalizedSLPercent));
-        console.log('✅ Loaded SL percent from localStorage on mount (normalized to uppercase):', Object.keys(normalizedSLPercent).length, 'coins');
+        logger.info('✅ Loaded SL percent from localStorage on mount (normalized to uppercase):', Object.keys(normalizedSLPercent).length, 'coins');
       }
       
       const localTPPercent = localStorage.getItem('watchlist_tp_percent');
@@ -5026,7 +5035,7 @@ function resolveDecisionIndexColor(value: number): string {
         setCoinTPPercent(normalizedTPPercent);
         // Update localStorage with normalized keys
         localStorage.setItem('watchlist_tp_percent', JSON.stringify(normalizedTPPercent));
-        console.log('✅ Loaded TP percent from localStorage on mount (normalized to uppercase):', Object.keys(normalizedTPPercent).length, 'coins');
+        logger.info('✅ Loaded TP percent from localStorage on mount (normalized to uppercase):', Object.keys(normalizedTPPercent).length, 'coins');
       }
       
       const localCoinPresets = localStorage.getItem('coin_presets');
@@ -5040,10 +5049,10 @@ function resolveDecisionIndexColor(value: number): string {
         setCoinPresets(normalizedCoinPresets);
         // Update localStorage with normalized keys
         localStorage.setItem('coin_presets', JSON.stringify(normalizedCoinPresets));
-        console.log('✅ Loaded coin presets from localStorage on mount (normalized to uppercase):', Object.keys(normalizedCoinPresets).length, 'coins');
+        logger.info('✅ Loaded coin presets from localStorage on mount (normalized to uppercase):', Object.keys(normalizedCoinPresets).length, 'coins');
       }
     } catch (err) {
-      console.warn('Failed to load watchlist settings from localStorage on mount:', err);
+      logger.warn('Failed to load watchlist settings from localStorage on mount:', err);
     }
   }, []); // Run only once on mount
 
@@ -5052,7 +5061,7 @@ function resolveDecisionIndexColor(value: number): string {
     try {
       localStorage.setItem('coin_presets', JSON.stringify(coinPresets));
     } catch (err) {
-      console.warn('Failed to save coin presets to localStorage:', err);
+      logger.warn('Failed to save coin presets to localStorage:', err);
     }
   }, [coinPresets]);
 
@@ -5061,20 +5070,20 @@ function resolveDecisionIndexColor(value: number): string {
   useEffect(() => {
     // Skip saving during initial load - backend data should be loaded first
     if (isInitialLoadRef.current) {
-      console.log('⏭️ Skipping localStorage save during initial load');
+      logger.info('⏭️ Skipping localStorage save during initial load');
       // Mark initial load as complete after first render
       setTimeout(() => {
         isInitialLoadRef.current = false;
-        console.log('✅ Initial load complete - localStorage saves will now be enabled');
+        logger.info('✅ Initial load complete - localStorage saves will now be enabled');
       }, 2000); // Give backend 2 seconds to load
       return;
     }
     
     try {
       localStorage.setItem('strategy_presets_config', JSON.stringify(presetsConfig));
-      console.log('💾 Auto-saved presetsConfig to localStorage (user change detected)');
+      logger.info('💾 Auto-saved presetsConfig to localStorage (user change detected)');
     } catch (err) {
-      console.warn('Failed to save strategy presets config to localStorage:', err);
+      logger.warn('Failed to save strategy presets config to localStorage:', err);
     }
   }, [presetsConfig]);
 
@@ -5113,7 +5122,7 @@ function resolveDecisionIndexColor(value: number): string {
     // CRITICAL: Save the preset to the backend first (source of truth)
     try {
       const result = await updateCoinConfig(symbol, { preset });
-      console.log(`✅ Saved preset ${preset} for ${symbol} to backend`);
+      logger.info(`✅ Saved preset ${preset} for ${symbol} to backend`);
       
       // Update state with backend response if available
       // Note: updateCoinConfig may not return the preset, so we use the value we sent
@@ -5231,13 +5240,13 @@ function resolveDecisionIndexColor(value: number): string {
         }
         
         await saveCoinSettings(symbol, settingsToSave);
-        console.log(`✅ Saved strategy settings for ${symbol}:`, settingsToSave);
+        logger.info(`✅ Saved strategy settings for ${symbol}:`, settingsToSave);
       } catch (err) {
-        console.warn(`⚠️ Failed to save strategy settings for ${symbol}:`, err);
+        logger.warn(`⚠️ Failed to save strategy settings for ${symbol}:`, err);
       }
       
       // Emit strategy change for notifications
-      console.log('Strategy change:', {
+      logger.info('Strategy change:', {
         symbol,
         preset: presetType,
         risk: riskMode,
@@ -5253,7 +5262,7 @@ function resolveDecisionIndexColor(value: number): string {
     try {
       await updateCoinConfig(symbol, { preset });
       setCoinPresets(prev => ({ ...prev, [symbol]: preset }));
-      console.log(`✅ Updated ${symbol} to use ${preset} preset`);
+      logger.info(`✅ Updated ${symbol} to use ${preset} preset`);
     } catch (err) {
       logHandledError(
         `updateCoinPreset:${symbol}`,
@@ -5314,7 +5323,7 @@ function resolveDecisionIndexColor(value: number): string {
           quote_currency: quoteCurrency
         });
       } catch (err) {
-        console.error('Failed to add custom top coin:', err);
+        logger.error('Failed to add custom top coin:', err);
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
         // Check if it's an auth error
         const errStatus = (err as { status?: number })?.status;
@@ -5353,24 +5362,24 @@ function resolveDecisionIndexColor(value: number): string {
           }
         }
       } catch (err) {
-        console.warn('Failed to update deleted coins cache:', err);
+        logger.warn('Failed to update deleted coins cache:', err);
       }
       
       // Clear the form
       setNewSymbol('');
       setShowAddForm(false);
       
-      console.log(`✅ Added ${symbolToAdd} to watchlist`);
+      logger.info(`✅ Added ${symbolToAdd} to watchlist`);
       
       // NO external API calls - price will be available after backend updates topCoins
       // The price will be loaded when fetchTopCoins() completes below
-      console.debug(`Price for ${symbolToAdd} will be loaded from backend data`);
+      logger.debug(`Price for ${symbolToAdd} will be loaded from backend data`);
       
       // Try to save to backend (optional, will fail silently)
       try {
         await saveCoinSettings(symbolToAdd, {});
       } catch (err) {
-        console.warn('Could not save to backend, but symbol added locally:', err);
+        logger.warn('Could not save to backend, but symbol added locally:', err);
       }
       
       // Refresh list from backend to pick up canonical data
@@ -5391,13 +5400,13 @@ function resolveDecisionIndexColor(value: number): string {
 
   // Handle delete coin
   const handleDeleteCoin = async (symbol: string) => {
-    console.log(`handleDeleteCoin called with symbol: ${symbol}`);
-    console.log(`deleteConfirm: ${deleteConfirm}`);
-    console.log(`deleteConfirm === symbol: ${deleteConfirm === symbol}`);
+    logger.info(`handleDeleteCoin called with symbol: ${symbol}`);
+    logger.info(`deleteConfirm: ${deleteConfirm}`);
+    logger.info(`deleteConfirm === symbol: ${deleteConfirm === symbol}`);
     
     if (deleteConfirm === symbol) {
       // User clicked Delete again - confirm deletion
-      console.log(`Confirming deletion of ${symbol}`);
+      logger.info(`Confirming deletion of ${symbol}`);
       const coinToDelete = topCoinsRef.current.find(coin => coin.instrument_name === symbol);
       const remaining = topCoinsRef.current.filter(coin => coin.instrument_name !== symbol);
       updateTopCoins(remaining);
@@ -5405,9 +5414,9 @@ function resolveDecisionIndexColor(value: number): string {
       // CRITICAL: Delete from backend database to prevent duplicates
       try {
         await deleteDashboardItemBySymbol(symbol);
-        console.log(`✅ Deleted ${symbol} from backend database`);
+        logger.info(`✅ Deleted ${symbol} from backend database`);
       } catch (err) {
-        console.error(`❌ Failed to delete ${symbol} from backend:`, err);
+        logger.error(`❌ Failed to delete ${symbol} from backend:`, err);
         // Continue with local deletion even if backend fails
       }
       
@@ -5415,7 +5424,7 @@ function resolveDecisionIndexColor(value: number): string {
         try {
           await removeCustomTopCoin(symbol);
         } catch (err) {
-          console.warn(`Failed to remove custom coin ${symbol} from backend:`, err);
+          logger.warn(`Failed to remove custom coin ${symbol} from backend:`, err);
         }
       }
       
@@ -5427,14 +5436,14 @@ function resolveDecisionIndexColor(value: number): string {
         
         if (isProtected) {
           try {
-            console.log(`ℹ️ ${symbol} is protected. Disabling trade before hiding.`);
+            logger.info(`ℹ️ ${symbol} is protected. Disabling trade before hiding.`);
             await saveCoinSettings(symbol, {
               trade_enabled: false,
               trade_amount_usd: null,
               alert_enabled: false,
             });
           } catch (err) {
-            console.warn(`Failed to disable trade for protected coin ${symbol}:`, err);
+            logger.warn(`Failed to disable trade for protected coin ${symbol}:`, err);
           }
         }
         
@@ -5446,7 +5455,7 @@ function resolveDecisionIndexColor(value: number): string {
             localStorage.setItem('deleted_coins', JSON.stringify(deletedList));
           }
         } catch (err) {
-          console.warn('Failed to save deleted coin:', err);
+          logger.warn('Failed to save deleted coin:', err);
         }
       }
       
@@ -5469,18 +5478,18 @@ function resolveDecisionIndexColor(value: number): string {
       localStorage.setItem('watchlist_sl_percent', JSON.stringify(updatedSL));
       localStorage.setItem('watchlist_tp_percent', JSON.stringify(updatedTP));
       setDeleteConfirm(null);
-      console.log(`✅ Deleted ${symbol} from watchlist and added to deleted list`);
+      logger.info(`✅ Deleted ${symbol} from watchlist and added to deleted list`);
 
       // Always refresh watchlist after deletion to reflect backend changes
         try {
           await fetchTopCoins(true);
         } catch (err) {
-        console.warn(`Failed to refresh watchlist after deletion:`, err);
+        logger.warn(`Failed to refresh watchlist after deletion:`, err);
           handleQueueError('slow', err);
       }
     } else {
       // First click - show confirmation
-      console.log(`First click - showing confirmation for ${symbol}`);
+      logger.info(`First click - showing confirmation for ${symbol}`);
       setDeleteConfirm(symbol);
     }
   };
@@ -5500,15 +5509,15 @@ function resolveDecisionIndexColor(value: number): string {
         const snapshot = await getDashboardSnapshot();
         if (snapshot.data.bot_status) {
           setBotStatus(snapshot.data.bot_status);
-          console.log('✅ Bot status loaded:', snapshot.data.bot_status);
+          logger.info('✅ Bot status loaded:', snapshot.data.bot_status);
         }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         // Only log if it's not a network error (those are expected occasionally)
         if (!errorMsg.includes('Failed to fetch') && !errorMsg.includes('NetworkError')) {
-        console.error('Failed to load bot status:', err);
+        logger.error('Failed to load bot status:', err);
         } else {
-          console.debug('Bot status load network error (expected occasionally):', errorMsg);
+          logger.debug('Bot status load network error (expected occasionally):', errorMsg);
         }
       }
     };
@@ -5534,9 +5543,9 @@ function resolveDecisionIndexColor(value: number): string {
         const errorMsg = err instanceof Error ? err.message : String(err);
         // Only log if it's not a network error (those are expected occasionally)
         if (!errorMsg.includes('Failed to fetch') && !errorMsg.includes('NetworkError')) {
-          console.error('Failed to refresh snapshot:', err);
+          logger.error('Failed to refresh snapshot:', err);
         } else {
-          console.debug('Snapshot refresh network error (expected occasionally):', errorMsg);
+          logger.debug('Snapshot refresh network error (expected occasionally):', errorMsg);
         }
         // Don't update state on error - keep showing last good data
       }
@@ -5549,7 +5558,7 @@ function resolveDecisionIndexColor(value: number): string {
     let isMounted = true;
     let hasRun = false; // Guard to prevent multiple runs
     
-    console.log('🔄 Starting initial fetch...');
+    logger.info('🔄 Starting initial fetch...');
 
     const loadInitialData = async () => {
       if (hasRun) {
@@ -5561,7 +5570,7 @@ function resolveDecisionIndexColor(value: number): string {
       // Load cached data IMMEDIATELY for instant UI (optimistic display)
       const hadCache = loadCachedTopCoinsRef.current?.() || false;
       if (hadCache) {
-        console.log('✅ Using cached top coins snapshot for instant UI while fetching fresh data...');
+        logger.info('✅ Using cached top coins snapshot for instant UI while fetching fresh data...');
       }
       
       // Use refs to avoid dependency issues
@@ -5576,7 +5585,7 @@ function resolveDecisionIndexColor(value: number): string {
       // DON'T load from localStorage here - backend is source of truth
       // Backend will load first, and if it has no data, we'll use PRESET_CONFIG defaults
       // localStorage will only be used as a last resort if backend completely fails
-      console.log('⏭️ Skipping localStorage load - waiting for backend to load first');
+      logger.info('⏭️ Skipping localStorage load - waiting for backend to load first');
       const fetchSignalsFn = fetchSignalsRef.current || (() => Promise.resolve());
       const handleQueueSuccessFn = handleQueueSuccess;
       const handleQueueErrorFn = handleQueueError;
@@ -5584,24 +5593,24 @@ function resolveDecisionIndexColor(value: number): string {
       // Load data with snapshot-first approach for portfolio and orders
       // Portfolio and orders load snapshot immediately (fast), then refresh in background
       // Other data loads normally
-      console.log('🚀 Starting initial data load (snapshot-first for portfolio/orders)...');
+      logger.info('🚀 Starting initial data load (snapshot-first for portfolio/orders)...');
       const startTime = Date.now();
       
       // Load portfolio and orders FIRST (non-blocking snapshot)
       // These will show snapshot data immediately, then refresh in background
-      fetchPortfolioFn().then(() => console.log('✅ Portfolio snapshot loaded (background refresh started)')).catch((err) => {
+      fetchPortfolioFn().then(() => logger.info('✅ Portfolio snapshot loaded (background refresh started)')).catch((err) => {
         if (isMounted) {
           logHandledError('initialPortfolioFetch', 'Initial portfolio fetch failed', err, 'warn');
         }
       });
-      fetchOpenOrdersFn().then(() => console.log('✅ Open orders snapshot loaded (background refresh started)')).catch((err) => {
+      fetchOpenOrdersFn().then(() => logger.info('✅ Open orders snapshot loaded (background refresh started)')).catch((err) => {
         if (isMounted) {
           logHandledError('initialOpenOrdersFetch', 'Initial open orders fetch failed', err, 'warn');
         }
       });
       // Load open orders summary automatically (non-blocking, ready when user clicks tab)
       fetchOpenOrdersSummaryFn({ showLoader: false, backgroundRefresh: false }).then(() => {
-        console.log('✅ Open orders summary loaded automatically');
+        logger.info('✅ Open orders summary loaded automatically');
       }).catch((err) => {
         if (isMounted) {
           logHandledError('initialOpenOrdersSummaryFetch', 'Initial open orders summary fetch failed', err, 'warn');
@@ -5618,7 +5627,7 @@ function resolveDecisionIndexColor(value: number): string {
         // Fetch fresh data from backend (not cache)
         fetchTopCoinsFn(false).then(() => {
           handleQueueSuccessFn('slow');
-          console.log('✅ Top coins fetched from backend');
+          logger.info('✅ Top coins fetched from backend');
         }).catch((err) => {
           if (isMounted) {
             handleQueueErrorFn('slow', err);
@@ -5630,37 +5639,37 @@ function resolveDecisionIndexColor(value: number): string {
           }
           throw err;
         }),
-        fetchExecutedOrdersFn({ showLoader: false, limit: 200, loadAll: false }).then(() => console.log('✅ Executed orders fetched from backend')).catch(err => {
-          console.warn('⚠️ Initial executed orders fetch failed (will retry):', err);
+        fetchExecutedOrdersFn({ showLoader: false, limit: 200, loadAll: false }).then(() => logger.info('✅ Executed orders fetched from backend')).catch(err => {
+          logger.warn('⚠️ Initial executed orders fetch failed (will retry):', err);
           // Retry once after a short delay if initial fetch fails
           // Use a separate timeout to avoid blocking the Promise.allSettled
           setTimeout(() => {
             fetchExecutedOrdersFn({ showLoader: false, limit: 200, loadAll: false }).catch(retryErr => {
-              console.error('❌ Retry also failed:', retryErr);
+              logger.error('❌ Retry also failed:', retryErr);
               // Ensure loading state is cleared even if retry fails
               // The finally block in fetchExecutedOrders should handle this, but be explicit
             });
           }, 2000);
         }),
-        fetchDataSourceStatusFn().then(() => console.log('✅ Data source status fetched from backend')),
-        fetchTradingConfigFn().then(() => console.log('✅ Trading config fetched from backend'))
+        fetchDataSourceStatusFn().then(() => logger.info('✅ Data source status fetched from backend')),
+        fetchTradingConfigFn().then(() => logger.info('✅ Trading config fetched from backend'))
       ]);
       
       const elapsedTime = Date.now() - startTime;
-      console.log(`⏱️ Initial data load completed in ${elapsedTime}ms (portfolio/orders loading from snapshot)`);
+      logger.info(`⏱️ Initial data load completed in ${elapsedTime}ms (portfolio/orders loading from snapshot)`);
       
       // Log any failures
       const failures = [topCoinsResult, executedOrdersResult, dataSourceStatusResult, tradingConfigResult]
         .filter((r): r is PromiseRejectedResult => r.status === 'rejected');
       if (failures.length > 0) {
-        console.warn(`⚠️ ${failures.length}/4 initial data fetches failed`);
-        failures.forEach(f => console.warn('Failed fetch:', f.reason));
+        logger.warn(`⚠️ ${failures.length}/4 initial data fetches failed`);
+        failures.forEach(f => logger.warn('Failed fetch:', f.reason));
       }
 
       const hydrateInitialSignals = async () => {
         const coins = topCoinsRef.current;
         if (!isMounted || coins.length === 0) {
-          console.log('⏭️ Skipping signal hydration - no coins available');
+          logger.info('⏭️ Skipping signal hydration - no coins available');
           return;
         }
 
@@ -5671,7 +5680,7 @@ function resolveDecisionIndexColor(value: number): string {
           .filter((coin) => coin.instrument_name && coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] !== true)
           .map((coin) => coin.instrument_name);
 
-        console.log(`📊 Hydrating signals: ${fastSymbols.length} fast, ${slowSymbols.length} slow symbols`);
+        logger.info(`📊 Hydrating signals: ${fastSymbols.length} fast, ${slowSymbols.length} slow symbols`);
 
         const hydrate = async (symbols: string[], batchSize: number, queue: 'fast' | 'slow') => {
           // Load signals in parallel batches for faster initial load
@@ -5681,19 +5690,19 @@ function resolveDecisionIndexColor(value: number): string {
           
           // Load immediate batch in parallel
           if (immediateBatch.length > 0) {
-            console.log(`🚀 Loading ${immediateBatch.length} ${queue} signals in parallel...`);
+            logger.info(`🚀 Loading ${immediateBatch.length} ${queue} signals in parallel...`);
             const results = await Promise.allSettled(immediateBatch.map((symbol) => fetchSignalsFn(symbol)));
             
             const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
             if (failures.length > 0) {
-              console.warn(`⚠️ ${failures.length}/${immediateBatch.length} signals failed in immediate batch for ${queue} queue`);
+              logger.warn(`⚠️ ${failures.length}/${immediateBatch.length} signals failed in immediate batch for ${queue} queue`);
             }
-            console.log(`✅ Loaded ${immediateBatch.length - failures.length}/${immediateBatch.length} ${queue} signals`);
+            logger.info(`✅ Loaded ${immediateBatch.length - failures.length}/${immediateBatch.length} ${queue} signals`);
           }
           
           // Load remaining symbols in background (non-blocking)
           if (remainingSymbols.length > 0 && isMounted) {
-            console.log(`⏳ Loading remaining ${remainingSymbols.length} ${queue} signals in background...`);
+            logger.info(`⏳ Loading remaining ${remainingSymbols.length} ${queue} signals in background...`);
             // Don't await - let it run in background
             (async () => {
               for (let i = 0; i < remainingSymbols.length && isMounted; i += batchSize) {
@@ -5702,7 +5711,7 @@ function resolveDecisionIndexColor(value: number): string {
                 
                 const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
                 if (failures.length > 0) {
-                  console.warn(`⚠️ ${failures.length}/${batch.length} signals failed in background batch ${i}-${i + batchSize} for ${queue} queue`);
+                  logger.warn(`⚠️ ${failures.length}/${batch.length} signals failed in background batch ${i}-${i + batchSize} for ${queue} queue`);
                 }
                 
                 if (i + batchSize < remainingSymbols.length) {
@@ -5749,9 +5758,9 @@ function resolveDecisionIndexColor(value: number): string {
       try {
         const dashboardItems: WatchlistItem[] = await getDashboard();
         setWatchlistItems(dashboardItems);
-        console.log(`✅ Loaded ${dashboardItems.length} watchlist items for TP/SL counting`);
+        logger.info(`✅ Loaded ${dashboardItems.length} watchlist items for TP/SL counting`);
       } catch (err) {
-        console.warn('Failed to load watchlist items for TP/SL counting:', err);
+        logger.warn('Failed to load watchlist items for TP/SL counting:', err);
       }
     };
     loadWatchlistItems();
@@ -5763,7 +5772,7 @@ function resolveDecisionIndexColor(value: number): string {
       return; // Wait for both to be loaded
     }
 
-    console.log('🔄 Loading min_price_change_pct values from database...');
+    logger.info('🔄 Loading min_price_change_pct values from database...');
     
     // Group min_price_change_pct values by preset/risk combination
     const presetRiskValues: Record<string, number[]> = {};
@@ -5830,7 +5839,7 @@ function resolveDecisionIndexColor(value: number): string {
               }
             };
             hasChanges = true;
-            console.log(`✅ Updated ${presetType}-${riskType} min_price_change_pct: ${currentValue ?? 'N/A'} → ${newValue} (from ${values.length} coins)`);
+            logger.info(`✅ Updated ${presetType}-${riskType} min_price_change_pct: ${currentValue ?? 'N/A'} → ${newValue} (from ${values.length} coins)`);
           }
         }
       });
@@ -5860,7 +5869,7 @@ function resolveDecisionIndexColor(value: number): string {
       });
       
       if (hasChanges) {
-        console.log('✅ Updated presetsConfig with min_price_change_pct values from database');
+        logger.info('✅ Updated presetsConfig with min_price_change_pct values from database');
       }
       
       return updated;
@@ -5874,7 +5883,7 @@ function resolveDecisionIndexColor(value: number): string {
       .map(([key]) => key);
     
     if (activeCoins.length > 0) {
-      console.log(`🔄 Fetching signals for newly activated coins: ${activeCoins.join(', ')}`);
+      logger.info(`🔄 Fetching signals for newly activated coins: ${activeCoins.join(', ')}`);
       activeCoins.forEach(symbol => {
         void fetchSignals(symbol).catch(err => handleQueueError('fast', err));
       });
@@ -5888,7 +5897,7 @@ function resolveDecisionIndexColor(value: number): string {
     );
     
     if (coinsWithoutSignals.length > 0) {
-      console.log(`🔄 Loading missing signals for ${coinsWithoutSignals.length} coins`);
+      logger.info(`🔄 Loading missing signals for ${coinsWithoutSignals.length} coins`);
       const timer = setTimeout(() => {
         coinsWithoutSignals.forEach((coin) => {
           if (coin.instrument_name) {
@@ -5922,7 +5931,7 @@ function resolveDecisionIndexColor(value: number): string {
           const values = calculateSLTPValues(coin);
           // Accept values even if they're fallback percentages (still > 0)
           if (values.sl > 0 && values.tp > 0) {
-            console.log(`🔄 Calculating SL/TP for ${coin.instrument_name}:`, values);
+            logger.info(`🔄 Calculating SL/TP for ${coin.instrument_name}:`, values);
             setCalculatedSL(prev => ({ ...prev, [coin.instrument_name]: values.sl }));
             setCalculatedTP(prev => ({ ...prev, [coin.instrument_name]: values.tp }));
             
@@ -5935,9 +5944,9 @@ function resolveDecisionIndexColor(value: number): string {
                   tp_price: values.tp
                 };
                 await saveCoinSettings(coin.instrument_name, settingsToSave);
-                console.log(`✅ Saved calculated SL/TP prices to backend for ${coin.instrument_name}:`, settingsToSave);
+                logger.info(`✅ Saved calculated SL/TP prices to backend for ${coin.instrument_name}:`, settingsToSave);
               } catch (err) {
-                console.warn(`⚠️ Failed to save calculated SL/TP prices for ${coin.instrument_name}:`, err);
+                logger.warn(`⚠️ Failed to save calculated SL/TP prices for ${coin.instrument_name}:`, err);
               }
             })();
           }
@@ -5957,7 +5966,7 @@ function resolveDecisionIndexColor(value: number): string {
   // Recalculate when signals change (only for active trades without saved values)
   useEffect(() => {
     if (Object.keys(signals).length > 0) {
-      console.log('📊 Signals updated, recalculating SL/TP values for active trades');
+      logger.info('📊 Signals updated, recalculating SL/TP values for active trades');
       topCoinsRef.current.forEach(coin => {
         // Only calculate for active trades
         const isActiveTrade = coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] === true;
@@ -5971,15 +5980,15 @@ function resolveDecisionIndexColor(value: number): string {
         if ((!hasSavedSL || !hasSavedTP) && hasSignal) {
           const values = calculateSLTPValues(coin);
           if (values.sl > 0 && values.tp > 0) {
-            console.log(`Setting calculated values for ${coin.instrument_name}:`, values);
+            logger.info(`Setting calculated values for ${coin.instrument_name}:`, values);
             setCalculatedSL(prev => {
               const newState = { ...prev, [coin.instrument_name]: values.sl };
-              console.log('New calculatedSL state:', newState);
+              logger.info('New calculatedSL state:', newState);
               return newState;
             });
             setCalculatedTP(prev => {
               const newState = { ...prev, [coin.instrument_name]: values.tp };
-              console.log('New calculatedTP state:', newState);
+              logger.info('New calculatedTP state:', newState);
               return newState;
             });
             
@@ -5992,9 +6001,9 @@ function resolveDecisionIndexColor(value: number): string {
                   tp_price: values.tp
                 };
                 await saveCoinSettings(coin.instrument_name, settingsToSave);
-                console.log(`✅ Saved calculated SL/TP prices to backend for ${coin.instrument_name}:`, settingsToSave);
+                logger.info(`✅ Saved calculated SL/TP prices to backend for ${coin.instrument_name}:`, settingsToSave);
               } catch (err) {
-                console.warn(`⚠️ Failed to save calculated SL/TP prices for ${coin.instrument_name}:`, err);
+                logger.warn(`⚠️ Failed to save calculated SL/TP prices for ${coin.instrument_name}:`, err);
               }
             })();
           }
@@ -6006,7 +6015,7 @@ function resolveDecisionIndexColor(value: number): string {
   // Load saved SL/TP values when coins are loaded (only for active trades)
   useEffect(() => {
     if (topCoinsRef.current.length > 0) {
-      console.log('🔄 Loading saved SL/TP values for active trades');
+      logger.info('🔄 Loading saved SL/TP values for active trades');
       topCoinsRef.current.forEach(coin => {
         // Only process active trades
         const isActiveTrade = coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] === true;
@@ -6022,7 +6031,7 @@ function resolveDecisionIndexColor(value: number): string {
           if (signal && signal.res_up && signal.res_down) {
             const values = calculateSLTPValues(coin);
             if (values.sl > 0 && values.tp > 0) {
-              console.log(`🔄 Loading calculated values for ${coin.instrument_name}:`, values);
+              logger.info(`🔄 Loading calculated values for ${coin.instrument_name}:`, values);
               setCalculatedSL(prev => ({ ...prev, [coin.instrument_name]: values.sl }));
               setCalculatedTP(prev => ({ ...prev, [coin.instrument_name]: values.tp }));
             }
@@ -6186,7 +6195,7 @@ function resolveDecisionIndexColor(value: number): string {
                       }
                     } catch (err: unknown) {
                       const errorObj = err as { detail?: string; message?: string };
-                      console.error('Failed to toggle LIVE_TRADING:', err);
+                      logger.error('Failed to toggle LIVE_TRADING:', err);
                       const errorMessage = errorObj?.detail || errorObj?.message || 'Unknown error occurred';
                       alert(`Failed to toggle LIVE_TRADING: ${errorMessage}\n\nPlease check:\n1. Database connection is working\n2. TradingSettings table exists\n3. Backend logs for details`);
                     } finally {
@@ -6642,7 +6651,7 @@ function resolveDecisionIndexColor(value: number): string {
                             if (finalTpValue > 0) {
                               details = `TP orders detected (value: $${finalTpValue.toFixed(2)}) but details unavailable. Check console for debug info.`;
                               // Debug logging to help identify the issue
-                              console.log(`[TP Debug] ${coinUpper}: tpValue=${finalTpValue}, matchingOrders=${matchingOrders.length}`, {
+                              logger.info(`[TP Debug] ${coinUpper}: tpValue=${finalTpValue}, matchingOrders=${matchingOrders.length}`, {
                                 matchingOrders: matchingOrders.map(o => ({
                                   id: o.order_id,
                                   symbol: o.instrument_name || (o as ExtendedOpenOrder).symbol,
@@ -6842,7 +6851,7 @@ function resolveDecisionIndexColor(value: number): string {
                       (() => {
                         // TypeScript: portfolio is guaranteed to be non-null here due to the condition above
                         const portfolioData = portfolio!;
-                        console.log(`🔍 No realBalances, using portfolio.assets (${portfolioData.assets.length} assets)`);
+                        logger.info(`🔍 No realBalances, using portfolio.assets (${portfolioData.assets.length} assets)`);
                         
                         // Create a map of watchlist items for quick lookup
                         const watchlistMap = new Map<string, WatchlistItem>();
@@ -6851,8 +6860,8 @@ function resolveDecisionIndexColor(value: number): string {
                           if (baseCurrency && !watchlistMap.has(baseCurrency)) {
                             watchlistMap.set(baseCurrency, item);
                           }
-                          const fullSymbol = item.symbol.toUpperCase();
-                          if (!watchlistMap.has(fullSymbol)) {
+                          const fullSymbol = item.symbol?.toUpperCase();
+                          if (fullSymbol && !watchlistMap.has(fullSymbol)) {
                             watchlistMap.set(fullSymbol, item);
                           }
                         });
@@ -7016,11 +7025,11 @@ function resolveDecisionIndexColor(value: number): string {
                             return false;
                           }
                           // Only log in debug mode to reduce console noise
-                          // console.log(`🔍 Filtering asset ${asset.coin}: balance=${asset.balance}, available_qty=${asset.available_qty}, reserved_qty=${asset.reserved_qty}, hasNonZeroBalance=${hasNonZeroBalance}, value_usd=${asset.value_usd}, hasNonZeroUsd=${hasNonZeroUsd}`);
+                          // logger.info(`🔍 Filtering asset ${asset.coin}: balance=${asset.balance}, available_qty=${asset.available_qty}, reserved_qty=${asset.reserved_qty}, hasNonZeroBalance=${hasNonZeroBalance}, value_usd=${asset.value_usd}, hasNonZeroUsd=${hasNonZeroUsd}`);
                           return hasNonZeroBalance || hasNonZeroUsd; // Show assets with any meaningful exposure (long or short)
                         })
                         .filter(asset => asset && asset.coin); // Additional safety filter
-                        console.log(`🔍 Filtered to ${filtered.length} assets after filtering (including non-zero and negative positions)`);
+                        logger.info(`🔍 Filtered to ${filtered.length} assets after filtering (including non-zero and negative positions)`);
                         
                         const _totalPortfolioValue = portfolioData.total_value_usd ?? filtered.reduce((sum, asset) => sum + (asset.value_usd ?? 0), 0);
                         const totalExposureUsd = filtered.reduce((sum, asset) => sum + Math.abs(asset.value_usd ?? 0), 0);
@@ -7037,7 +7046,7 @@ function resolveDecisionIndexColor(value: number): string {
                             const percentShare = totalExposureUsd > 0 ? (Math.abs(netValueUsd) / totalExposureUsd) * 100 : 0;
                             const percentLabel = `${netValueUsd < 0 ? '-' : ''}${formatNumber(percentShare)}`;
                             // Only log in debug mode to reduce console noise
-                            // console.log(`🔍 Rendering asset ${asset.coin}: value_usd=${netValueUsd}, percentShare=${percentLabel}%`);
+                            // logger.info(`🔍 Rendering asset ${asset.coin}: value_usd=${netValueUsd}, percentShare=${percentLabel}%`);
                             
                             // Get TP/SL order values for this coin
                             const _orderValues = getCoinOrderValues(asset.coin, netValueUsd);
@@ -7242,7 +7251,7 @@ function resolveDecisionIndexColor(value: number): string {
                         }
                       } catch (error) {
                         const errorObj = error as { detail?: string; message?: string };
-                        console.error('Failed to toggle LIVE_TRADING:', error);
+                        logger.error('Failed to toggle LIVE_TRADING:', error);
                         const errorMessage = errorObj?.detail || errorObj?.message || 'Unknown error occurred';
                         alert(`Failed to toggle LIVE_TRADING: ${errorMessage}\n\nPlease check:\n1. Database connection is working\n2. TradingSettings table exists\n3. Backend logs for details`);
                       } finally {
@@ -7746,12 +7755,12 @@ function resolveDecisionIndexColor(value: number): string {
                                     // Convert selected string to number before saving to avoid type mismatches
                                     const newRatio = parseFloat(e.target.value);
                                     if (isNaN(newRatio)) {
-                                      console.warn('[CONFIG] Invalid volume ratio value:', e.target.value);
+                                      logger.warn('[CONFIG] Invalid volume ratio value:', e.target.value);
                                       return;
                                     }
                                     
                                     // [CONFIG] Log the change with clear prefix
-                                    console.log('[CONFIG] Min volume changed:', {
+                                    logger.info('[CONFIG] Min volume changed:', {
                                       preset: selectedConfigPreset,
                                       risk: selectedConfigRisk,
                                       oldValue: currentVolumeRatio,
@@ -7762,7 +7771,7 @@ function resolveDecisionIndexColor(value: number): string {
                                       // FIX: Add null checks to prevent TypeError if PRESET_CONFIG structure is incomplete
                                       const defaultPreset = PRESET_CONFIG[selectedConfigPreset];
                                       if (!defaultPreset) {
-                                        console.error(`[CONFIG] Missing preset ${selectedConfigPreset} in PRESET_CONFIG`);
+                                        logger.error(`[CONFIG] Missing preset ${selectedConfigPreset} in PRESET_CONFIG`);
                                         return prev; // Return unchanged if preset doesn't exist
                                       }
                                       const existingPreset = prev[selectedConfigPreset] ?? defaultPreset;
@@ -7786,7 +7795,7 @@ function resolveDecisionIndexColor(value: number): string {
                                       
                                       // [CONFIG] Verify the value was set correctly
                                       const verifyVol = updated[selectedConfigPreset].rules[selectedConfigRisk].volumeMinRatio;
-                                      console.log('[CONFIG] State updated successfully:', {
+                                      logger.info('[CONFIG] State updated successfully:', {
                                         preset: selectedConfigPreset,
                                         risk: selectedConfigRisk,
                                         volumeMinRatio: verifyVol,
@@ -7798,7 +7807,7 @@ function resolveDecisionIndexColor(value: number): string {
                                   }}
                                   onFocus={() => {
                                     // [CONFIG] Log when dropdown is opened/focused
-                                    console.log('[CONFIG] Volume dropdown focused:', {
+                                    logger.info('[CONFIG] Volume dropdown focused:', {
                                       preset: selectedConfigPreset,
                                       risk: selectedConfigRisk,
                                       currentValue: currentVolumeRatio,
@@ -8097,12 +8106,12 @@ function resolveDecisionIndexColor(value: number): string {
                             ? currentRiskRules.minPriceChangePct 
                             : 1.0;
                           
-                          console.log(`💾 Saving configuration for ${selectedConfigPreset}-${selectedConfigRisk}:`, currentRiskRules);
+                          logger.info(`💾 Saving configuration for ${selectedConfigPreset}-${selectedConfigRisk}:`, currentRiskRules);
                           
                           // Disable initial load flag if still active (user is explicitly saving)
                           if (isInitialLoadRef.current) {
                             isInitialLoadRef.current = false;
-                            console.log('✅ User save action - disabling initial load flag');
+                            logger.info('✅ User save action - disabling initial load flag');
                           }
                           
                           // Save to backend FIRST (source of truth)
@@ -8124,7 +8133,7 @@ function resolveDecisionIndexColor(value: number): string {
                               // [CONFIG] Log volumeMinRatio values before sending
                               Object.entries(preset.rules).forEach(([riskMode, rules]) => {
                                 const volRatio = (rules as StrategyRules).volumeMinRatio;
-                                console.log('[CONFIG] Preparing to save:', {
+                                logger.info('[CONFIG] Preparing to save:', {
                                   preset: presetName,
                                   risk: riskMode,
                                   volumeMinRatio: volRatio,
@@ -8142,12 +8151,12 @@ function resolveDecisionIndexColor(value: number): string {
                             });
                             
                             // [CONFIG] Log full payload before sending
-                            console.log('[CONFIG] Saving config payload:', JSON.stringify(backendConfig.strategy_rules, null, 2));
+                            logger.info('[CONFIG] Saving config payload:', JSON.stringify(backendConfig.strategy_rules, null, 2));
                             
                             // Save to backend
                             const saveResult = await saveTradingConfig(backendConfig);
-                            console.log('[CONFIG] ✅ Configuration saved to backend successfully');
-                            console.log('[CONFIG] ✅ Saved config:', JSON.stringify(backendConfig.strategy_rules, null, 2));
+                            logger.info('[CONFIG] ✅ Configuration saved to backend successfully');
+                            logger.info('[CONFIG] ✅ Saved config:', JSON.stringify(backendConfig.strategy_rules, null, 2));
                             
                             // Convert saved config from PUT response to frontend PresetConfig format
                             // FIX: Use saveResult.config directly instead of reloading - avoids stale closure and extra network call
@@ -8160,7 +8169,7 @@ function resolveDecisionIndexColor(value: number): string {
                                 if (presetData && typeof presetData === 'object' && 'rules' in presetData && presetData.rules) {
                                   Object.entries(presetData.rules as Record<string, unknown>).forEach(([riskMode, rules]: [string, unknown]) => {
                                     const volRatio = (rules as StrategyRules)?.volumeMinRatio;
-                                    console.log(`[CONFIG] ✅ Verified saved ${presetKey}-${riskMode} volumeMinRatio:`, volRatio);
+                                    logger.info(`[CONFIG] ✅ Verified saved ${presetKey}-${riskMode} volumeMinRatio:`, volRatio);
                                   });
                                 }
                               });
@@ -8196,7 +8205,7 @@ function resolveDecisionIndexColor(value: number): string {
                             // This should rarely happen, but provides a safety net
                             if (!savedPresetsConfig) {
                               try {
-                                console.log('[CONFIG] ⚠️ PUT response missing config, reloading from backend...');
+                                logger.info('[CONFIG] ⚠️ PUT response missing config, reloading from backend...');
                                 const reloadedConfig = await getTradingConfig();
                                 if (reloadedConfig?.strategy_rules) {
                                   savedPresetsConfig = {} as PresetConfig;
@@ -8225,7 +8234,7 @@ function resolveDecisionIndexColor(value: number): string {
                                   });
                                 }
                               } catch (reloadErr) {
-                                console.warn('[CONFIG] ⚠️ Failed to reload config after save:', reloadErr);
+                                logger.warn('[CONFIG] ⚠️ Failed to reload config after save:', reloadErr);
                               }
                             }
                             
@@ -8233,7 +8242,7 @@ function resolveDecisionIndexColor(value: number): string {
                             // This avoids using stale closure variable if all previous attempts failed
                             if (!savedPresetsConfig) {
                               try {
-                                console.log('[CONFIG] ⚠️ Both PUT response and reload failed, making final attempt to fetch config...');
+                                logger.info('[CONFIG] ⚠️ Both PUT response and reload failed, making final attempt to fetch config...');
                                 const finalConfig = await getTradingConfig();
                                 if (finalConfig?.strategy_rules) {
                                   savedPresetsConfig = {} as PresetConfig;
@@ -8260,10 +8269,10 @@ function resolveDecisionIndexColor(value: number): string {
                                       };
                                     }
                                   });
-                                  console.log('[CONFIG] ✅ Final fetch attempt succeeded');
+                                  logger.info('[CONFIG] ✅ Final fetch attempt succeeded');
                                 }
                               } catch (finalErr) {
-                                console.warn('[CONFIG] ⚠️ Final fetch attempt also failed:', finalErr);
+                                logger.warn('[CONFIG] ⚠️ Final fetch attempt also failed:', finalErr);
                               }
                             }
                             
@@ -8277,20 +8286,20 @@ function resolveDecisionIndexColor(value: number): string {
                             // Only use stale presetsConfig as absolute last resort if all fetch attempts failed
                             if (savedPresetsConfig) {
                               localStorage.setItem('strategy_presets_config', JSON.stringify(savedPresetsConfig));
-                              console.log('[CONFIG] ✅ Updated localStorage with saved values (from backend)');
+                              logger.info('[CONFIG] ✅ Updated localStorage with saved values (from backend)');
                             } else {
                               // Last resort: use current presetsConfig (may be stale, but better than nothing)
                               // This should rarely happen - only if all 3 fetch attempts (PUT response, reload, final fetch) failed
-                              console.warn('[CONFIG] ⚠️ All config fetch attempts failed, using current state (may be stale)');
+                              logger.warn('[CONFIG] ⚠️ All config fetch attempts failed, using current state (may be stale)');
                               localStorage.setItem('strategy_presets_config', JSON.stringify(presetsConfig));
-                              console.log('[CONFIG] ⚠️ Updated localStorage with current state (fallback - may be stale)');
+                              logger.info('[CONFIG] ⚠️ Updated localStorage with current state (fallback - may be stale)');
                             }
                           } catch (backendErr) {
-                            console.error('⚠️ Failed to save configuration to backend:', backendErr);
+                            logger.error('⚠️ Failed to save configuration to backend:', backendErr);
                             // Fallback: save to localStorage even if backend save fails
                             // Note: presetsConfig may be stale due to closure, but it's the best we have if backend save failed
                             localStorage.setItem('strategy_presets_config', JSON.stringify(presetsConfig));
-                            console.log('⚠️ Saved to localStorage only (backend save failed) - using current state');
+                            logger.info('⚠️ Saved to localStorage only (backend save failed) - using current state');
                           }
                             
                             // Apply min_price_change_pct to all coins using this strategy
@@ -8336,14 +8345,14 @@ function resolveDecisionIndexColor(value: number): string {
                               }
                             });
                             
-                            console.log(`📊 Found ${coinsToUpdate.length} coins using ${selectedConfigPreset}-${selectedConfigRisk}:`, coinsToUpdate);
+                            logger.info(`📊 Found ${coinsToUpdate.length} coins using ${selectedConfigPreset}-${selectedConfigRisk}:`, coinsToUpdate);
                             
                             // Update all matching coins
                             if (coinsToUpdate.length > 0) {
                               const updatePromises = coinsToUpdate.map(symbol => 
                                 saveCoinSettings(symbol, { min_price_change_pct: minPriceChangePct })
                                   .catch(err => {
-                                    console.warn(`Failed to update ${symbol}:`, err);
+                                    logger.warn(`Failed to update ${symbol}:`, err);
                                     return null; // Continue with other coins even if one fails
                                   })
                               );
@@ -8359,7 +8368,7 @@ function resolveDecisionIndexColor(value: number): string {
                               alert(`✅ Configuration saved for ${selectedConfigPreset} - ${selectedConfigRisk}\n\nNo coins currently using this strategy.`);
                             }
                           } catch (err) {
-                            console.error('Error saving strategy configuration:', err);
+                            logger.error('Error saving strategy configuration:', err);
                             alert(`❌ Error saving configuration: ${err}`);
                           }
                         }}
@@ -8511,7 +8520,7 @@ function resolveDecisionIndexColor(value: number): string {
                   .filter((coin) => {
                     // Defensive: skip malformed coins that would crash rendering
                     if (!coin || !coin.instrument_name) {
-                      console.warn('⚠️ Skipping malformed coin in Watchlist:', coin);
+                      logger.warn('⚠️ Skipping malformed coin in Watchlist:', coin);
                       return false;
                     }
                     return true;
@@ -8594,7 +8603,7 @@ function resolveDecisionIndexColor(value: number): string {
                               return;
                             }
                             // Log the price being used for debugging
-                            console.log(`📊 Creando orden BUY para ${coin.instrument_name} con precio: $${price} (current_price del dashboard)`);
+                            logger.info(`📊 Creando orden BUY para ${coin.instrument_name} con precio: $${price} (current_price del dashboard)`);
                             
                             // Calculate quantity
                             let qty = amountUSD / price;
@@ -8665,7 +8674,7 @@ ${marginText}
                               return;
                             }
                             // Log the price being used for debugging
-                            console.log(`📊 Creando orden SELL para ${coin.instrument_name} con precio: $${price} (current_price del dashboard)`);
+                            logger.info(`📊 Creando orden SELL para ${coin.instrument_name} con precio: $${price} (current_price del dashboard)`);
                             
                             // Calculate quantity
                             let qty = amountUSD / price;
@@ -8840,7 +8849,7 @@ ${marginText}
                         onClick={async () => {
                           const symbolKey = normalizeSymbolKey(coin.instrument_name);
                           const newValue = !coinTradeStatus[symbolKey];
-                          console.log(`🔄 Changing Trade status for ${coin.instrument_name}: ${coinTradeStatus[symbolKey]} -> ${newValue}`);
+                          logger.info(`🔄 Changing Trade status for ${coin.instrument_name}: ${coinTradeStatus[symbolKey]} -> ${newValue}`);
                           setCoinTradeStatus(prev => {
                             const updated = {
                               ...prev,
@@ -8855,7 +8864,7 @@ ${marginText}
                           
                           // Save to database
                           try {
-                            console.log(`💾 Saving trade_enabled=${newValue} for ${symbol} to database...`);
+                            logger.info(`💾 Saving trade_enabled=${newValue} for ${symbol} to database...`);
                             // CRITICAL: Use the backend response to update local state (single source of truth)
                             // This ensures UI matches the canonical row that SignalMonitor reads
                             const result = await saveCoinSettings(symbol, { trade_enabled: newValue });
@@ -8864,7 +8873,7 @@ ${marginText}
                             if (result && typeof result === 'object' && 'trade_enabled' in result) {
                               const backendValue = result.trade_enabled;
                               if (typeof backendValue === 'boolean') {
-                                console.log(`✅ Backend confirmed trade_enabled=${backendValue} for ${symbol} (id=${result.id})`);
+                                logger.info(`✅ Backend confirmed trade_enabled=${backendValue} for ${symbol} (id=${result.id})`);
                                 const symbolUpper = symbol.toUpperCase();
                                 setCoinTradeStatus(prev => {
                                   const updated = {
@@ -8876,11 +8885,11 @@ ${marginText}
                                 });
                               } else {
                                 // Fallback: if backendValue is not boolean, keep optimistic update
-                                console.log(`✅ Successfully saved trade_enabled=${newValue} for ${symbol}`);
+                                logger.info(`✅ Successfully saved trade_enabled=${newValue} for ${symbol}`);
                               }
                             } else {
                               // Fallback: if result doesn't have trade_enabled, keep optimistic update
-                              console.log(`✅ Successfully saved trade_enabled=${newValue} for ${symbol}`);
+                              logger.info(`✅ Successfully saved trade_enabled=${newValue} for ${symbol}`);
                             }
                             
                             // Show success message
@@ -8903,15 +8912,15 @@ ${marginText}
                             
                             // Log backend message if available
                             if (result && typeof result === 'object' && 'message' in result && result.message) {
-                              console.log(`✅ Backend: ${result.message}`);
+                              logger.info(`✅ Backend: ${result.message}`);
                             }
                             
                             // CRITICAL: After saving, verify the symbol is still visible
                             // Do NOT trigger a full refresh that might filter it out
                             // The symbol should remain visible regardless of Trade status
-                            console.log(`🛡️ Symbol ${symbol} should remain visible in watchlist (Trade=${newValue})`);
+                            logger.info(`🛡️ Symbol ${symbol} should remain visible in watchlist (Trade=${newValue})`);
                           } catch (err) {
-                            console.error(`❌ Failed to save trade_enabled for ${coin.instrument_name}:`, err);
+                            logger.error(`❌ Failed to save trade_enabled for ${coin.instrument_name}:`, err);
                             // Revert the UI change on error
                             setCoinTradeStatus(prev => {
                               const reverted = {
@@ -8926,7 +8935,7 @@ ${marginText}
                               ? err.message 
                               : (typeof err === 'string' ? err : 'Unknown error occurred');
                             
-                            console.error(`❌ Error saving trade_enabled for ${coin.instrument_name}:`, errorMessage);
+                            logger.error(`❌ Error saving trade_enabled for ${coin.instrument_name}:`, errorMessage);
                             
                             // Check for specific error types and retry automatically
                             const isRetryableError = errorMessage.includes('502') || 
@@ -8940,11 +8949,11 @@ ${marginText}
                             
                             if (isRetryableError) {
                               // Automatic retry after a short delay
-                              console.log(`🔄 Retrying save for ${coin.instrument_name} after 1 second...`);
+                              logger.info(`🔄 Retrying save for ${coin.instrument_name} after 1 second...`);
                               setTimeout(async () => {
                                 try {
                                   await saveCoinSettings(coin.instrument_name, { trade_enabled: newValue });
-                                  console.log(`✅ Successfully saved trade_enabled=${newValue} for ${coin.instrument_name} (automatic retry)`);
+                                  logger.info(`✅ Successfully saved trade_enabled=${newValue} for ${coin.instrument_name} (automatic retry)`);
                                   // Update UI to reflect success
                                   setCoinTradeStatus(prev => {
                                     const updated = {
@@ -8955,14 +8964,14 @@ ${marginText}
                                     return updated;
                                   });
                                 } catch (retryErr) {
-                                  console.error(`❌ Automatic retry also failed for ${coin.instrument_name}:`, retryErr);
+                                  logger.error(`❌ Automatic retry also failed for ${coin.instrument_name}:`, retryErr);
                                   // Don't show alert - just log the error
                                   // The UI will remain in the reverted state
                                 }
                               }, 1000);
                             } else {
                               // For non-retryable errors, just log them
-                              console.error(`❌ Non-retryable error for ${symbol}:`, errorMessage);
+                              logger.error(`❌ Non-retryable error for ${symbol}:`, errorMessage);
                               setAlertSavedMessages(prev => ({
                                 ...prev,
                                 [messageKey]: { type: 'error', timestamp: Date.now() }
@@ -8996,14 +9005,14 @@ ${marginText}
                           }}
                           onBlur={async (e) => {
                           const rawValue = e.target.value.trim();
-                          console.log(`Saving Amount USD for ${coin.instrument_name}:`, rawValue);
+                          logger.info(`Saving Amount USD for ${coin.instrument_name}:`, rawValue);
                           const symbol = coin.instrument_name;
                           const messageKey = `${symbol}_amount`;
 
                           const clearAmount = async () => {
                             try {
                               const result = await saveCoinSettings(symbol, { trade_amount_usd: null });
-                              console.log(`✅ Cleared Amount USD for ${symbol} in backend`);
+                              logger.info(`✅ Cleared Amount USD for ${symbol} in backend`);
                               
                               // Update state with backend response
                               if (result && result.symbol) {
@@ -9038,7 +9047,7 @@ ${marginText}
                                 delete savedMessageTimersRef.current[messageKey];
                               }, 3000);
                             } catch (err) {
-                              console.warn(`⚠️ Failed to clear Amount USD in backend for ${symbol}:`, err);
+                              logger.warn(`⚠️ Failed to clear Amount USD in backend for ${symbol}:`, err);
                               setAlertSavedMessages(prev => ({
                                 ...prev,
                                 [messageKey]: { type: 'error', timestamp: Date.now() }
@@ -9056,7 +9065,7 @@ ${marginText}
                             try {
                               // Save to backend first (source of truth)
                               const result = await saveCoinSettings(symbol, { trade_amount_usd: numValue });
-                              console.log(`✅ Saved Amount USD=${numValue} for ${symbol} in backend`);
+                              logger.info(`✅ Saved Amount USD=${numValue} for ${symbol} in backend`);
                               
                               // Update state with backend response
                               if (result && result.symbol) {
@@ -9100,11 +9109,11 @@ ${marginText}
                                 
                                 // Log backend message if available
                                 if (result.message) {
-                                  console.log(`✅ Backend: ${result.message}`);
+                                  logger.info(`✅ Backend: ${result.message}`);
                                 }
                               }
                             } catch (err) {
-                              console.warn(`⚠️ Backend save failed for ${symbol}:`, err);
+                              logger.warn(`⚠️ Backend save failed for ${symbol}:`, err);
                               setAlertSavedMessages(prev => ({
                                 ...prev,
                                 [messageKey]: { type: 'error', timestamp: Date.now() }
@@ -9114,7 +9123,7 @@ ${marginText}
                           }
 
                           // Invalid value (non-number or <=0) → reset input and clear backend value
-                          console.warn(`⚠️ Invalid Amount USD provided for ${symbol}: "${rawValue}". Clearing value.`);
+                          logger.warn(`⚠️ Invalid Amount USD provided for ${symbol}: "${rawValue}". Clearing value.`);
                           e.target.value = '';
                           await clearAmount();
                         }}
@@ -9183,7 +9192,7 @@ ${marginText}
                             const result = await saveCoinSettings(symbol, { 
                               sl_tp_mode: newValue ? 'aggressive' : 'conservative'
                             });
-                            console.log(`✅ Saved RISK=${newValue ? 'aggressive' : 'conservative'} for ${symbol} in backend`);
+                            logger.info(`✅ Saved RISK=${newValue ? 'aggressive' : 'conservative'} for ${symbol} in backend`);
                             
                             // Update state with backend response
                             if (result && result.symbol) {
@@ -9221,7 +9230,7 @@ ${marginText}
                               
                               // Recalculate SL/TP values immediately
                               const values = calculateSLTPValues(coin);
-                              console.log(`🔄 Recalculating SL/TP for ${symbol} after mode change:`, values);
+                              logger.info(`🔄 Recalculating SL/TP for ${symbol} after mode change:`, values);
                               setCalculatedSL(prev => ({ ...prev, [symbol]: values.sl }));
                               setCalculatedTP(prev => ({ ...prev, [symbol]: values.tp }));
                               
@@ -9240,9 +9249,9 @@ ${marginText}
                                 }
                                 
                                 await saveCoinSettings(symbol, settingsToSave);
-                                console.log(`✅ Saved recalculated SL/TP for ${symbol}:`, settingsToSave);
+                                logger.info(`✅ Saved recalculated SL/TP for ${symbol}:`, settingsToSave);
                               } catch (err) {
-                                console.warn(`⚠️ Failed to save recalculated SL/TP for ${symbol}:`, err);
+                                logger.warn(`⚠️ Failed to save recalculated SL/TP for ${symbol}:`, err);
                               }
                             }
                             
@@ -9266,10 +9275,10 @@ ${marginText}
                             
                             // Log backend message if available
                             if (result.message) {
-                              console.log(`✅ Backend: ${result.message}`);
+                              logger.info(`✅ Backend: ${result.message}`);
                             }
                           } catch (err) {
-                            console.warn(`⚠️ Backend save failed for RISK:`, err);
+                            logger.warn(`⚠️ Backend save failed for RISK:`, err);
                             setAlertSavedMessages(prev => ({
                               ...prev,
                               [messageKey]: { type: 'error', timestamp: Date.now() }
@@ -9320,7 +9329,7 @@ ${marginText}
                           const hasOverride = coinSLPercent[coin.instrument_name] && coinSLPercent[coin.instrument_name] !== '';
                           const calculatedValue = calculatedSL[coin.instrument_name];
                           
-                          console.log(`🔍 SL Debug for ${coin.instrument_name}:`, {
+                          logger.info(`🔍 SL Debug for ${coin.instrument_name}:`, {
                             isEditing,
                             isHovering,
                             hasOverride,
@@ -9392,7 +9401,7 @@ ${marginText}
                             // Field was cleared - save to backend first
                             try {
                               const result = await saveCoinSettings(symbol, { sl_percentage: null });
-                              console.log(`✅ Cleared SL% from backend`);
+                              logger.info(`✅ Cleared SL% from backend`);
                               
                               // Update state with backend response
                               if (result && result.symbol) {
@@ -9427,7 +9436,7 @@ ${marginText}
                                 delete savedMessageTimersRef.current[messageKey];
                               }, 3000);
                             } catch (err) {
-                              console.warn('⚠️ Backend clear failed for SL%', err);
+                              logger.warn('⚠️ Backend clear failed for SL%', err);
                               setAlertSavedMessages(prev => ({
                                 ...prev,
                                 [messageKey]: { type: 'error', timestamp: Date.now() }
@@ -9437,7 +9446,7 @@ ${marginText}
                             // Valid value - save to backend first (source of truth)
                             try {
                               const result = await saveCoinSettings(symbol, { sl_percentage: numValue });
-                              console.log(`✅ Saved SL%=${numValue} for ${symbol} in backend`);
+                              logger.info(`✅ Saved SL%=${numValue} for ${symbol} in backend`);
                               
                               // Update state with backend response
                               if (result && result.symbol) {
@@ -9495,10 +9504,10 @@ ${marginText}
                               
                               // Log backend message if available
                               if (result.message) {
-                                console.log(`✅ Backend: ${result.message}`);
+                                logger.info(`✅ Backend: ${result.message}`);
                               }
                             } catch (err) {
-                              console.warn('⚠️ Backend save failed for SL%', err);
+                              logger.warn('⚠️ Backend save failed for SL%', err);
                               setAlertSavedMessages(prev => ({
                                 ...prev,
                                 [messageKey]: { type: 'error', timestamp: Date.now() }
@@ -9541,7 +9550,7 @@ ${marginText}
                           const hasOverride = coinTPPercent[coin.instrument_name] && coinTPPercent[coin.instrument_name] !== '';
                           const calculatedValue = calculatedTP[coin.instrument_name];
                           
-                          console.log(`🔍 TP Debug for ${coin.instrument_name}:`, {
+                          logger.info(`🔍 TP Debug for ${coin.instrument_name}:`, {
                             isEditing,
                             isHovering,
                             hasOverride,
@@ -9613,7 +9622,7 @@ ${marginText}
                             // Field was cleared - save to backend first
                             try {
                               const result = await saveCoinSettings(symbol, { tp_percentage: null });
-                              console.log(`✅ Cleared TP% from backend`);
+                              logger.info(`✅ Cleared TP% from backend`);
                               
                               // Update state with backend response
                               if (result && result.symbol) {
@@ -9648,7 +9657,7 @@ ${marginText}
                                 delete savedMessageTimersRef.current[messageKey];
                               }, 3000);
                             } catch (err) {
-                              console.warn('⚠️ Backend clear failed for TP%', err);
+                              logger.warn('⚠️ Backend clear failed for TP%', err);
                               setAlertSavedMessages(prev => ({
                                 ...prev,
                                 [messageKey]: { type: 'error', timestamp: Date.now() }
@@ -9658,7 +9667,7 @@ ${marginText}
                             // Valid value - save to backend first (source of truth)
                             try {
                               const result = await saveCoinSettings(symbol, { tp_percentage: numValue });
-                              console.log(`✅ Saved TP%=${numValue} for ${symbol} in backend`);
+                              logger.info(`✅ Saved TP%=${numValue} for ${symbol} in backend`);
                               
                               // Update state with backend response
                               if (result && result.symbol) {
@@ -9716,10 +9725,10 @@ ${marginText}
                               
                               // Log backend message if available
                               if (result.message) {
-                                console.log(`✅ Backend: ${result.message}`);
+                                logger.info(`✅ Backend: ${result.message}`);
                               }
                             } catch (err) {
-                              console.warn('⚠️ Backend save failed for TP%', err);
+                              logger.warn('⚠️ Backend save failed for TP%', err);
                               setAlertSavedMessages(prev => ({
                                 ...prev,
                                 [messageKey]: { type: 'error', timestamp: Date.now() }
@@ -10140,7 +10149,7 @@ ${marginText}
                               const showIndex = typeof strategyIndex === 'number' && strategyIndex !== null;
                               
                               if (process.env.NODE_ENV !== 'production') {
-                                console.debug('[WATCHLIST_STRATEGY]', {
+                                logger.debug('[WATCHLIST_STRATEGY]', {
                                   symbol: coin.instrument_name,
                                   backendDecision,
                                   normalizedDecision: signal,
@@ -10263,9 +10272,9 @@ ${marginText}
                             });
                             
                             try {
-                              console.log(`🔄 Attempting to update buy alert status for ${symbol}: ${currentBuyAlertStatus} -> ${newBuyAlertStatus}`);
+                              logger.info(`🔄 Attempting to update buy alert status for ${symbol}: ${currentBuyAlertStatus} -> ${newBuyAlertStatus}`);
                               const result = await updateBuyAlert(symbol, newBuyAlertStatus);
-                              console.log(`✅ Buy Alert ${newBuyAlertStatus ? 'enabled' : 'disabled'} for ${symbol}:`, result);
+                              logger.info(`✅ Buy Alert ${newBuyAlertStatus ? 'enabled' : 'disabled'} for ${symbol}:`, result);
                               
                               // Sync state with backend response to ensure frontend and backend are in sync
                               if (result.ok && result.buy_alert_enabled !== undefined) {
@@ -10274,7 +10283,7 @@ ${marginText}
                                   localStorage.setItem('watchlist_buy_alert_status', JSON.stringify(updated));
                                   return updated;
                                 });
-                                console.log(`✅ Synced buy_alert_enabled from backend response for ${symbol}: ${result.buy_alert_enabled}`);
+                                logger.info(`✅ Synced buy_alert_enabled from backend response for ${symbol}: ${result.buy_alert_enabled}`);
                                 // Show "Saved" confirmation message
                                 const messageKey = `${symbol}_buy`;
                                 setAlertSavedMessages(prev => ({
@@ -10296,7 +10305,7 @@ ${marginText}
                                 }, 2500);
                               }
                             } catch (alertError: unknown) {
-                              console.error(`❌ Failed to update buy alert status for ${symbol}:`, alertError);
+                              logger.error(`❌ Failed to update buy alert status for ${symbol}:`, alertError);
                               // Revert optimistic update on failure
                               setCoinBuyAlertStatus(prev => {
                                 const updated = { ...prev, [symbol]: currentBuyAlertStatus };
@@ -10334,9 +10343,9 @@ ${marginText}
                             });
                             
                             try {
-                              console.log(`🔄 Attempting to update sell alert status for ${symbol}: ${currentSellAlertStatus} -> ${newSellAlertStatus}`);
+                              logger.info(`🔄 Attempting to update sell alert status for ${symbol}: ${currentSellAlertStatus} -> ${newSellAlertStatus}`);
                               const result = await updateSellAlert(symbol, newSellAlertStatus);
-                              console.log(`✅ Sell Alert ${newSellAlertStatus ? 'enabled' : 'disabled'} for ${symbol}:`, result);
+                              logger.info(`✅ Sell Alert ${newSellAlertStatus ? 'enabled' : 'disabled'} for ${symbol}:`, result);
                               
                               // Sync state with backend response to ensure frontend and backend are in sync
                               if (result.ok && result.sell_alert_enabled !== undefined) {
@@ -10345,7 +10354,7 @@ ${marginText}
                                   localStorage.setItem('watchlist_sell_alert_status', JSON.stringify(updated));
                                   return updated;
                                 });
-                                console.log(`✅ Synced sell_alert_enabled from backend response for ${symbol}: ${result.sell_alert_enabled}`);
+                                logger.info(`✅ Synced sell_alert_enabled from backend response for ${symbol}: ${result.sell_alert_enabled}`);
                                 // Show "Saved" confirmation message
                                 const messageKey = `${symbol}_sell`;
                                 setAlertSavedMessages(prev => ({
@@ -10367,7 +10376,7 @@ ${marginText}
                                 }, 2500);
                               }
                             } catch (alertError: unknown) {
-                              console.error(`❌ Failed to update sell alert status for ${symbol}:`, alertError);
+                              logger.error(`❌ Failed to update sell alert status for ${symbol}:`, alertError);
                               // Revert optimistic update on failure
                               setCoinSellAlertStatus(prev => {
                                 const updated = { ...prev, [symbol]: currentSellAlertStatus };
@@ -10460,7 +10469,7 @@ ${marginText}
                               const results: Array<{ type: string; result: SimulateAlertResponse }> = [];
                               
                               // Simulate the determined side
-                              console.log(`[TEST_BUTTON] Calling simulateAlert`, { 
+                              logger.info(`[TEST_BUTTON] Calling simulateAlert`, { 
                                 symbol, 
                                 testSide, 
                                 amountUSD,
@@ -10469,7 +10478,7 @@ ${marginText}
                                 method: 'POST',
                                 payload: { symbol, signal_type: testSide, force_order: true, trade_amount_usd: amountUSD, trade_enabled: tradeEnabled }
                               });
-                              console.log(`🧪 Simulando alerta ${testSide} para ${symbol} con amount=${amountUSD}, trade_enabled=${tradeEnabled}...`);
+                              logger.info(`🧪 Simulando alerta ${testSide} para ${symbol} con amount=${amountUSD}, trade_enabled=${tradeEnabled}...`);
                               const testResult = await simulateAlert(symbol, testSide, true, amountUSD);
                               results.push({ type: testSide, result: testResult });
                               
@@ -10503,7 +10512,7 @@ ${marginText}
                               });
                               
                               alert(message);
-                              console.log(`✅ Simulación completada:`, results);
+                              logger.info(`✅ Simulación completada:`, results);
                             } catch (simError: unknown) {
                               const simErrorObj = simError as { detail?: string; message?: string };
                               logHandledError(
@@ -10523,8 +10532,8 @@ ${marginText}
                         </button>
                         <button
                           onClick={() => {
-                            console.log(`Delete clicked for ${coin.instrument_name}`);
-                            console.log(`Current deleteConfirm: ${deleteConfirm}`);
+                            logger.info(`Delete clicked for ${coin.instrument_name}`);
+                            logger.info(`Current deleteConfirm: ${deleteConfirm}`);
                             handleDeleteCoin(coin.instrument_name);
                           }}
                           className={`px-3 py-1 rounded text-sm ${
@@ -10594,7 +10603,7 @@ ${marginText}
                         }
                       } catch (error) {
                         const errorObj = error as { detail?: string; message?: string };
-                        console.error('Failed to toggle LIVE_TRADING:', error);
+                        logger.error('Failed to toggle LIVE_TRADING:', error);
                         const errorMessage = errorObj?.detail || errorObj?.message || 'Unknown error occurred';
                         alert(`Failed to toggle LIVE_TRADING: ${errorMessage}\n\nPlease check:\n1. Database connection is working\n2. TradingSettings table exists\n3. Backend logs for details`);
                       } finally {
@@ -11222,7 +11231,7 @@ ${marginText}
                         }
                       } catch (error) {
                         const errorObj = error as { detail?: string; message?: string };
-                        console.error('Failed to toggle LIVE_TRADING:', error);
+                        logger.error('Failed to toggle LIVE_TRADING:', error);
                         const errorMessage = errorObj?.detail || errorObj?.message || 'Unknown error occurred';
                         alert(`Failed to toggle LIVE_TRADING: ${errorMessage}\n\nPlease check:\n1. Database connection is working\n2. TradingSettings table exists\n3. Backend logs for details`);
                       } finally {
@@ -11628,7 +11637,7 @@ ${marginText}
                               );
                             }
                           } catch (err) {
-                            console.error('Error calculating P/L for order:', order.order_id, err);
+                            logger.error('Error calculating P/L for order:', order.order_id, err);
                             return <span className="text-gray-400 italic">—</span>;
                           }
                         })()}
@@ -11720,7 +11729,7 @@ ${marginText}
                     alert(`❌ Failed to fix backend health: ${result.error || 'Unknown error'}`);
                   }
                 } catch (error) {
-                  console.error('Error fixing backend health:', error);
+                  logger.error('Error fixing backend health:', error);
                   alert(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
                 }
               }}

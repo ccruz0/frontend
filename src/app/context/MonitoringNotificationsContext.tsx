@@ -30,6 +30,21 @@ const getLatestTimestamp = (messages: TelegramMessage[]): number | null => {
   return Math.max(...timestamps);
 };
 
+const isNotifiableThrottleMessage = (msg: TelegramMessage): boolean => {
+  // Default heuristic:
+  // - Prefer throttle_status if present
+  // - Otherwise fall back to "not blocked"
+  const maybeOrderSkipped = (msg as TelegramMessage & { order_skipped?: boolean }).order_skipped;
+  if (maybeOrderSkipped) return true;
+
+  const status = (msg as TelegramMessage & { throttle_status?: string | null }).throttle_status;
+  if (typeof status === 'string' && status.trim().length > 0) {
+    const normalized = status.toUpperCase();
+    return normalized === 'SENT' || normalized === 'ORDER SKIPPED';
+  }
+  return !msg.blocked;
+};
+
 export function MonitoringNotificationsProvider({ children }: { children: React.ReactNode }) {
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [hydrated, setHydrated] = useState(false);
@@ -46,7 +61,57 @@ export function MonitoringNotificationsProvider({ children }: { children: React.
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioPrimedRef = useRef(false);
   const pendingSoundRef = useRef(false);
+  const soundQueueRef = useRef(0);
+  const soundPlayingRef = useRef(false);
+  const lastNotifiedTimestampRef = useRef<number | null>(null);
   const lastLoggedTimestampRef = useRef<number | null>(null);
+
+  const drainSoundQueue = useCallback(function drainSoundQueueImpl() {
+    if (soundPlayingRef.current) return;
+    if (soundQueueRef.current <= 0) return;
+    if (!audioPrimedRef.current || !audioRef.current) {
+      pendingSoundRef.current = true;
+      console.info('[Monitoring] Notification sound queued until audio is ready');
+      return;
+    }
+
+    const audio = audioRef.current;
+    soundPlayingRef.current = true;
+    soundQueueRef.current = Math.max(0, soundQueueRef.current - 1);
+
+    const handleEnded = () => {
+      audio.removeEventListener('ended', handleEnded);
+      soundPlayingRef.current = false;
+      drainSoundQueueImpl();
+    };
+
+    // Ensure sequential playback (one beep per message).
+    audio.addEventListener('ended', handleEnded);
+    try {
+      audio.currentTime = 0;
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise.catch((err) => {
+          audio.removeEventListener('ended', handleEnded);
+          soundPlayingRef.current = false;
+          // Re-queue one sound and wait for next user interaction to unlock audio.
+          soundQueueRef.current += 1;
+          pendingSoundRef.current = true;
+          console.warn(
+            '[Monitoring] Notification sound blocked by browser, will retry after next interaction',
+            err
+          );
+        });
+      }
+    } catch (err) {
+      audio.removeEventListener('ended', handleEnded);
+      soundPlayingRef.current = false;
+      // Re-queue one sound and retry after next interaction.
+      soundQueueRef.current += 1;
+      pendingSoundRef.current = true;
+      console.warn('Failed to play monitoring notification sound:', err);
+    }
+  }, []);
 
   useEffect(() => {
     lastSeenRef.current = lastSeenTimestamp;
@@ -59,32 +124,14 @@ export function MonitoringNotificationsProvider({ children }: { children: React.
     }
   }, [lastSeenTimestamp]);
 
-  const playNotificationSound = useCallback(() => {
-    if (!audioPrimedRef.current || !audioRef.current) {
-      pendingSoundRef.current = true;
-      console.info('[Monitoring] Notification sound queued until audio is ready');
-      return;
-    }
-    try {
-      audioRef.current.currentTime = 0;
-      const playPromise = audioRef.current.play();
-      if (playPromise && typeof playPromise.then === 'function') {
-        playPromise
-          .then(() => {
-            pendingSoundRef.current = false;
-          })
-          .catch((err) => {
-            pendingSoundRef.current = true;
-            console.warn('[Monitoring] Notification sound blocked by browser, will retry after next interaction', err);
-          });
-      } else {
-        pendingSoundRef.current = false;
-      }
-    } catch (err) {
-      pendingSoundRef.current = true;
-      console.warn('Failed to play monitoring notification sound:', err);
-    }
-  }, []);
+  const enqueueNotificationSounds = useCallback(
+    (count: number) => {
+      if (!Number.isFinite(count) || count <= 0) return;
+      soundQueueRef.current += Math.floor(count);
+      drainSoundQueue();
+    },
+    [drainSoundQueue]
+  );
 
   const primeAudio = useCallback(() => {
     if (audioPrimedRef.current) return;
@@ -95,10 +142,11 @@ export function MonitoringNotificationsProvider({ children }: { children: React.
       audioRef.current.volume = 0.6;
     }
     audioRef.current.load();
-    if (pendingSoundRef.current) {
-      playNotificationSound();
+    if (pendingSoundRef.current && soundQueueRef.current > 0) {
+      pendingSoundRef.current = false;
+      drainSoundQueue();
     }
-  }, [playNotificationSound]);
+  }, [drainSoundQueue]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -119,6 +167,7 @@ export function MonitoringNotificationsProvider({ children }: { children: React.
     if (latestTimestamp !== null) {
       baselineRef.current = latestTimestamp;
       setLastSeenTimestamp(latestTimestamp);
+      lastNotifiedTimestampRef.current = latestTimestamp;
     }
     prevUnreadRef.current = 0;
     setUnreadCount(0);
@@ -161,6 +210,10 @@ export function MonitoringNotificationsProvider({ children }: { children: React.
         if (baselineRef.current === null && latestTimestamp !== null) {
           baselineRef.current = latestTimestamp;
         }
+        // Avoid playing sounds for the initial payload.
+        if (lastNotifiedTimestampRef.current === null && latestTimestamp !== null) {
+          lastNotifiedTimestampRef.current = latestTimestamp;
+        }
         prevUnreadRef.current = 0;
         setUnreadCount(0);
         return;
@@ -171,6 +224,27 @@ export function MonitoringNotificationsProvider({ children }: { children: React.
         prevUnreadRef.current = 0;
         setUnreadCount(0);
         return;
+      }
+
+      // Sound logic: one sound per new "throttle" message (SENT / not blocked).
+      // We deduplicate by timestamp watermark so the same message doesn't re-trigger on every poll.
+      const notifyThreshold = lastNotifiedTimestampRef.current ?? baseline;
+      let newestNotifiedTs: number | null = null;
+      let newlyNotifiableCount = 0;
+      for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i];
+        if (!isNotifiableThrottleMessage(msg)) continue;
+        const ts = getTimestamp(msg.timestamp);
+        if (ts === null) continue;
+        if (ts <= notifyThreshold) continue;
+        newlyNotifiableCount += 1;
+        if (newestNotifiedTs === null || ts > newestNotifiedTs) {
+          newestNotifiedTs = ts;
+        }
+      }
+      if (newlyNotifiableCount > 0) {
+        lastNotifiedTimestampRef.current = newestNotifiedTs ?? Date.now();
+        enqueueNotificationSounds(newlyNotifiableCount);
       }
 
       const newUnread = messages.reduce((count, msg) => {
@@ -184,19 +258,16 @@ export function MonitoringNotificationsProvider({ children }: { children: React.
         setUnreadCount(newUnread);
       }
 
-      if (newUnread > previousUnread) {
-        console.info(`[Monitoring] Unread alerts increased from ${previousUnread} to ${newUnread}`);
-        playNotificationSound();
-      }
-
       prevUnreadRef.current = newUnread;
     },
-    [hydrated, playNotificationSound]
+    [enqueueNotificationSounds, hydrated]
   );
 
   useEffect(() => {
     return () => {
       prevUnreadRef.current = 0;
+      soundQueueRef.current = 0;
+      soundPlayingRef.current = false;
     };
   }, []);
 
@@ -211,6 +282,7 @@ export function MonitoringNotificationsProvider({ children }: { children: React.
         message: override?.message ?? `🧪 TEST ALERT - ${now.toLocaleTimeString()}`,
         symbol: override?.symbol ?? 'TEST_USD',
         blocked: override?.blocked ?? false,
+        order_skipped: override?.order_skipped ?? false,
         timestamp: override?.timestamp ?? now.toISOString(),
         throttle_status: override?.throttle_status ?? 'SENT',
         throttle_reason: override?.throttle_reason ?? null,

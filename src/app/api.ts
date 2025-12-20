@@ -26,6 +26,12 @@ export interface WatchlistItem {
   order_status?: string;
   price?: number;
   rsi?: number;
+  ma50?: number;
+  ma200?: number;
+  ema10?: number;
+  atr?: number;
+  res_up?: number;
+  res_down?: number;
   signals?: TradingSignals;
 }
 
@@ -216,7 +222,7 @@ export interface CoinSettings {
   tp_percentage?: number | null;
   sl_price?: number;
   tp_price?: number;
-  alert_cooldown_minutes?: number;  // Alert cooldown in minutes
+  alert_cooldown_minutes?: number | null;  // Alert cooldown in minutes (nullable)
   id?: number;  // Optional ID field
   message?: string;  // Optional message field
 }

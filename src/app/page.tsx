@@ -6393,8 +6393,8 @@ function resolveDecisionIndexColor(value: number): string {
                       <SortableHeader field="usd_value" sortState={portfolioSort} setSortState={setPortfolioSort} className="px-4 py-3 text-right font-semibold">USD Value</SortableHeader>
                       <SortableHeader field="percent" sortState={portfolioSort} setSortState={setPortfolioSort} className="px-4 py-3 text-right font-semibold">% Portfolio</SortableHeader>
                       <th className="px-4 py-3 text-center font-semibold">Open Orders</th>
-                      <th className="px-4 py-3 text-center font-semibold">TP</th>
-                      <th className="px-4 py-3 text-center font-semibold">SL</th>
+                      <th className="px-4 py-3 text-center font-semibold">TP Value</th>
+                      <th className="px-4 py-3 text-center font-semibold">SL Value</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -6622,8 +6622,8 @@ function resolveDecisionIndexColor(value: number): string {
                           const backendOrderValues = tpSlOrderValues[coinBase] || { tp_value_usd: 0, sl_value_usd: 0 };
                           
                           // Use frontend calculation if available, otherwise use backend (don't use MAX to avoid double counting)
-                          let finalTpValue = tpValue > 0 ? tpValue : (backendOrderValues.tp_value_usd || 0);
-                          let finalSlValue = slValue > 0 ? slValue : (backendOrderValues.sl_value_usd || 0);
+                          const finalTpValue = tpValue > 0 ? tpValue : (backendOrderValues.tp_value_usd || 0);
+                          const finalSlValue = slValue > 0 ? slValue : (backendOrderValues.sl_value_usd || 0);
 
                           // Cap TP/SL values to the holding value (you can't have orders worth more than you own)
                           // We'll cap this when we have the holding value, but for now store the raw values
@@ -6734,18 +6734,22 @@ function resolveDecisionIndexColor(value: number): string {
                           // Get open orders info (count, TP value, SL value) for this coin
                           const openOrdersInfo = getOpenOrdersInfo(balance.asset, balance);
                           
-                          // Get TP/SL prices from portfolio asset or balance
-                          const tpPrice = portfolioAsset?.tp ?? balance.tp ?? null;
-                          const slPrice = portfolioAsset?.sl ?? balance.sl ?? null;
+                          // Cap TP/SL values to the holding value (you can't have orders worth more than you own)
+                          const assetValueUsd = Math.abs(displayValueUsd);
+                          const cappedTpValue = Math.min(openOrdersInfo.tpValue, assetValueUsd);
+                          const cappedSlValue = Math.min(openOrdersInfo.slValue, assetValueUsd);
+                          const cappedOpenOrdersInfo = {
+                            ...openOrdersInfo,
+                            tpValue: cappedTpValue,
+                            slValue: cappedSlValue
+                          };
                           
                           return { 
                             balance: { ...balance, balance: displayBalance }, 
                             displayValueUsd, 
                             percentOfPortfolio, 
                             orderValues, 
-                            openOrdersInfo,
-                            tpPrice,
-                            slPrice
+                            openOrdersInfo: cappedOpenOrdersInfo
                           };
                         })
                         .sort((a, b) => {
@@ -6791,7 +6795,7 @@ function resolveDecisionIndexColor(value: number): string {
                             return aStr > bStr ? -1 : aStr < bStr ? 1 : 0;
                           }
                         })
-                        .map(({ balance, displayValueUsd, percentOfPortfolio, orderValues: _orderValues, openOrdersInfo, tpPrice, slPrice }) => (
+                        .map(({ balance, displayValueUsd, percentOfPortfolio, orderValues: _orderValues, openOrdersInfo }) => (
                           <tr key={balance.asset} data-testid={`portfolio-row-${balance.asset}`} className="hover:bg-gray-50 border-b">
                             <td className="px-4 py-3 font-medium">{normalizeSymbol(balance.asset || '')}</td>
                             <td className="px-4 py-3 text-right">{formatNumber(balance.balance ?? balance.total ?? ((balance.free ?? 0) + (balance.locked ?? 0)), balance.asset)}</td>
@@ -6817,23 +6821,23 @@ function resolveDecisionIndexColor(value: number): string {
                               </span>
                             </td>
                             <td className="px-4 py-3 text-right">
-                              {tpPrice !== null && tpPrice !== undefined && tpPrice > 0 ? (
-                                <span className="px-2 py-1 rounded text-sm font-medium bg-green-100 text-green-800 border border-green-500" title={`Take Profit price: $${formatNumber(tpPrice)}`}>
-                                  ${formatNumber(tpPrice)}
+                              {openOrdersInfo.tpValue > 0 ? (
+                                <span className="px-2 py-1 rounded text-sm font-medium bg-green-100 text-green-800 border border-green-500" title={`Take Profit value: $${formatNumber(openOrdersInfo.tpValue)} (value to be received when TP orders are executed)`}>
+                                  ${formatNumber(openOrdersInfo.tpValue)}
                                 </span>
                               ) : (
-                                <span className="px-2 py-1 rounded text-sm font-medium bg-gray-100 text-gray-600 border border-gray-300" title="No TP price set">
+                                <span className="px-2 py-1 rounded text-sm font-medium bg-gray-100 text-gray-600 border border-gray-300" title="No TP orders set">
                                   $0.00
                                 </span>
                               )}
                             </td>
                             <td className="px-4 py-3 text-right">
-                              {slPrice !== null && slPrice !== undefined && slPrice > 0 ? (
-                                <span className="px-2 py-1 rounded text-sm font-medium bg-red-100 text-red-800 border border-red-500" title={`Stop Loss price: $${formatNumber(slPrice)}`}>
-                                  ${formatNumber(slPrice)}
+                              {openOrdersInfo.slValue > 0 ? (
+                                <span className="px-2 py-1 rounded text-sm font-medium bg-red-100 text-red-800 border border-red-500" title={`Stop Loss value: $${formatNumber(openOrdersInfo.slValue)} (value to be received when SL orders are executed)`}>
+                                  ${formatNumber(openOrdersInfo.slValue)}
                                 </span>
                               ) : (
-                                <span className="px-2 py-1 rounded text-sm font-medium bg-gray-100 text-gray-600 border border-gray-300" title="No SL price set">
+                                <span className="px-2 py-1 rounded text-sm font-medium bg-gray-100 text-gray-600 border border-gray-300" title="No SL orders set">
                                   $0.00
                                 </span>
                               )}
@@ -7085,23 +7089,23 @@ function resolveDecisionIndexColor(value: number): string {
                                   </span>
                                 </td>
                                 <td className="px-4 py-3 text-right">
-                                  {asset.tp !== null && asset.tp !== undefined && asset.tp > 0 ? (
-                                    <span className="px-2 py-1 rounded text-sm font-medium bg-green-100 text-green-800 border border-green-500" title={`Take Profit price: $${formatNumber(asset.tp)}`}>
-                                      ${formatNumber(asset.tp)}
+                                  {cappedOpenOrdersInfo.tpValue > 0 ? (
+                                    <span className="px-2 py-1 rounded text-sm font-medium bg-green-100 text-green-800 border border-green-500" title={`Take Profit value: $${formatNumber(cappedOpenOrdersInfo.tpValue)} (value to be received when TP orders are executed)`}>
+                                      ${formatNumber(cappedOpenOrdersInfo.tpValue)}
                                     </span>
                                   ) : (
-                                    <span className="px-2 py-1 rounded text-sm font-medium bg-gray-100 text-gray-600 border border-gray-300" title="No TP price set">
+                                    <span className="px-2 py-1 rounded text-sm font-medium bg-gray-100 text-gray-600 border border-gray-300" title="No TP orders set">
                                       $0.00
                                     </span>
                                   )}
                                 </td>
                                 <td className="px-4 py-3 text-right">
-                                  {asset.sl !== null && asset.sl !== undefined && asset.sl > 0 ? (
-                                    <span className="px-2 py-1 rounded text-sm font-medium bg-red-100 text-red-800 border border-red-500" title={`Stop Loss price: $${formatNumber(asset.sl)}`}>
-                                      ${formatNumber(asset.sl)}
+                                  {cappedOpenOrdersInfo.slValue > 0 ? (
+                                    <span className="px-2 py-1 rounded text-sm font-medium bg-red-100 text-red-800 border border-red-500" title={`Stop Loss value: $${formatNumber(cappedOpenOrdersInfo.slValue)} (value to be received when SL orders are executed)`}>
+                                      ${formatNumber(cappedOpenOrdersInfo.slValue)}
                                     </span>
                                   ) : (
-                                    <span className="px-2 py-1 rounded text-sm font-medium bg-gray-100 text-gray-600 border border-gray-300" title="No SL price set">
+                                    <span className="px-2 py-1 rounded text-sm font-medium bg-gray-100 text-gray-600 border border-gray-300" title="No SL orders set">
                                       $0.00
                                     </span>
                                   )}

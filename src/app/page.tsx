@@ -6735,9 +6735,10 @@ function resolveDecisionIndexColor(value: number): string {
                           const openOrdersInfo = getOpenOrdersInfo(balance.asset, balance);
                           
                           // Cap TP/SL values to the holding value (you can't have orders worth more than you own)
+                          // Only cap if we have a valid asset value > 0, otherwise use uncapped values
                           const assetValueUsd = Math.abs(displayValueUsd);
-                          const cappedTpValue = Math.min(openOrdersInfo.tpValue, assetValueUsd);
-                          const cappedSlValue = Math.min(openOrdersInfo.slValue, assetValueUsd);
+                          const cappedTpValue = assetValueUsd > 0 ? Math.min(openOrdersInfo.tpValue, assetValueUsd) : openOrdersInfo.tpValue;
+                          const cappedSlValue = assetValueUsd > 0 ? Math.min(openOrdersInfo.slValue, assetValueUsd) : openOrdersInfo.slValue;
                           const cappedOpenOrdersInfo = {
                             ...openOrdersInfo,
                             tpValue: cappedTpValue,
@@ -7061,9 +7062,10 @@ function resolveDecisionIndexColor(value: number): string {
                             const openOrdersInfo = getOpenOrdersInfo(asset.coin, assetBalance);
                             
                             // Cap TP/SL values to the holding value (you can't have orders worth more than you own)
+                            // Only cap if we have a valid asset value > 0, otherwise use uncapped values
                             const assetValueUsd = Math.abs(netValueUsd);
-                            const cappedTpValue = Math.min(openOrdersInfo.tpValue, assetValueUsd);
-                            const cappedSlValue = Math.min(openOrdersInfo.slValue, assetValueUsd);
+                            const cappedTpValue = assetValueUsd > 0 ? Math.min(openOrdersInfo.tpValue, assetValueUsd) : openOrdersInfo.tpValue;
+                            const cappedSlValue = assetValueUsd > 0 ? Math.min(openOrdersInfo.slValue, assetValueUsd) : openOrdersInfo.slValue;
                             const cappedOpenOrdersInfo = {
                               ...openOrdersInfo,
                               tpValue: cappedTpValue,

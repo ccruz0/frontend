@@ -6761,6 +6761,29 @@ function resolveDecisionIndexColor(value: number): string {
                           // Prioritize portfolio asset USD value (from backend/Crypto.com), then balance USD value, then market value
                           // Don't filter by > 0 - use the value directly from portfolio assets
                           const portfolioUsdValue = portfolioAsset?.value_usd ?? portfolioAsset?.usd_value;
+                          // DEBUG: Log first few assets to understand matching
+                          if (balance.asset === 'AAVE_USDT' || balance.asset === 'AAVE') {
+                            console.log('[DEBUG USD]', {
+                              balanceAsset: balance.asset,
+                              assetUpper,
+                              balanceBase,
+                              portfolioAssetsCount: portfolio?.assets?.length || 0,
+                              portfolioAssetFound: !!portfolioAsset,
+                              portfolioAssetCoin: portfolioAsset?.coin,
+                              portfolioAssetUsdValue: portfolioAsset?.usd_value,
+                              portfolioAssetValueUsd: portfolioAsset?.value_usd,
+                              portfolioUsdValue,
+                              balanceUsdValue: balance.usd_value,
+                              balanceMarketValue: balance.market_value,
+                              displayValueUsd: (portfolioUsdValue !== undefined && portfolioUsdValue !== null)
+                                ? portfolioUsdValue
+                                : ((balance.usd_value !== undefined && balance.usd_value !== null)
+                                    ? balance.usd_value
+                                    : ((balance.market_value !== undefined && balance.market_value !== null)
+                                        ? balance.market_value
+                                        : 0))
+                            });
+                          }
                           const displayValueUsd = 
                             (portfolioUsdValue !== undefined && portfolioUsdValue !== null)
                             ? portfolioUsdValue

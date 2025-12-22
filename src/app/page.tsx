@@ -3009,12 +3009,12 @@ function resolveDecisionIndexColor(value: number): string {
           // Use backend portfolio assets directly - they have usd_value from Crypto.com
           assetsWithValues = dashboardState.portfolio.assets
             .filter(asset => asset && asset.coin)
-            .map(asset => ({
-              ...asset,
+          .map(asset => ({
+          ...asset,
               // Ensure value_usd is set from usd_value if available
               value_usd: asset.value_usd ?? asset.usd_value ?? 0,
-              updated_at: new Date().toISOString()
-            }));
+          updated_at: new Date().toISOString()
+        }));
           logger.info(`✅ Using backend portfolio.assets (${assetsWithValues.length} assets with usd_value from Crypto.com)`);
         } else {
           // Fallback: create assets from normalized balances
@@ -3508,10 +3508,17 @@ function resolveDecisionIndexColor(value: number): string {
     const fetchTopCoinsFn = (fetchTopCoinsRef.current || (() => Promise.resolve()));
     const fetchSignalsFn = (fetchSignalsRef.current || (() => Promise.resolve()));
 
+    // Sync executed orders from exchange if we have no orders or if it's the first load
+    // This ensures P/L calculation has data to work with
+    const shouldSyncOrders = executedOrders.length === 0;
+    if (shouldSyncOrders) {
+      logger.info('🔄 No executed orders found, syncing from exchange...');
+    }
+
     await Promise.allSettled([
       fetchPortfolioFn(),
       fetchOpenOrdersFn(),
-      fetchExecutedOrdersFn({ showLoader: false }),
+      fetchExecutedOrdersFn({ showLoader: shouldSyncOrders, loadAll: shouldSyncOrders }),
     ]);
     
     // Update top coins data for Trade NO coins (less frequent updates)

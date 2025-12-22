@@ -6753,6 +6753,14 @@ function resolveDecisionIndexColor(value: number): string {
                           // Use backend-provided USD value when available, otherwise attempt to derive from portfolio snapshot.
                           // Match by exact coin or by base currency (e.g., AAVE_USDT matches AAVE)
                           const balanceBase = balance.asset?.split('_')[0]?.toUpperCase() || '';
+                          // DEBUG: Log portfolio state for first asset
+                          if (balance.asset === 'AAVE_USDT' || balance.asset === 'AAVE') {
+                            console.log('[DEBUG PORTFOLIO]', {
+                              portfolioExists: !!portfolio,
+                              portfolioAssetsCount: portfolio?.assets?.length || 0,
+                              portfolioAssets: portfolio?.assets?.slice(0, 3).map(a => ({ coin: a.coin, usd_value: a.usd_value, value_usd: a.value_usd })) || []
+                            });
+                          }
                           const portfolioAsset = portfolio?.assets?.find(a => {
                             const assetCoin = (a.coin || '').toUpperCase();
                             const assetBase = assetCoin.split('_')[0];

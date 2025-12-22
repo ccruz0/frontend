@@ -2983,9 +2983,9 @@ function resolveDecisionIndexColor(value: number): string {
 
         if (assetsWithValues.length > 0) {
           // Calculate total as sum of ALL asset values (including negatives)
-          const calculatedTotal = assetsWithValues.reduce((sum, asset) => sum + (asset.value_usd ?? 0), 0);
-          // Use calculated total (sum of all values) instead of backend value
-          const totalUsd = calculatedTotal;
+          // Prioritize backend total_value_usd if available, otherwise calculate from assets
+          const calculatedTotal = assetsWithValues.reduce((sum, asset) => sum + (asset.value_usd ?? asset.usd_value ?? 0), 0);
+          const totalUsd = dashboardState.portfolio?.total_value_usd ?? dashboardState.total_usd_value ?? calculatedTotal;
           
           // Calculate borrowed amount: sum of negative USD/USDT balances
           const borrowedAmount = assetsWithValues
@@ -3002,7 +3002,7 @@ function resolveDecisionIndexColor(value: number): string {
           logger.info(`✅ Processed ${assetsWithValues.length} assets from ${normalizedBalances.length} balances`);
           logger.info(`📊 Total Portfolio Value (backend=${dashboardState.total_usd_value ?? 0}, calculated=${calculatedTotal})`);
 
-          const assetsWithUsd = assetsWithValues.filter(a => (a.value_usd ?? 0) > 0);
+          const assetsWithUsd = assetsWithValues.filter(a => (a.value_usd ?? a.usd_value ?? 0) > 0);
           if (assetsWithUsd.length === 0) {
             // Silenced: This is expected when backend hasn't computed USD values yet
             // logger.warn('⚠️ WARNING: Portfolio has balances but USD values are 0. Backend should calculate USD values on next sync.');
@@ -3010,7 +3010,8 @@ function resolveDecisionIndexColor(value: number): string {
             // Silenced verbose logging
             // logger.info(`💰 Assets with USD values (${assetsWithUsd.length}/${assetsWithValues.length}):`);
             assetsWithUsd.slice(0, 10).forEach(asset => {
-              logger.info(`   ${asset.coin}: $${asset.value_usd?.toFixed(2) ?? '0.00'} (balance: ${asset.balance.toFixed(8)})`);
+              const usdValue = asset.value_usd ?? asset.usd_value ?? 0;
+              logger.info(`   ${asset.coin}: $${usdValue.toFixed(2)} (balance: ${asset.balance.toFixed(8)})`);
             });
           }
 

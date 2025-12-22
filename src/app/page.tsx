@@ -6766,40 +6766,20 @@ function resolveDecisionIndexColor(value: number): string {
                             const assetBase = assetCoin.split('_')[0];
                             return assetCoin === assetUpper || assetCoin === balanceBase || assetBase === balanceBase;
                           });
-                          // Prioritize portfolio asset USD value (from backend/Crypto.com), then balance USD value, then market value
-                          // Don't filter by > 0 - use the value directly from portfolio assets
+                          // Prioritize balance USD value (directly from backend), then portfolio asset USD value, then market value
+                          // The backend balances already have usd_value from Crypto.com, so use that first
                           const portfolioUsdValue = portfolioAsset?.value_usd ?? portfolioAsset?.usd_value;
-                          // DEBUG: Log first few assets to understand matching
-                          if (balance.asset === 'AAVE_USDT' || balance.asset === 'AAVE') {
-                            console.log('[DEBUG USD]', {
-                              balanceAsset: balance.asset,
-                              assetUpper,
-                              balanceBase,
-                              portfolioAssetsCount: portfolio?.assets?.length || 0,
-                              portfolioAssetFound: !!portfolioAsset,
-                              portfolioAssetCoin: portfolioAsset?.coin,
-                              portfolioAssetUsdValue: portfolioAsset?.usd_value,
-                              portfolioAssetValueUsd: portfolioAsset?.value_usd,
-                              portfolioUsdValue,
-                              balanceUsdValue: balance.usd_value,
-                              balanceMarketValue: balance.market_value,
-                              displayValueUsd: (portfolioUsdValue !== undefined && portfolioUsdValue !== null)
-                                ? portfolioUsdValue
-                                : ((balance.usd_value !== undefined && balance.usd_value !== null)
-                                    ? balance.usd_value
-                                    : ((balance.market_value !== undefined && balance.market_value !== null)
-                                        ? balance.market_value
-                                        : 0))
-                            });
-                          }
                           const displayValueUsd = 
-                            (portfolioUsdValue !== undefined && portfolioUsdValue !== null)
-                            ? portfolioUsdValue
-                            : ((balance.usd_value !== undefined && balance.usd_value !== null)
-                                ? balance.usd_value
-                                : ((balance.market_value !== undefined && balance.market_value !== null)
-                                    ? balance.market_value
-                                    : 0));
+                            // First priority: balance.usd_value (directly from backend/Crypto.com)
+                            (balance.usd_value !== undefined && balance.usd_value !== null && balance.usd_value !== 0)
+                            ? balance.usd_value
+                            : // Second priority: portfolio asset USD value (from portfolio state)
+                            ((portfolioUsdValue !== undefined && portfolioUsdValue !== null && portfolioUsdValue !== 0)
+                              ? portfolioUsdValue
+                              : // Third priority: balance.market_value
+                              ((balance.market_value !== undefined && balance.market_value !== null && balance.market_value !== 0)
+                                ? balance.market_value
+                                : 0));
                           
                           const totalPortfolioValue = portfolio?.total_value_usd ?? realBalances.reduce((sum, b) => sum + (b.usd_value ?? b.market_value ?? 0), 0);
                           const percentOfPortfolio = totalPortfolioValue > 0 && displayValueUsd > 0

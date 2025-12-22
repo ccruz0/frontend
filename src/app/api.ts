@@ -1573,9 +1573,10 @@ export function dashboardBalancesToPortfolioAssets(balances: DashboardBalance[])
       const asset = balance.asset || balance.currency || balance.coin || '';
       const balanceAmount = balance.balance || balance.total || 0;
       // Prioritize usd_value, then market_value, then 0
-      const usdValue = (balance.usd_value !== undefined && balance.usd_value !== null && balance.usd_value > 0)
+      // Don't filter by > 0 - preserve all values including 0
+      const usdValue = (balance.usd_value !== undefined && balance.usd_value !== null)
         ? balance.usd_value
-        : ((balance.market_value !== undefined && balance.market_value !== null && balance.market_value > 0)
+        : ((balance.market_value !== undefined && balance.market_value !== null)
             ? balance.market_value
             : 0);
       return {

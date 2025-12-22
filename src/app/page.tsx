@@ -6744,7 +6744,7 @@ function resolveDecisionIndexColor(value: number): string {
                             ? balance.usd_value
                             : ((balance.market_value !== undefined && balance.market_value !== null)
                                 ? balance.market_value
-                                : (portfolioAsset?.value_usd ?? 0));
+                                : (portfolioAsset?.value_usd ?? portfolioAsset?.usd_value ?? 0));
                           const displayValueUsd = fallbackUsd;
                           
                           const totalPortfolioValue = portfolio?.total_value_usd ?? realBalances.reduce((sum, b) => sum + (b.usd_value ?? b.market_value ?? 0), 0);

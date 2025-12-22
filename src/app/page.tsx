@@ -6740,9 +6740,9 @@ function resolveDecisionIndexColor(value: number): string {
                             return assetCoin === assetUpper || assetCoin === balanceBase || assetBase === balanceBase;
                           });
                           const fallbackUsd =
-                            (balance.usd_value !== undefined && balance.usd_value !== null && balance.usd_value > 0)
+                            (balance.usd_value !== undefined && balance.usd_value !== null)
                             ? balance.usd_value
-                            : ((balance.market_value !== undefined && balance.market_value !== null && balance.market_value > 0)
+                            : ((balance.market_value !== undefined && balance.market_value !== null)
                                 ? balance.market_value
                                 : (portfolioAsset?.value_usd ?? 0));
                           const displayValueUsd = fallbackUsd;

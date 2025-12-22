@@ -1594,62 +1594,77 @@ function DashboardPageContent() {
         });
       }
       
-      // Potential P/L: Theoretical gains from open positions purchased TODAY (not executed/sold yet)
+      // Potential P/L: Theoretical gains from ALL open positions (unrealized P/L)
+      // Calculate based on current portfolio positions vs their entry prices
       let potentialPL = 0;
-      if (executedOrders && executedOrders.length > 0 && topCoins && topCoins.length > 0 && portfolio?.assets) {
-        // For daily period, calculate potential P/L from open positions bought today
-        const buyOrdersToday = executedOrders.filter(order => {
-          if (!order || order.side?.toUpperCase() !== 'BUY' || order.status !== 'FILLED') return false;
-          const orderTime = order.update_time || order.create_time || 0;
-          return orderTime >= startTime && orderTime <= endTime;
-        });
-        
-        // Check each buy order from today to see if position is still open
-        buyOrdersToday.forEach(order => {
+      if (portfolio?.assets && portfolio.assets.length > 0 && topCoins && topCoins.length > 0 && executedOrders && executedOrders.length > 0) {
+        // Calculate potential P/L for each portfolio asset
+        portfolio.assets.forEach(asset => {
           try {
-            const orderSymbol = order.instrument_name;
-            if (!orderSymbol) return; // Skip if no symbol
+            if (!asset.coin || asset.balance <= 0) return;
             
-            const orderPrice = parseFloat(order.price || order.avg_price || order.filled_price || '0');
-            const orderQuantity = parseFloat(order.quantity || order.filled_quantity || order.cumulative_quantity || '0');
+            const assetSymbol = asset.coin.toUpperCase();
+            const assetBase = assetSymbol.split('_')[0];
             
-            if (orderPrice <= 0 || orderQuantity <= 0) return;
-            
-            // Find matching portfolio asset to get current balance
-            const portfolioAsset = portfolio.assets.find(a => {
-              const assetSymbol = a.coin?.toUpperCase() || '';
-              // Match by base currency (e.g., BTC_USDT matches BTC)
-              const orderBase = orderSymbol.split('_')[0]?.toUpperCase() || '';
-              return assetSymbol === orderBase || assetSymbol === orderSymbol.toUpperCase();
+            // Find current price from topCoins
+            const coin = topCoins.find(c => {
+              const coinSymbol = (c?.instrument_name || '').toUpperCase();
+              return coinSymbol === assetSymbol || coinSymbol.startsWith(assetBase + '_');
             });
             
-            // Only calculate if we have a portfolio balance (position is still open)
-            if (portfolioAsset && portfolioAsset.balance > 0) {
-              // Get current price from topCoins
-              const orderBase = orderSymbol.split('_')[0] || '';
-              const coin = topCoins.find(c => c && c.instrument_name === orderSymbol || c?.instrument_name?.startsWith(orderBase + '_'));
-              if (coin && coin.current_price > 0) {
-                // Check if this order was already sold (has matching SELL order after today)
-                const wasSold = executedOrders.some(sellOrder => {
-                  if (!sellOrder || sellOrder.side?.toUpperCase() !== 'SELL' || sellOrder.instrument_name !== orderSymbol) return false;
-                  const sellTime = sellOrder.update_time || sellOrder.create_time || 0;
-                  const buyTime = order.update_time || order.create_time || 0;
-                  return sellTime > buyTime && sellTime <= endTime;
-                });
-                
-                // Only calculate if position is still open (not sold yet)
-                if (!wasSold) {
-                  // Calculate P/L based on quantity bought TODAY, not full portfolio balance
-                  // Use the smaller of orderQuantity or portfolio balance (in case partial sell)
-                  const quantityStillOpen = Math.min(orderQuantity, portfolioAsset.balance);
-                  const currentValue = coin.current_price * quantityStillOpen;
-                  const buyValue = orderPrice * quantityStillOpen;
-                potentialPL += currentValue - buyValue;
+            if (!coin || !coin.current_price || coin.current_price <= 0) return;
+            
+            // Find the most recent BUY order for this asset to get entry price
+            // Look for BUY orders that match this asset (by symbol or base currency)
+            const buyOrders = executedOrders.filter(order => {
+              if (!order || order.side?.toUpperCase() !== 'BUY' || order.status !== 'FILLED') return false;
+              const orderSymbol = (order.instrument_name || '').toUpperCase();
+              const orderBase = orderSymbol.split('_')[0];
+              return orderSymbol === assetSymbol || orderBase === assetBase;
+            });
+            
+            if (buyOrders.length === 0) return;
+            
+            // Calculate average entry price from all BUY orders
+            // Weight by quantity to get true average entry price
+            let totalCost = 0;
+            let totalQuantity = 0;
+            buyOrders.forEach(buyOrder => {
+              const buyPrice = parseFloat(buyOrder.price || buyOrder.avg_price || buyOrder.filled_price || '0');
+              const buyQty = parseFloat(buyOrder.quantity || buyOrder.filled_quantity || buyOrder.cumulative_quantity || '0');
+              if (buyPrice > 0 && buyQty > 0) {
+                totalCost += buyPrice * buyQty;
+                totalQuantity += buyQty;
               }
-            }
+            });
+            
+            if (totalQuantity <= 0) return;
+            
+            const avgEntryPrice = totalCost / totalQuantity;
+            
+            // Check if position was fully sold (all SELL orders match or exceed BUY quantity)
+            const sellOrders = executedOrders.filter(order => {
+              if (!order || order.side?.toUpperCase() !== 'SELL' || order.status !== 'FILLED') return false;
+              const orderSymbol = (order.instrument_name || '').toUpperCase();
+              const orderBase = orderSymbol.split('_')[0];
+              return orderSymbol === assetSymbol || orderBase === assetBase;
+            });
+            
+            const totalSoldQty = sellOrders.reduce((sum, sellOrder) => {
+              const qty = parseFloat(sellOrder.quantity || sellOrder.filled_quantity || sellOrder.cumulative_quantity || '0');
+              return sum + qty;
+            }, 0);
+            
+            // Only calculate if position is still open (not fully sold)
+            if (totalSoldQty < totalQuantity) {
+              // Calculate P/L based on current balance (remaining position)
+              const remainingQty = Math.min(asset.balance, totalQuantity - totalSoldQty);
+              const currentValue = coin.current_price * remainingQty;
+              const entryValue = avgEntryPrice * remainingQty;
+              potentialPL += currentValue - entryValue;
             }
           } catch {
-            // Silently skip potential P/L calculation errors for individual orders
+            // Silently skip potential P/L calculation errors for individual assets
           }
         });
       }
@@ -1659,7 +1674,7 @@ function DashboardPageContent() {
       logger.error('Error calculating P/L summary:', err);
       return { realizedPL: 0, potentialPL: 0, totalPL: 0 };
     }
-  }, [plPeriod, selectedMonth, selectedYear, executedOrders, topCoins, calculateProfitLoss]);
+  }, [plPeriod, selectedMonth, selectedYear, executedOrders, topCoins, calculateProfitLoss, portfolio]);
 
   const orderedWatchlistCoins = useMemo(() => {
     // Defensive check: ensure topCoins is an array

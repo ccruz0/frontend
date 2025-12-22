@@ -6771,13 +6771,14 @@ function resolveDecisionIndexColor(value: number): string {
                           const portfolioUsdValue = portfolioAsset?.value_usd ?? portfolioAsset?.usd_value;
                           const displayValueUsd = 
                             // First priority: balance.usd_value (directly from backend/Crypto.com)
-                            (balance.usd_value !== undefined && balance.usd_value !== null && balance.usd_value !== 0)
+                            // Don't filter by !== 0 - use the value directly if it's defined
+                            (balance.usd_value !== undefined && balance.usd_value !== null)
                             ? balance.usd_value
                             : // Second priority: portfolio asset USD value (from portfolio state)
-                            ((portfolioUsdValue !== undefined && portfolioUsdValue !== null && portfolioUsdValue !== 0)
+                            ((portfolioUsdValue !== undefined && portfolioUsdValue !== null)
                               ? portfolioUsdValue
                               : // Third priority: balance.market_value
-                              ((balance.market_value !== undefined && balance.market_value !== null && balance.market_value !== 0)
+                              ((balance.market_value !== undefined && balance.market_value !== null)
                                 ? balance.market_value
                                 : 0));
                           

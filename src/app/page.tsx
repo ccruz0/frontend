@@ -6727,7 +6727,13 @@ function resolveDecisionIndexColor(value: number): string {
                           const displayBalance = balance.balance ?? balance.total ?? ((balance.free ?? 0) + (balance.locked ?? 0));
                           
                           // Use backend-provided USD value when available, otherwise attempt to derive from portfolio snapshot.
-                          const portfolioAsset = portfolio?.assets?.find(a => a.coin === balance.asset);
+                          // Match by exact coin or by base currency (e.g., AAVE_USDT matches AAVE)
+                          const balanceBase = balance.asset?.split('_')[0]?.toUpperCase() || '';
+                          const portfolioAsset = portfolio?.assets?.find(a => {
+                            const assetCoin = (a.coin || '').toUpperCase();
+                            const assetBase = assetCoin.split('_')[0];
+                            return assetCoin === assetUpper || assetCoin === balanceBase || assetBase === balanceBase;
+                          });
                           const fallbackUsd =
                             (balance.usd_value !== undefined && balance.usd_value !== null && balance.usd_value > 0)
                             ? balance.usd_value

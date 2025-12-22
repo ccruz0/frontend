@@ -6335,8 +6335,9 @@ function resolveDecisionIndexColor(value: number): string {
                     <h2 className="text-lg font-semibold mb-2">Portfolio Value</h2>
                     <div className="flex items-baseline gap-2">
                     <p className="text-3xl font-bold">${formatNumber(
-                      // Always calculate total as sum of all asset values
-                      portfolio?.assets?.reduce((sum, asset) => sum + (asset.value_usd ?? 0), 0) ?? 
+                      // Prioritize portfolio.total_value_usd (already calculated), then calculate from assets, then from balances
+                      portfolio?.total_value_usd ?? 
+                      portfolio?.assets?.reduce((sum, asset) => sum + (asset.value_usd ?? asset.usd_value ?? 0), 0) ?? 
                       realBalances.reduce((sum, b) => sum + (b.usd_value ?? b.market_value ?? 0), 0)
                     )}</p>
                       {totalBorrowed > 0 && (

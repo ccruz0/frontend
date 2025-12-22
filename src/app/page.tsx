@@ -6759,9 +6759,11 @@ function resolveDecisionIndexColor(value: number): string {
                             return assetCoin === assetUpper || assetCoin === balanceBase || assetBase === balanceBase;
                           });
                           // Prioritize portfolio asset USD value (from backend/Crypto.com), then balance USD value, then market value
+                          // Don't filter by > 0 - use the value directly from portfolio assets
+                          const portfolioUsdValue = portfolioAsset?.value_usd ?? portfolioAsset?.usd_value;
                           const displayValueUsd = 
-                            (portfolioAsset?.value_usd ?? portfolioAsset?.usd_value ?? 0) > 0
-                            ? (portfolioAsset?.value_usd ?? portfolioAsset?.usd_value ?? 0)
+                            (portfolioUsdValue !== undefined && portfolioUsdValue !== null)
+                            ? portfolioUsdValue
                             : ((balance.usd_value !== undefined && balance.usd_value !== null)
                                 ? balance.usd_value
                                 : ((balance.market_value !== undefined && balance.market_value !== null)

@@ -2933,11 +2933,19 @@ function resolveDecisionIndexColor(value: number): string {
 
       if (dashboardState.balances && dashboardState.balances.length > 0) {
         // Normalize balances: ensure 'asset' field exists (use currency/coin as fallback)
+        // Also ensure usd_value and market_value are preserved
         const normalizedBalances = dashboardState.balances
           .filter(bal => bal && (bal.asset || bal.currency || bal.coin))
           .map(bal => ({
             ...bal,
-            asset: bal.asset || bal.currency || bal.coin || ''
+            asset: bal.asset || bal.currency || bal.coin || '',
+            // Preserve USD values - prioritize usd_value, then market_value
+            usd_value: (bal.usd_value !== undefined && bal.usd_value !== null && bal.usd_value > 0)
+              ? bal.usd_value
+              : ((bal.market_value !== undefined && bal.market_value !== null && bal.market_value > 0)
+                  ? bal.market_value
+                  : (bal.usd_value ?? bal.market_value ?? 0)),
+            market_value: bal.market_value ?? bal.usd_value ?? 0
           }));
         setRealBalances(normalizedBalances);
 

@@ -2940,12 +2940,17 @@ function resolveDecisionIndexColor(value: number): string {
             ...bal,
             asset: bal.asset || bal.currency || bal.coin || '',
             // Preserve USD values - prioritize usd_value, then market_value
-            usd_value: (bal.usd_value !== undefined && bal.usd_value !== null && bal.usd_value > 0)
+            // Don't filter by > 0 - preserve all values including 0
+            usd_value: (bal.usd_value !== undefined && bal.usd_value !== null)
               ? bal.usd_value
-              : ((bal.market_value !== undefined && bal.market_value !== null && bal.market_value > 0)
+              : ((bal.market_value !== undefined && bal.market_value !== null)
                   ? bal.market_value
-                  : (bal.usd_value ?? bal.market_value ?? 0)),
-            market_value: bal.market_value ?? bal.usd_value ?? 0
+                  : undefined),
+            market_value: (bal.market_value !== undefined && bal.market_value !== null)
+              ? bal.market_value
+              : ((bal.usd_value !== undefined && bal.usd_value !== null)
+                  ? bal.usd_value
+                  : undefined)
           }));
         setRealBalances(normalizedBalances);
 

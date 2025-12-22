@@ -1568,16 +1568,26 @@ export async function getOpenOrdersSummary(): Promise<OpenOrdersSummary> {
 // Convert dashboard balances to portfolio assets
 export function dashboardBalancesToPortfolioAssets(balances: DashboardBalance[]): PortfolioAsset[] {
   return balances
-    .filter(balance => balance && balance.asset && (balance.balance || 0) > 0)
-    .map(balance => ({
-      coin: balance.asset,
-      balance: balance.balance || 0,
-      available_qty: balance.free || 0,
-      reserved_qty: balance.locked || 0,
-      haircut: 0,
-      value_usd: balance.usd_value || balance.market_value || 0,
-      updated_at: new Date().toISOString()
-    }));
+    .filter(balance => balance && (balance.asset || balance.currency || balance.coin) && (balance.balance || balance.total || 0) > 0)
+    .map(balance => {
+      const asset = balance.asset || balance.currency || balance.coin || '';
+      const balanceAmount = balance.balance || balance.total || 0;
+      // Prioritize usd_value, then market_value, then 0
+      const usdValue = (balance.usd_value !== undefined && balance.usd_value !== null && balance.usd_value > 0)
+        ? balance.usd_value
+        : ((balance.market_value !== undefined && balance.market_value !== null && balance.market_value > 0)
+            ? balance.market_value
+            : 0);
+      return {
+        coin: asset,
+        balance: balanceAmount,
+        available_qty: balance.free || 0,
+        reserved_qty: balance.locked || 0,
+        haircut: 0,
+        value_usd: usdValue,
+        updated_at: new Date().toISOString()
+      };
+    });
 }
 
 // Expected Take Profit API

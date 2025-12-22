@@ -1604,9 +1604,10 @@ function DashboardPageContent() {
       
       // Potential P/L: Theoretical gains from ALL open positions (unrealized P/L)
       // Calculate based on current portfolio positions vs their entry prices
+      // IMPORTANT: Don't filter by period - calculate P/L for ALL open positions regardless of when they were bought
       let potentialPL = 0;
       if (portfolio?.assets && portfolio.assets.length > 0 && topCoins && topCoins.length > 0 && executedOrders && executedOrders.length > 0) {
-        logger.info(`📊 Calculating potential P/L for ${portfolio.assets.length} portfolio assets`);
+        logger.info(`📊 Calculating potential P/L for ${portfolio.assets.length} portfolio assets (all open positions, not filtered by period)`);
         // Calculate potential P/L for each portfolio asset
         portfolio.assets.forEach(asset => {
           try {
@@ -1626,7 +1627,7 @@ function DashboardPageContent() {
               return;
             }
             
-            // Find the most recent BUY order for this asset to get entry price
+            // Find ALL BUY orders for this asset to get entry price (not filtered by period)
             // Look for BUY orders that match this asset (by symbol or base currency)
             const buyOrders = executedOrders.filter(order => {
               if (!order || order.side?.toUpperCase() !== 'BUY' || order.status !== 'FILLED') return false;
@@ -1636,9 +1637,11 @@ function DashboardPageContent() {
             });
             
             if (buyOrders.length === 0) {
-              logger.debug(`⚠️ No BUY orders found for ${assetSymbol}`);
+              logger.debug(`⚠️ No BUY orders found for ${assetSymbol} (total executedOrders: ${executedOrders.length})`);
               return;
             }
+            
+            logger.debug(`📊 Found ${buyOrders.length} BUY orders for ${assetSymbol}`);
             
             // Calculate average entry price from all BUY orders
             // Weight by quantity to get true average entry price
@@ -1654,13 +1657,14 @@ function DashboardPageContent() {
             });
             
             if (totalQuantity <= 0) {
-              logger.debug(`⚠️ Invalid totalQuantity for ${assetSymbol}`);
+              logger.debug(`⚠️ Invalid totalQuantity for ${assetSymbol} (totalCost: ${totalCost}, totalQuantity: ${totalQuantity})`);
               return;
             }
             
             const avgEntryPrice = totalCost / totalQuantity;
             
             // Check if position was fully sold (all SELL orders match or exceed BUY quantity)
+            // IMPORTANT: Don't filter by period - check ALL SELL orders
             const sellOrders = executedOrders.filter(order => {
               if (!order || order.side?.toUpperCase() !== 'SELL' || order.status !== 'FILLED') return false;
               const orderSymbol = (order.instrument_name || '').toUpperCase();
@@ -1676,12 +1680,13 @@ function DashboardPageContent() {
             // Only calculate if position is still open (not fully sold)
             if (totalSoldQty < totalQuantity) {
               // Calculate P/L based on current balance (remaining position)
+              // Use the smaller of: current balance, or remaining quantity after sales
               const remainingQty = Math.min(asset.balance, totalQuantity - totalSoldQty);
               const currentValue = coin.current_price * remainingQty;
               const entryValue = avgEntryPrice * remainingQty;
               const assetPL = currentValue - entryValue;
               potentialPL += assetPL;
-              logger.info(`💰 Potential P/L for ${assetSymbol}: $${assetPL.toFixed(2)} (balance: ${asset.balance}, entry: $${avgEntryPrice.toFixed(2)}, current: $${coin.current_price.toFixed(2)})`);
+              logger.info(`💰 Potential P/L for ${assetSymbol}: $${assetPL.toFixed(2)} (balance: ${asset.balance.toFixed(8)}, remaining: ${remainingQty.toFixed(8)}, entry: $${avgEntryPrice.toFixed(2)}, current: $${coin.current_price.toFixed(2)}, bought: ${totalQuantity.toFixed(8)}, sold: ${totalSoldQty.toFixed(8)})`);
             } else {
               logger.debug(`⚠️ Position ${assetSymbol} fully sold (sold: ${totalSoldQty}, bought: ${totalQuantity})`);
             }

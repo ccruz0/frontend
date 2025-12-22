@@ -1573,6 +1573,9 @@ function DashboardPageContent() {
       const startTime = startDate.getTime();
       const endTime = endDate.getTime();
       
+      logger.info(`📊 P/L Summary calculation: period=${plPeriod}, startTime=${new Date(startTime).toISOString()}, endTime=${new Date(endTime).toISOString()}`);
+      logger.info(`📊 executedOrders count: ${executedOrders?.length || 0}, portfolio assets: ${portfolio?.assets?.length || 0}, topCoins: ${topCoins?.length || 0}`);
+      
       let realizedPL = 0;
       // Additional defensive check
       if (Array.isArray(executedOrders) && executedOrders.length > 0 && typeof calculateProfitLoss === 'function') {
@@ -1582,22 +1585,28 @@ function DashboardPageContent() {
           return orderTime >= startTime && orderTime <= endTime;
         });
         
+        logger.info(`📊 Found ${realizedOrders.length} SELL orders in period`);
+        
         realizedOrders.forEach(order => {
           try {
             const pnlData = calculateProfitLoss(order, executedOrders);
             if (pnlData && pnlData.isRealized) {
               realizedPL += pnlData.pnl || 0;
+              logger.info(`💰 Realized P/L for ${order.instrument_name}: $${pnlData.pnl?.toFixed(2)}`);
             }
-          } catch {
-            // Silently skip P/L calculation errors for individual orders
+          } catch (err) {
+            logger.warn(`⚠️ Error calculating P/L for ${order.instrument_name}:`, err);
           }
         });
       }
+      
+      logger.info(`📊 Total realizedPL: $${realizedPL.toFixed(2)}`);
       
       // Potential P/L: Theoretical gains from ALL open positions (unrealized P/L)
       // Calculate based on current portfolio positions vs their entry prices
       let potentialPL = 0;
       if (portfolio?.assets && portfolio.assets.length > 0 && topCoins && topCoins.length > 0 && executedOrders && executedOrders.length > 0) {
+        logger.info(`📊 Calculating potential P/L for ${portfolio.assets.length} portfolio assets`);
         // Calculate potential P/L for each portfolio asset
         portfolio.assets.forEach(asset => {
           try {
@@ -1612,7 +1621,10 @@ function DashboardPageContent() {
               return coinSymbol === assetSymbol || coinSymbol.startsWith(assetBase + '_');
             });
             
-            if (!coin || !coin.current_price || coin.current_price <= 0) return;
+            if (!coin || !coin.current_price || coin.current_price <= 0) {
+              logger.debug(`⚠️ No current price found for ${assetSymbol}`);
+              return;
+            }
             
             // Find the most recent BUY order for this asset to get entry price
             // Look for BUY orders that match this asset (by symbol or base currency)
@@ -1623,7 +1635,10 @@ function DashboardPageContent() {
               return orderSymbol === assetSymbol || orderBase === assetBase;
             });
             
-            if (buyOrders.length === 0) return;
+            if (buyOrders.length === 0) {
+              logger.debug(`⚠️ No BUY orders found for ${assetSymbol}`);
+              return;
+            }
             
             // Calculate average entry price from all BUY orders
             // Weight by quantity to get true average entry price
@@ -1638,7 +1653,10 @@ function DashboardPageContent() {
               }
             });
             
-            if (totalQuantity <= 0) return;
+            if (totalQuantity <= 0) {
+              logger.debug(`⚠️ Invalid totalQuantity for ${assetSymbol}`);
+              return;
+            }
             
             const avgEntryPrice = totalCost / totalQuantity;
             
@@ -1661,13 +1679,21 @@ function DashboardPageContent() {
               const remainingQty = Math.min(asset.balance, totalQuantity - totalSoldQty);
               const currentValue = coin.current_price * remainingQty;
               const entryValue = avgEntryPrice * remainingQty;
-              potentialPL += currentValue - entryValue;
+              const assetPL = currentValue - entryValue;
+              potentialPL += assetPL;
+              logger.info(`💰 Potential P/L for ${assetSymbol}: $${assetPL.toFixed(2)} (balance: ${asset.balance}, entry: $${avgEntryPrice.toFixed(2)}, current: $${coin.current_price.toFixed(2)})`);
+            } else {
+              logger.debug(`⚠️ Position ${assetSymbol} fully sold (sold: ${totalSoldQty}, bought: ${totalQuantity})`);
             }
-          } catch {
-            // Silently skip potential P/L calculation errors for individual assets
+          } catch (err) {
+            logger.warn(`⚠️ Error calculating potential P/L for ${asset.coin}:`, err);
           }
         });
+      } else {
+        logger.warn(`⚠️ Missing data for potential P/L: portfolio.assets=${portfolio?.assets?.length || 0}, topCoins=${topCoins?.length || 0}, executedOrders=${executedOrders?.length || 0}`);
       }
+      
+      logger.info(`📊 Total potentialPL: $${potentialPL.toFixed(2)}, totalPL: $${(realizedPL + potentialPL).toFixed(2)}`);
       
       return { realizedPL, potentialPL, totalPL: realizedPL + potentialPL };
     } catch (err) {

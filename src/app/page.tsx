@@ -2932,7 +2932,13 @@ function resolveDecisionIndexColor(value: number): string {
       };
 
       if (dashboardState.balances && dashboardState.balances.length > 0) {
-        const normalizedBalances = dashboardState.balances.filter(bal => bal?.asset);
+        // Normalize balances: ensure 'asset' field exists (use currency/coin as fallback)
+        const normalizedBalances = dashboardState.balances
+          .filter(bal => bal && (bal.asset || bal.currency || bal.coin))
+          .map(bal => ({
+            ...bal,
+            asset: bal.asset || bal.currency || bal.coin || ''
+          }));
         setRealBalances(normalizedBalances);
 
         logger.info(`${source} - normalized balance sample:`, normalizedBalances[0]);

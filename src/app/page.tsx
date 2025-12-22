@@ -2956,12 +2956,30 @@ function resolveDecisionIndexColor(value: number): string {
 
         logger.info(`${source} - normalized balance sample:`, normalizedBalances[0]);
 
-        const assetsWithValues = dashboardBalancesToPortfolioAssets(normalizedBalances)
-          .filter(asset => asset && asset.coin) // Additional safety filter
-          .map(asset => ({
-          ...asset,
-          updated_at: new Date().toISOString()
-        }));
+        // Prioritize portfolio.assets from backend if available (has usd_value directly from Crypto.com)
+        // Otherwise fall back to creating assets from normalized balances
+        let assetsWithValues: PortfolioAsset[];
+        if (dashboardState.portfolio?.assets && dashboardState.portfolio.assets.length > 0) {
+          // Use backend portfolio assets directly - they have usd_value from Crypto.com
+          assetsWithValues = dashboardState.portfolio.assets
+            .filter(asset => asset && asset.coin)
+            .map(asset => ({
+              ...asset,
+              // Ensure value_usd is set from usd_value if available
+              value_usd: asset.value_usd ?? asset.usd_value ?? 0,
+              updated_at: new Date().toISOString()
+            }));
+          logger.info(`✅ Using backend portfolio.assets (${assetsWithValues.length} assets with usd_value from Crypto.com)`);
+        } else {
+          // Fallback: create assets from normalized balances
+          assetsWithValues = dashboardBalancesToPortfolioAssets(normalizedBalances)
+            .filter(asset => asset && asset.coin)
+            .map(asset => ({
+              ...asset,
+              updated_at: new Date().toISOString()
+            }));
+          logger.info(`⚠️ Using fallback: created assets from normalized balances (${assetsWithValues.length} assets)`);
+        }
 
         if (assetsWithValues.length > 0) {
           // Calculate total as sum of ALL asset values (including negatives)

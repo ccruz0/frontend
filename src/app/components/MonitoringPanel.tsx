@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   getMonitoringSummary,
   getSignalThrottleState,
   getWorkflows,
+  restartBackend,
   MonitoringSummary,
   SignalThrottleEntry,
   TelegramMessage,
@@ -208,7 +209,12 @@ export default function MonitoringPanel({
   const [workflowRunning, setWorkflowRunning] = useState<Record<string, boolean>>({});
   const [workflowMessages, setWorkflowMessages] = useState<Record<string, string>>({});
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [workflowsLoading, setWorkflowsLoading] = useState(true);
+  const [workflowsLoading, setWorkflowsLoading] = useState(true); // Only true on initial load
+  const [workflowsRefreshing, setWorkflowsRefreshing] = useState(false); // Lightweight flag for refresh indicator
+  const [workflowsError, setWorkflowsError] = useState<string | null>(null); // Non-destructive error banner
+  const [workflowsLastUpdate, setWorkflowsLastUpdate] = useState<Date | null>(null); // For "Updated Xs ago" label
+  const workflowsFetchControllerRef = useRef<AbortController | null>(null); // Guard against overlapping polls
+  const [restarting, setRestarting] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -240,20 +246,66 @@ export default function MonitoringPanel({
     }
   }, []);
 
-  const fetchWorkflows = useCallback(async () => {
+  const fetchWorkflows = useCallback(async (isInitialLoad: boolean = false) => {
+    // Cancel any in-flight request to prevent overlapping polls
+    if (workflowsFetchControllerRef.current) {
+      workflowsFetchControllerRef.current.abort();
+    }
+    workflowsFetchControllerRef.current = new AbortController();
+
     try {
-      setWorkflowsLoading(true);
+      // Only show loading spinner on initial load
+      // For subsequent refreshes, use lightweight refreshing flag
+      if (isInitialLoad) {
+        setWorkflowsLoading(true);
+      } else {
+        setWorkflowsRefreshing(true);
+      }
+      setWorkflowsError(null);
+
       const response = await getWorkflows();
-      setWorkflows(response.workflows || []);
+      
+      // Keep last known good data: only update if we got a valid response
+      // This ensures the UI never disappears during refresh
+      if (response.workflows) {
+        setWorkflows(response.workflows);
+        setWorkflowsLastUpdate(new Date());
+      }
+      // If response.workflows is falsy, keep existing workflows state (last known good data)
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-      console.error('Failed to fetch workflows:', err);
-      // On error, use empty array (workflows will be empty)
-      setWorkflows([]);
+      // Don't clear workflows on error - keep last known good data
+      // Show error as non-destructive inline banner instead
+      if (!(err instanceof Error && err.name === 'AbortError')) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        setWorkflowsError(errorMsg);
+        console.error('Failed to fetch workflows:', err);
+      }
+      // workflows state remains unchanged (last known good data)
     } finally {
       setWorkflowsLoading(false);
+      setWorkflowsRefreshing(false);
+      workflowsFetchControllerRef.current = null;
     }
-  }, []);
+  }, []); // No dependencies - stable callback reference
+
+  const handleRestartBackend = useCallback(async () => {
+    if (restarting) return;
+    
+    try {
+      setRestarting(true);
+      await restartBackend();
+      // Refresh data after a short delay to see updated status
+      setTimeout(() => {
+        fetchData();
+      }, 2000);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('Failed to restart backend:', err);
+      alert(`Error al reiniciar el backend: ${errorMsg}`);
+    } finally {
+      setRestarting(false);
+    }
+  }, [restarting, fetchData]);
 
   const handleRunWorkflow = useCallback(async (workflowId: string) => {
     // Note: workflows must be in dependency array, but we check it inside the function
@@ -313,15 +365,21 @@ export default function MonitoringPanel({
   useEffect(() => {
     fetchData();
     fetchThrottle();
-    fetchWorkflows(); // Fetch workflows from API instead of using static config
+    fetchWorkflows(true); // Initial load
 
     const interval = setInterval(() => {
       fetchData();
       fetchThrottle();
-      fetchWorkflows(); // Refresh workflows periodically
+      fetchWorkflows(false); // Refresh (not initial load)
     }, refreshInterval);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      // Cancel any in-flight request on unmount
+      if (workflowsFetchControllerRef.current) {
+        workflowsFetchControllerRef.current.abort();
+      }
+    };
   }, [fetchData, fetchThrottle, fetchWorkflows, refreshInterval]);
 
   // Filter telegram messages by coin/symbol - must be called before any conditional logic
@@ -441,6 +499,16 @@ export default function MonitoringPanel({
       return '🆕 First alert';
     }
     
+    // Parameter change
+    if (reasonLower.includes('parameter changed:')) {
+      // Extract the parameter name(s) from the reason
+      const paramMatch = reason.match(/parameter changed:\s*(.+)/i);
+      if (paramMatch) {
+        return `⚙️ Parameter changed: ${paramMatch[1]}`;
+      }
+      return '⚙️ Parameter changed';
+    }
+    
     // Strategy change / Force reset
     if (reasonLower.includes('forced_after_toggle_reset') || reasonLower.includes('forced')) {
       return '🔄 Strategy changed / Manual reset';
@@ -556,6 +624,8 @@ export default function MonitoringPanel({
       balances: typeof data.balances === 'number' ? data.balances : 0,
       scheduler_ticks: typeof data.scheduler_ticks === 'number' ? data.scheduler_ticks : 0,
       last_backend_restart: data.last_backend_restart ?? null,
+      backend_restart_status: data.backend_restart_status ?? null,
+      backend_restart_timestamp: data.backend_restart_timestamp ?? null,
     } : {
       active_alerts: 0,
       backend_health: 'error',
@@ -566,6 +636,8 @@ export default function MonitoringPanel({
       scheduler_ticks: 0,
       errors: [],
       last_backend_restart: null,
+      backend_restart_status: null,
+      backend_restart_timestamp: null,
       alerts: []
     };
   } catch (err) {
@@ -580,6 +652,8 @@ export default function MonitoringPanel({
       scheduler_ticks: 0,
       errors: [],
       last_backend_restart: null,
+      backend_restart_status: null,
+      backend_restart_timestamp: null,
       alerts: []
     };
   }
@@ -613,6 +687,59 @@ export default function MonitoringPanel({
     }
   }
 
+  // Component for expandable message dropdown
+  const MessageDropdown = ({ entry, idx }: { entry: SignalThrottleEntry; idx: number }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    // Use telegram_message if available (full message), otherwise fallback to emit_reason
+    const fullMessage = entry.telegram_message || entry.emit_reason || 'No message available';
+    const displayText = formatEmitReason(entry.emit_reason);
+    const isTruncated = fullMessage.length > 60 || fullMessage !== displayText || entry.telegram_message !== undefined;
+
+    return (
+      <td className="px-4 py-3 text-sm text-gray-600 max-w-xs">
+        <div className="relative">
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="flex items-center gap-1 text-left w-full hover:text-blue-600 transition-colors group"
+            title={isTruncated ? 'Click to view full message' : undefined}
+          >
+            <span className="block truncate flex-1">{displayText}</span>
+            {isTruncated && (
+              <span className="flex-shrink-0 text-blue-500 text-xs group-hover:text-blue-700">
+                {isOpen ? '▼' : '▶'}
+              </span>
+            )}
+          </button>
+          {isOpen && (
+            <>
+              {/* Backdrop to close on outside click */}
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setIsOpen(false)}
+              />
+              {/* Dropdown content */}
+              <div className="absolute z-50 mt-1 left-0 w-96 bg-white border border-gray-300 rounded-lg shadow-xl p-3 max-h-64 overflow-y-auto">
+                <div className="flex justify-between items-start mb-2">
+                  <span className="text-xs font-semibold text-gray-700">Mensaje completo de Telegram:</span>
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    className="text-gray-400 hover:text-gray-600 text-xs font-bold"
+                    title="Cerrar"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="text-sm text-gray-800 whitespace-pre-wrap break-words">
+                  {fullMessage}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </td>
+    );
+  };
+
   // Build throttle rows array - limit to last 5 orders
   const throttleRows: React.ReactNode[] = [];
   if (Array.isArray(throttleEntries) && throttleEntries.length > 0) {
@@ -640,9 +767,7 @@ export default function MonitoringPanel({
           <td className={`px-4 py-3 text-sm font-medium ${priceChangeColor}`}>
             {priceChangeDisplay}
           </td>
-          <td className="px-4 py-3 text-sm text-gray-600 max-w-xs" title={entry.emit_reason || undefined}>
-            <span className="block truncate">{formatEmitReason(entry.emit_reason)}</span>
-          </td>
+          <MessageDropdown entry={entry} idx={idx} />
           <td className="px-4 py-3 text-sm text-gray-600">
             {entry.last_time ? formatTimestamp(entry.last_time) : 'N/A'}
           </td>
@@ -856,11 +981,31 @@ export default function MonitoringPanel({
 
         <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
           <div className="text-sm text-gray-500 mb-1">Backend Restart</div>
-          <div className="text-sm font-semibold text-gray-800">
+          <div className="text-sm font-semibold text-gray-800 mb-2">
             {monitoringData.last_backend_restart
               ? formatDuration(Math.floor((Date.now() / 1000) - monitoringData.last_backend_restart))
               : 'N/A'}
           </div>
+          {monitoringData.backend_restart_status && (
+            <div className={`text-xs font-semibold px-2 py-1 rounded border mb-2 ${
+              monitoringData.backend_restart_status === 'restarting' 
+                ? 'bg-blue-100 text-blue-800 border-blue-200'
+                : monitoringData.backend_restart_status === 'restarted'
+                ? 'bg-green-100 text-green-800 border-green-200'
+                : 'bg-red-100 text-red-800 border-red-200'
+            }`}>
+              {monitoringData.backend_restart_status === 'restarting' ? '🔄 Reiniciando...' :
+               monitoringData.backend_restart_status === 'restarted' ? '✅ Reiniciado' :
+               '❌ Error'}
+            </div>
+          )}
+          <button
+            onClick={handleRestartBackend}
+            disabled={restarting || monitoringData.backend_restart_status === 'restarting'}
+            className="w-full px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {restarting || monitoringData.backend_restart_status === 'restarting' ? 'Reiniciando...' : 'Reiniciar Backend'}
+          </button>
         </div>
       </div>
 
@@ -957,12 +1102,41 @@ export default function MonitoringPanel({
 
       {/* Monitoring Workflows Box */}
       <div className="bg-white rounded-lg shadow border border-gray-200 mb-6">
-        <div className="p-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold">Monitoring Workflows</h3>
-          <p className="text-xs text-gray-500">Automated monitoring workflows with manual triggers</p>
+        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold">Monitoring Workflows</h3>
+            <p className="text-xs text-gray-500">
+              Automated monitoring workflows with manual triggers
+              {workflowsLastUpdate && (
+                <span className="ml-2 text-gray-400">
+                  • Updated {formatRelativeTime(Math.floor((Date.now() - workflowsLastUpdate.getTime()) / 1000))}
+                </span>
+              )}
+              {workflowsRefreshing && (
+                <span className="ml-2 text-blue-500">⟳ Refreshing...</span>
+              )}
+            </p>
+          </div>
         </div>
-        {workflowsLoading ? (
+        {/* Non-destructive error banner - doesn't clear the UI */}
+        {workflowsError && (
+          <div className="px-4 py-2 text-sm text-red-600 bg-red-50 border-b border-red-100">
+            Error refreshing workflows: {workflowsError}
+            <button
+              onClick={() => {
+                setWorkflowsError(null);
+                fetchWorkflows(false);
+              }}
+              className="ml-2 text-red-700 underline hover:text-red-900"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+        {/* Only show loading spinner on initial load when we have no data */}
+        {workflowsLoading && workflows.length === 0 ? (
           <div className="p-6 text-center text-gray-500">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
             Loading workflows...
           </div>
         ) : workflowRows.length === 0 ? (
@@ -970,6 +1144,7 @@ export default function MonitoringPanel({
             No workflows found
           </div>
         ) : (
+          /* Keep the table mounted at all times - never disappears during refresh */
           <div className="overflow-x-auto max-h-96 overflow-y-auto">
             <table className="w-full">
               <thead className="bg-gray-50 sticky top-0">

@@ -4329,24 +4329,33 @@ function resolveDecisionIndexColor(value: number): string {
             
             // Now load from localStorage (which now has backend values) into state
             // This ensures dashboard only reads from localStorage
-            // CRITICAL: Preserve user's formatted values if backend value is numerically equivalent
-            // This prevents the value from "jumping back" when backend returns slightly different format
+            // CRITICAL: Preserve user's values if they differ from backend (user may have just changed them)
+            // This prevents the value from "jumping back" when backend hasn't confirmed the change yet
             setCoinAmounts(prev => {
               const merged = { ...cleanedAmounts };
-              // For each existing value in state, check if backend has equivalent value
+              // For each existing value in state, preserve it if it's different from backend
+              // This allows user changes to persist until backend confirms
               Object.entries(prev).forEach(([key, userValue]) => {
+                if (!userValue) return; // Skip empty values
+                
+                const userNum = parseFloat(userValue);
+                if (isNaN(userNum) || userNum <= 0) return; // Skip invalid values
+                
                 const backendValue = cleanedAmounts[key];
                 if (backendValue) {
-                  // Compare numerically - if values are equivalent, keep user's formatted value
-                  const userNum = parseFloat(userValue || '0');
-                  const backendNum = parseFloat(backendValue || '0');
+                  const backendNum = parseFloat(backendValue);
                   const tolerance = 0.01;
-                  if (Math.abs(userNum - backendNum) <= tolerance && userValue !== backendValue) {
+                  // If user value differs significantly from backend, preserve user value
+                  // (user may have just changed it and backend hasn't confirmed yet)
+                  if (Math.abs(userNum - backendNum) > tolerance) {
+                    // User value is different - preserve it until backend confirms
+                    merged[key] = userValue;
+                  } else if (userValue !== backendValue) {
                     // Values are numerically equivalent but formatted differently
                     // Keep user's formatted value (preserves their input format)
                     merged[key] = userValue;
                   }
-                } else if (userValue) {
+                } else {
                   // Backend doesn't have this value, but user has it in state
                   // This could be a value user just entered but backend hasn't confirmed yet
                   // Keep user's value

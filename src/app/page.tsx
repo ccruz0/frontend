@@ -2205,7 +2205,8 @@ function resolveDecisionIndexColor(value: number): string {
     currentStrategy?: StrategyDecision,
     strategyVolumeRatio?: number | null,  // Optional: canonical volume ratio from strategy (same as Volume column)
     volumeAvgPeriods?: number | null,  // Optional: number of periods used for avg_volume calculation
-    backendMinVolumeRatio?: number  // CANONICAL: Backend configured threshold from Signal Config (source of truth)
+    backendMinVolumeRatio?: number,  // CANONICAL: Backend configured threshold from Signal Config (source of truth)
+    ma10w?: number | undefined  // Optional: MA10w value for trend reversal check
   ): string {
     if (!rules) {
       return `Estrategia no configurada`;
@@ -2318,9 +2319,13 @@ function resolveDecisionIndexColor(value: number): string {
     
     lines.push('');
     
-    // SELL Criteria - More strict: require BOTH RSI AND MA reversal
-    if (rules.maChecks?.ma50) {
-      lines.push('🔴 CRITERIOS SELL (AMBOS deben cumplirse):');
+    // SELL Criteria - More strict: require BOTH RSI AND trend reversal (MA reversal OR price below MA10w)
+    // CANONICAL: Use backend sell_trend_ok for overall trend status
+    const sellTrendOk = strategyReasons.sell_trend_ok;
+    const requiresMaReversal = rules.maChecks?.ma50 === true;
+    
+    if (requiresMaReversal) {
+      lines.push('🔴 CRITERIOS SELL (TODOS deben cumplirse):');
     } else {
       lines.push('🔴 CRITERIOS SELL:');
     }
@@ -2330,21 +2335,145 @@ function resolveDecisionIndexColor(value: number): string {
     const rsiSellStatus = sellRsiOk === true ? '✓' : sellRsiOk === false ? '✗' : '?';
     lines.push(`  • RSI > ${sellAbove} ${(rsi !== undefined && rsi !== null) ? `(actual: ${rsi.toFixed(2)}${rsiSellStatus})` : rsiSellStatus}`);
     
-    if (rules.maChecks?.ma50 && ma50 !== undefined && ema10 !== undefined) {
-      // Calculate percentage difference
-      const priceDiff = Math.abs(ma50 - ema10);
-      const avgPrice = (ma50 + ema10) / 2;
-      const percentDiff = (priceDiff / avgPrice) * 100;
-      const ma50Reversal = ma50 < ema10 && percentDiff >= 0.5;
-      const ma50ReversalStatus = ma50Reversal ? '✓' : '✗';
+    // Trend reversal check: MA50 < EMA10 OR price < MA10w
+    // CANONICAL: Use backend sell_trend_ok for overall status, but show individual conditions for clarity
+    const trendStatus = sellTrendOk === true ? '✓' : sellTrendOk === false ? '✗' : '?';
+    
+    if (requiresMaReversal) {
+      // Show overall trend status from backend first
+      lines.push(`  • Reversa de tendencia confirmada ${trendStatus} (requiere: MA50<EMA10 O Precio<MA10w)`);
       
-      lines.push(`  • MA50 < EMA10 (diferencia ≥0.5%) ${ma50ReversalStatus}`);
-      lines.push(`    - MA50: $${formatNumber(ma50, symbol)}`);
-      lines.push(`    - EMA10: $${formatNumber(ema10, symbol)}`);
-      lines.push(`    - Diferencia: ${percentDiff.toFixed(2)}% ${ma50 < ema10 ? '(requiere ≥0.5%)' : ''}`);
+      // Show MA50 < EMA10 check details
+      if (ma50 !== undefined && ema10 !== undefined) {
+        // Calculate percentage difference
+        const priceDiff = Math.abs(ma50 - ema10);
+        const avgPrice = (ma50 + ema10) / 2;
+        const percentDiff = (priceDiff / avgPrice) * 100;
+        const ma50Reversal = ma50 < ema10 && percentDiff >= 0.5;
+        const ma50ReversalStatus = ma50Reversal ? '✓' : '✗';
+        
+        lines.push(`    - MA50 < EMA10 (diferencia ≥0.5%) ${ma50ReversalStatus}`);
+        lines.push(`      MA50: $${formatNumber(ma50, symbol)} | EMA10: $${formatNumber(ema10, symbol)}`);
+        if (ma50 < ema10) {
+          lines.push(`      Diferencia: ${percentDiff.toFixed(2)}% ${percentDiff >= 0.5 ? '(cumple ≥0.5%)' : '(requiere ≥0.5%)'}`);
+        }
+      }
+      
+      // Show price < MA10w check (alternative trend reversal signal)
+      // Always show if ma10w and currentPrice are available
+      if (ma10w != null && currentPrice != null) {
+        const ma10wNum = typeof ma10w === 'number' ? ma10w : parseFloat(String(ma10w));
+        const currentPriceNum = typeof currentPrice === 'number' ? currentPrice : parseFloat(String(currentPrice));
+        
+        // Debug logging for TON_USDT
+        if (symbol === 'TON_USDT') {
+          console.log('[TON_USDT DEBUG] ma10w check:', {
+            ma10w,
+            ma10wType: typeof ma10w,
+            ma10wNum,
+            isNaN_ma10w: isNaN(ma10wNum),
+            currentPrice,
+            currentPriceType: typeof currentPrice,
+            currentPriceNum,
+            isNaN_currentPrice: isNaN(currentPriceNum),
+            requiresMaReversal,
+            sellTrendOk
+          });
+        }
+        
+        // Show if both are valid numbers
+        if (!isNaN(ma10wNum) && !isNaN(currentPriceNum)) {
+          const priceBelowMa10w = currentPriceNum < ma10wNum;
+          const priceBelowStatus = priceBelowMa10w ? '✓' : '✗';
+          lines.push(`    - Precio < MA10w ${priceBelowStatus}`);
+          lines.push(`      Precio: $${formatNumber(currentPriceNum, symbol)} | MA10w: $${formatNumber(ma10wNum, symbol)}`);
+        } else if (symbol === 'TON_USDT') {
+          console.log('[TON_USDT DEBUG] Failed validation:', {
+            ma10wNum,
+            currentPriceNum,
+            isNaN_ma10w: isNaN(ma10wNum),
+            isNaN_currentPrice: isNaN(currentPriceNum)
+          });
+        }
+      } else if (symbol === 'TON_USDT') {
+        console.log('[TON_USDT DEBUG] ma10w or currentPrice is null:', {
+          ma10w,
+          currentPrice,
+          ma10wNull: ma10w == null,
+          currentPriceNull: currentPrice == null
+        });
+      }
+    } else {
+      // Strategy doesn't require MA checks, but show trend status and details if available
+      if (sellTrendOk !== undefined && sellTrendOk !== null) {
+        lines.push(`  • Reversa de tendencia confirmada ${trendStatus} (no requerida por estrategia, pero evaluada: MA50<EMA10 O Precio<MA10w)`);
+        
+        // Show MA50 < EMA10 check details even if not required
+        if (ma50 !== undefined && ema10 !== undefined) {
+          const priceDiff = Math.abs(ma50 - ema10);
+          const avgPrice = (ma50 + ema10) / 2;
+          const percentDiff = (priceDiff / avgPrice) * 100;
+          const ma50Reversal = ma50 < ema10 && percentDiff >= 0.5;
+          const ma50ReversalStatus = ma50Reversal ? '✓' : '✗';
+          
+          lines.push(`    - MA50 < EMA10 (diferencia ≥0.5%) ${ma50ReversalStatus}`);
+          lines.push(`      MA50: $${formatNumber(ma50, symbol)} | EMA10: $${formatNumber(ema10, symbol)}`);
+          if (ma50 < ema10) {
+            lines.push(`      Diferencia: ${percentDiff.toFixed(2)}% ${percentDiff >= 0.5 ? '(cumple ≥0.5%)' : '(requiere ≥0.5%)'}`);
+          }
+        }
+        
+        // Show price < MA10w check even if not required
+        // Always show if ma10w and currentPrice are available
+        if (ma10w != null && currentPrice != null) {
+          const ma10wNum = typeof ma10w === 'number' ? ma10w : parseFloat(String(ma10w));
+          const currentPriceNum = typeof currentPrice === 'number' ? currentPrice : parseFloat(String(currentPrice));
+          
+          // Debug logging for TON_USDT
+          if (symbol === 'TON_USDT') {
+            console.log('[TON_USDT DEBUG] ma10w check (else branch):', {
+              ma10w,
+              ma10wType: typeof ma10w,
+              ma10wNum,
+              isNaN_ma10w: isNaN(ma10wNum),
+              currentPrice,
+              currentPriceType: typeof currentPrice,
+              currentPriceNum,
+              isNaN_currentPrice: isNaN(currentPriceNum),
+              requiresMaReversal,
+              sellTrendOk
+            });
+          }
+          
+          // Use same validation as requiresMaReversal=true branch
+          // This ensures consistent behavior regardless of requiresMaReversal value
+          if (!isNaN(ma10wNum) && !isNaN(currentPriceNum)) {
+            const priceBelowMa10w = currentPriceNum < ma10wNum;
+            const priceBelowStatus = priceBelowMa10w ? '✓' : '✗';
+            lines.push(`    - Precio < MA10w ${priceBelowStatus}`);
+            lines.push(`      Precio: $${formatNumber(currentPriceNum, symbol)} | MA10w: $${formatNumber(ma10wNum, symbol)}`);
+          } else if (symbol === 'TON_USDT') {
+            console.log('[TON_USDT DEBUG] Failed validation (else branch):', {
+              ma10wNum,
+              currentPriceNum,
+              isNaN_ma10w: isNaN(ma10wNum),
+              isNaN_currentPrice: isNaN(currentPriceNum)
+            });
+          }
+        } else if (symbol === 'TON_USDT') {
+          console.log('[TON_USDT DEBUG] ma10w or currentPrice is null (else branch):', {
+            ma10w,
+            currentPrice,
+            ma10wNull: ma10w == null,
+            currentPriceNull: currentPrice == null
+          });
+        }
+      }
     }
     
     // Volume criterion: require volume >= minVolumeRatio x average for SELL (market reaction)
+    // CANONICAL: Use backend sell_volume_ok for status, show ratio for context
+    const sellVolumeOk = strategyReasons.sell_volume_ok;
     // CANONICAL: Use strategy volume_ratio if provided (same as Volume column), otherwise calculate
     volumeRatio = undefined;
     if (strategyVolumeRatio !== undefined && strategyVolumeRatio !== null && strategyVolumeRatio >= 0) {
@@ -2356,7 +2485,8 @@ function resolveDecisionIndexColor(value: number): string {
     }
     
     if (volumeRatio !== undefined && volumeRatio !== null) {
-      const volumeStatus = volumeRatio >= minVolumeRatio ? '✓' : '✗';
+      // CANONICAL: Use backend sell_volume_ok for status
+      const volumeStatus = sellVolumeOk === true ? '✓' : sellVolumeOk === false ? '✗' : '?';
       lines.push(`  • Volume ≥ ${minVolumeRatio}x promedio ${volumeStatus}`);
       lines.push(`    - Ratio actual: ${volumeRatio.toFixed(2)}x (mismo valor que columna Volume)`);
       lines.push(`    - Volume (último período): ${formatNumber(volume, undefined)}`);
@@ -2367,7 +2497,9 @@ function resolveDecisionIndexColor(value: number): string {
         lines.push(`    - Promedio: ${formatNumber(avgVolume, undefined)}`);
       }
     } else {
-      lines.push(`  • Volume ≥ ${minVolumeRatio}x promedio ? (datos no disponibles)`);
+      // CANONICAL: Use backend sell_volume_ok for status even when ratio unavailable
+      const volumeStatus = sellVolumeOk === true ? '✓' : sellVolumeOk === false ? '✗' : '?';
+      lines.push(`  • Volume ≥ ${minVolumeRatio}x promedio ${volumeStatus} (datos no disponibles)`);
     }
     
     lines.push('');
@@ -8683,36 +8815,123 @@ function resolveDecisionIndexColor(value: number): string {
                     </td>
                     <td className="px-1 py-3 text-center w-16">
                       <div className="flex gap-1 justify-center items-center">
-                        <button
-                          onClick={async () => {
-                            const amountUSD = parseFloat(coinAmounts[normalizeSymbolKey(coin.instrument_name)] || '0');
-                            if (!amountUSD || amountUSD <= 0) {
-                              alert(`Por favor configura el Amount USD para ${coin.instrument_name}`);
-                              return;
-                            }
-                            const useMargin = coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_margin'] || false;
-                            // Use the current price from the dashboard (should be the latest price)
-                            const price = coin.current_price;
-                            if (price == null || price <= 0) {
-                              alert(`No hay precio disponible para ${coin.instrument_name}`);
-                              return;
-                            }
-                            // Log the price being used for debugging
-                            logger.info(`📊 Creando orden BUY para ${coin.instrument_name} con precio: $${price} (current_price del dashboard)`);
-                            
-                            // Calculate quantity
-                            let qty = amountUSD / price;
-                            if (price >= 100) {
-                              qty = Math.round(qty * 10000) / 10000;
-                            } else if (price >= 1) {
-                              qty = Math.round(qty * 1000000) / 1000000;
+                        {(() => {
+                          // Get data needed for tooltip construction
+                          const signalEntry = signals[coin.instrument_name];
+                          const coinStrategy = (coin as TopCoin).strategy;
+                          const strategyState: StrategyDecision | undefined = 
+                            safeGetStrategyDecision(coin.strategy_state) ||
+                            safeGetStrategyDecision(signalEntry?.strategy) ||
+                            safeGetStrategyDecision(coinStrategy) ||
+                            undefined;
+                          
+                          const backendProfile = (coin as unknown as { strategy_profile?: { preset?: string; approach?: string } }).strategy_profile;
+                          const preset =
+                            backendProfile?.preset && backendProfile?.approach
+                              ? `${backendProfile.preset}-${backendProfile.approach}`
+                              : (coinPresets[normalizeSymbolKey(coin.instrument_name)] || 'swing');
+                          let presetType: Preset;
+                          let riskMode: RiskMode;
+                          
+                          const validPresets = ['swing', 'intraday', 'scalp'];
+                          
+                          if (preset.includes('-conservative')) {
+                            const basePreset = preset.replace(/-conservative/gi, '').replace(/-+$/, '').toLowerCase();
+                            if (basePreset && validPresets.includes(basePreset)) {
+                              presetType = (basePreset.charAt(0).toUpperCase() + basePreset.slice(1)) as Preset;
+                              riskMode = 'Conservative';
                             } else {
-                              qty = Math.round(qty * 100000000) / 100000000;
+                              presetType = 'Swing';
+                              riskMode = 'Conservative';
                             }
-                            
-                            // Show confirmation dialog with order details
-                            const marginText = useMargin ? `🚀 On Margin (10x)` : '💰 Spot';
-                            const confirmMessage = `🟢 CONFIRMAR ORDEN BUY
+                          } else if (preset.includes('-aggressive') || preset.includes('-agresiva')) {
+                            const basePreset = preset.replace(/-aggressive|-agresiva/gi, '').replace(/-+$/, '').toLowerCase();
+                            if (basePreset && validPresets.includes(basePreset)) {
+                              presetType = (basePreset.charAt(0).toUpperCase() + basePreset.slice(1)) as Preset;
+                              riskMode = 'Aggressive';
+                            } else {
+                              presetType = 'Swing';
+                              riskMode = 'Aggressive';
+                            }
+                          } else if (preset === 'swing' || preset === 'intraday' || preset === 'scalp') {
+                            presetType = (preset.charAt(0).toUpperCase() + preset.slice(1)) as Preset;
+                            riskMode = 'Conservative';
+                          } else {
+                            const basePreset = preset.split('-')[0].toLowerCase();
+                            if (basePreset && validPresets.includes(basePreset)) {
+                              presetType = (basePreset.charAt(0).toUpperCase() + basePreset.slice(1)) as Preset;
+                              riskMode = 'Conservative';
+                            } else {
+                              presetType = 'Swing';
+                              riskMode = 'Conservative';
+                            }
+                          }
+                          
+                          const rules = presetsConfig[presetType]?.rules?.[riskMode] ?? PRESET_CONFIG[presetType]?.rules?.[riskMode];
+                          const rsi = signalEntry?.rsi ?? coin.rsi;
+                          const ma50 = signalEntry?.ma50 ?? coin.ma50;
+                          const ema10 = signalEntry?.ema10 ?? coin.ema10;
+                          const ma200 = signalEntry?.ma200 ?? coin.ma200;
+                          const currentPrice = coin.current_price;
+                          const currentVolume = signalEntry?.current_volume ?? coin.current_volume;
+                          const avgVolume = signalEntry?.avg_volume ?? coin.avg_volume;
+                          const strategyVolumeRatio = coin.volume_ratio ?? signalEntry?.volume_ratio;
+                          const volumeAvgPeriods = coin.volume_avg_periods ?? signalEntry?.volume_avg_periods ?? null;
+                          const backendMinVolumeRatio = (coin as TopCoin & { min_volume_ratio?: number }).min_volume_ratio ?? rules?.volumeMinRatio ?? 0.5;
+                          const ma10w = signalEntry?.ma10w ?? coin.ma10w;
+                          
+                          // Build tooltip for SELL button
+                          const sellButtonTooltip = buildSignalCriteriaTooltip(
+                            presetType,
+                            riskMode,
+                            rules,
+                            rsi,
+                            ma50,
+                            ema10,
+                            ma200,
+                            currentPrice,
+                            currentVolume,
+                            avgVolume,
+                            coin.instrument_name,
+                            strategyState as StrategyDecision | undefined,
+                            strategyVolumeRatio,
+                            volumeAvgPeriods,
+                            backendMinVolumeRatio,
+                            ma10w
+                          );
+                          
+                          return (
+                            <>
+                              <button
+                                onClick={async () => {
+                                  const amountUSD = parseFloat(coinAmounts[normalizeSymbolKey(coin.instrument_name)] || '0');
+                                  if (!amountUSD || amountUSD <= 0) {
+                                    alert(`Por favor configura el Amount USD para ${coin.instrument_name}`);
+                                    return;
+                                  }
+                                  const useMargin = coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_margin'] || false;
+                                  // Use the current price from the dashboard (should be the latest price)
+                                  const price = coin.current_price;
+                                  if (price == null || price <= 0) {
+                                    alert(`No hay precio disponible para ${coin.instrument_name}`);
+                                    return;
+                                  }
+                                  // Log the price being used for debugging
+                                  logger.info(`📊 Creando orden BUY para ${coin.instrument_name} con precio: $${price} (current_price del dashboard)`);
+                                  
+                                  // Calculate quantity
+                                  let qty = amountUSD / price;
+                                  if (price >= 100) {
+                                    qty = Math.round(qty * 10000) / 10000;
+                                  } else if (price >= 1) {
+                                    qty = Math.round(qty * 1000000) / 1000000;
+                                  } else {
+                                    qty = Math.round(qty * 100000000) / 100000000;
+                                  }
+                                  
+                                  // Show confirmation dialog with order details
+                                  const marginText = useMargin ? `🚀 On Margin (10x)` : '💰 Spot';
+                                  const confirmMessage = `🟢 CONFIRMAR ORDEN BUY
 
 📊 Symbol: ${coin.instrument_name}
 💰 Amount USD: $${amountUSD.toFixed(2)}
@@ -8722,68 +8941,68 @@ ${marginText}
 💡 La orden se ejecutará al precio de mercado actual
 
 ¿Confirmar esta orden?`;
-                            
-                            if (!window.confirm(confirmMessage)) {
-                              return;
-                            }
-                            
-                            try {
-                              const response = await quickOrder({
-                                symbol: coin.instrument_name,
-                                side: 'BUY',
-                                price: price,
-                                amount_usd: amountUSD,
-                                use_margin: useMargin
-                              });
-                              alert(`✅ Orden BUY creada exitosamente!\n\nOrder ID: ${response.order_id}${response.dry_run ? '\n🧪 Modo: DRY RUN' : '\n🔴 Modo: LIVE'}`);
-                            } catch (buyError: unknown) {
-                              const buyErrorObj = buyError as { detail?: string; message?: string };
-                              // Get error message with priority: detail > message > fallback
-                              const errorMsg = buyErrorObj.detail || buyErrorObj.message || 'Error desconocido';
-                              logHandledError(
-                                `quickOrder:buy:${coin.instrument_name}`,
-                                `❌ Error creating BUY order for ${coin.instrument_name}`,
-                                { error: buyError, price },
-                                'error'
-                              );
-                              alert(`❌ Error creando orden BUY:\n\n${errorMsg}\n\nPrecio usado: $${price.toFixed(4)}`);
-                            }
-                          }}
-                          className="px-2 py-1 text-xs font-semibold bg-green-500 hover:bg-green-600 text-white rounded transition-colors"
-                          title={`BUY ${coin.instrument_name} @ $${coin.current_price || 0}`}
-                        >
-                          BUY
-                        </button>
-                        <button
-                          onClick={async () => {
-                            const amountUSD = parseFloat(coinAmounts[normalizeSymbolKey(coin.instrument_name)] || '0');
-                            if (!amountUSD || amountUSD <= 0) {
-                              alert(`Por favor configura el Amount USD para ${coin.instrument_name}`);
-                              return;
-                            }
-                            const useMargin = coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_margin'] || false;
-                            // Use the current price from the dashboard (should be the latest price)
-                            const price = coin.current_price;
-                            if (price == null || price <= 0) {
-                              alert(`No hay precio disponible para ${coin.instrument_name}`);
-                              return;
-                            }
-                            // Log the price being used for debugging
-                            logger.info(`📊 Creando orden SELL para ${coin.instrument_name} con precio: $${price} (current_price del dashboard)`);
-                            
-                            // Calculate quantity
-                            let qty = amountUSD / price;
-                            if (price >= 100) {
-                              qty = Math.round(qty * 10000) / 10000;
-                            } else if (price >= 1) {
-                              qty = Math.round(qty * 1000000) / 1000000;
-                            } else {
-                              qty = Math.round(qty * 100000000) / 100000000;
-                            }
-                            
-                            // Show confirmation dialog with order details
-                            const marginText = useMargin ? `🚀 On Margin (10x)` : '💰 Spot';
-                            const confirmMessage = `🔴 CONFIRMAR ORDEN SELL
+                                  
+                                  if (!window.confirm(confirmMessage)) {
+                                    return;
+                                  }
+                                  
+                                  try {
+                                    const response = await quickOrder({
+                                      symbol: coin.instrument_name,
+                                      side: 'BUY',
+                                      price: price,
+                                      amount_usd: amountUSD,
+                                      use_margin: useMargin
+                                    });
+                                    alert(`✅ Orden BUY creada exitosamente!\n\nOrder ID: ${response.order_id}${response.dry_run ? '\n🧪 Modo: DRY RUN' : '\n🔴 Modo: LIVE'}`);
+                                  } catch (buyError: unknown) {
+                                    const buyErrorObj = buyError as { detail?: string; message?: string };
+                                    // Get error message with priority: detail > message > fallback
+                                    const errorMsg = buyErrorObj.detail || buyErrorObj.message || 'Error desconocido';
+                                    logHandledError(
+                                      `quickOrder:buy:${coin.instrument_name}`,
+                                      `❌ Error creating BUY order for ${coin.instrument_name}`,
+                                      { error: buyError, price },
+                                      'error'
+                                    );
+                                    alert(`❌ Error creando orden BUY:\n\n${errorMsg}\n\nPrecio usado: $${price.toFixed(4)}`);
+                                  }
+                                }}
+                                className="px-2 py-1 text-xs font-semibold bg-green-500 hover:bg-green-600 text-white rounded transition-colors"
+                                title={`BUY ${coin.instrument_name} @ $${coin.current_price || 0}`}
+                              >
+                                BUY
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  const amountUSD = parseFloat(coinAmounts[normalizeSymbolKey(coin.instrument_name)] || '0');
+                                  if (!amountUSD || amountUSD <= 0) {
+                                    alert(`Por favor configura el Amount USD para ${coin.instrument_name}`);
+                                    return;
+                                  }
+                                  const useMargin = coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_margin'] || false;
+                                  // Use the current price from the dashboard (should be the latest price)
+                                  const price = coin.current_price;
+                                  if (price == null || price <= 0) {
+                                    alert(`No hay precio disponible para ${coin.instrument_name}`);
+                                    return;
+                                  }
+                                  // Log the price being used for debugging
+                                  logger.info(`📊 Creando orden SELL para ${coin.instrument_name} con precio: $${price} (current_price del dashboard)`);
+                                  
+                                  // Calculate quantity
+                                  let qty = amountUSD / price;
+                                  if (price >= 100) {
+                                    qty = Math.round(qty * 10000) / 10000;
+                                  } else if (price >= 1) {
+                                    qty = Math.round(qty * 1000000) / 1000000;
+                                  } else {
+                                    qty = Math.round(qty * 100000000) / 100000000;
+                                  }
+                                  
+                                  // Show confirmation dialog with order details
+                                  const marginText = useMargin ? `🚀 On Margin (10x)` : '💰 Spot';
+                                  const confirmMessage = `🔴 CONFIRMAR ORDEN SELL
 
 📊 Symbol: ${coin.instrument_name}
 💰 Amount USD: $${amountUSD.toFixed(2)}
@@ -8794,38 +9013,41 @@ ${marginText}
 💡 La orden se ejecutará al precio de mercado actual
 
 ¿Confirmar esta orden?`;
-                            
-                            if (!window.confirm(confirmMessage)) {
-                              return;
-                            }
-                            
-                            try {
-                              const response = await quickOrder({
-                                symbol: coin.instrument_name,
-                                side: 'SELL',
-                                price: price,
-                                amount_usd: amountUSD,
-                                use_margin: useMargin
-                              });
-                              alert(`✅ Orden SELL creada exitosamente!\n\nOrder ID: ${response.order_id}${response.dry_run ? '\n🧪 Modo: DRY RUN' : '\n🔴 Modo: LIVE'}`);
-                            } catch (sellError: unknown) {
-                              const sellErrorObj = sellError as { detail?: string; message?: string };
-                              // Get error message with priority: detail > message > fallback
-                              const errorMsg = sellErrorObj.detail || sellErrorObj.message || 'Error desconocido';
-                              logHandledError(
-                                `quickOrder:sell:${coin.instrument_name}`,
-                                `❌ Error creating SELL order for ${coin.instrument_name}`,
-                                { error: sellError, price },
-                                'error'
-                              );
-                              alert(`❌ Error creando orden SELL:\n\n${errorMsg}\n\nPrecio usado: $${price.toFixed(4)}`);
-                            }
-                          }}
-                          className="px-2 py-1 text-xs font-semibold bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
-                          title={`SELL ${coin.instrument_name} @ $${coin.current_price || 0}`}
-                        >
-                          SELL
-                        </button>
+                                  
+                                  if (!window.confirm(confirmMessage)) {
+                                    return;
+                                  }
+                                  
+                                  try {
+                                    const response = await quickOrder({
+                                      symbol: coin.instrument_name,
+                                      side: 'SELL',
+                                      price: price,
+                                      amount_usd: amountUSD,
+                                      use_margin: useMargin
+                                    });
+                                    alert(`✅ Orden SELL creada exitosamente!\n\nOrder ID: ${response.order_id}${response.dry_run ? '\n🧪 Modo: DRY RUN' : '\n🔴 Modo: LIVE'}`);
+                                  } catch (sellError: unknown) {
+                                    const sellErrorObj = sellError as { detail?: string; message?: string };
+                                    // Get error message with priority: detail > message > fallback
+                                    const errorMsg = sellErrorObj.detail || sellErrorObj.message || 'Error desconocido';
+                                    logHandledError(
+                                      `quickOrder:sell:${coin.instrument_name}`,
+                                      `❌ Error creating SELL order for ${coin.instrument_name}`,
+                                      { error: sellError, price },
+                                      'error'
+                                    );
+                                    alert(`❌ Error creando orden SELL:\n\n${errorMsg}\n\nPrecio usado: $${price.toFixed(4)}`);
+                                  }
+                                }}
+                                className="px-2 py-1 text-xs font-semibold bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+                                title={sellButtonTooltip}
+                              >
+                                SELL
+                              </button>
+                            </>
+                          );
+                        })()}
                       </div>
                     </td>
                     <td className="px-2 py-3 text-right font-semibold w-24" 
@@ -10330,6 +10552,22 @@ ${marginText}
                               // Note: min_volume_ratio comes from coin object (backend), not from TradingSignals type
                               // FIX: Add optional chaining to prevent TypeError if rules is undefined
                               const backendMinVolumeRatio = (coin as TopCoin & { min_volume_ratio?: number }).min_volume_ratio ?? rules?.volumeMinRatio ?? 0.5;
+                              // Get MA10w for trend reversal check
+                              const ma10w = signalEntry?.ma10w ?? coin.ma10w;
+                              
+                              // Debug logging for TON_USDT
+                              if (coin.instrument_name === 'TON_USDT') {
+                                console.log('[TON_USDT DEBUG] Before buildSignalCriteriaTooltip:', {
+                                  signalEntry_ma10w: signalEntry?.ma10w,
+                                  coin_ma10w: coin.ma10w,
+                                  ma10w,
+                                  currentPrice,
+                                  ma50,
+                                  ema10,
+                                  sellTrendOk: (strategyState as StrategyDecision | undefined)?.reasons?.sell_trend_ok
+                                });
+                              }
+                              
                               const signalTooltip = buildSignalCriteriaTooltip(
                                 presetType,
                                 riskMode,
@@ -10345,7 +10583,8 @@ ${marginText}
                                 strategyState as StrategyDecision | undefined,
                                 strategyVolumeRatio,  // Pass canonical strategy volume_ratio
                                 volumeAvgPeriods,  // Pass volume average periods count
-                                backendMinVolumeRatio  // CANONICAL: Pass backend configured threshold
+                                backendMinVolumeRatio,  // CANONICAL: Pass backend configured threshold
+                                ma10w  // Pass MA10w for trend reversal check
                               );
                         
                               const decisionIndexTitle =

@@ -4329,7 +4329,32 @@ function resolveDecisionIndexColor(value: number): string {
             
             // Now load from localStorage (which now has backend values) into state
             // This ensures dashboard only reads from localStorage
-            setCoinAmounts(cleanedAmounts);
+            // CRITICAL: Preserve user's formatted values if backend value is numerically equivalent
+            // This prevents the value from "jumping back" when backend returns slightly different format
+            setCoinAmounts(prev => {
+              const merged = { ...cleanedAmounts };
+              // For each existing value in state, check if backend has equivalent value
+              Object.entries(prev).forEach(([key, userValue]) => {
+                const backendValue = cleanedAmounts[key];
+                if (backendValue) {
+                  // Compare numerically - if values are equivalent, keep user's formatted value
+                  const userNum = parseFloat(userValue || '0');
+                  const backendNum = parseFloat(backendValue || '0');
+                  const tolerance = 0.01;
+                  if (Math.abs(userNum - backendNum) <= tolerance && userValue !== backendValue) {
+                    // Values are numerically equivalent but formatted differently
+                    // Keep user's formatted value (preserves their input format)
+                    merged[key] = userValue;
+                  }
+                } else if (userValue) {
+                  // Backend doesn't have this value, but user has it in state
+                  // This could be a value user just entered but backend hasn't confirmed yet
+                  // Keep user's value
+                  merged[key] = userValue;
+                }
+              });
+              return merged;
+            });
             setCoinTradeStatus(cleanedTradeStatus);
             setCoinSLPercent(cleanedSLPercent);
             setCoinTPPercent(cleanedTPPercent);
@@ -9427,8 +9452,16 @@ ${marginText}
                                     ? result.trade_amount_usd.toString()
                                     : '';
                                   
-                                  // Only update if backend value differs (sync with backend)
-                                  if (backendValue !== numValue.toString()) {
+                                  // Only update if backend value differs significantly (sync with backend)
+                                  // Compare numerically to avoid issues with string formatting (e.g., "10" vs "10.0")
+                                  const backendNum = parseFloat(backendValue);
+                                  const savedNum = numValue;
+                                  const difference = Math.abs(backendNum - savedNum);
+                                  const tolerance = 0.01; // Allow 1 cent difference for floating point precision
+                                  
+                                  // Only update if there's a significant difference (more than tolerance)
+                                  if (backendValue && (isNaN(backendNum) || difference > tolerance)) {
+                                    logger.info(`🔄 Backend returned different value: ${backendValue} vs saved ${numValue}. Updating to backend value.`);
                                     setCoinAmounts(prev => ({
                                       ...prev,
                                       [backendSymbolUpper]: backendValue
@@ -9442,6 +9475,9 @@ ${marginText}
                                       [backendSymbolUpper]: backendValue
                                     };
                                     localStorage.setItem('watchlist_amounts', JSON.stringify(updatedAmounts));
+                                  } else {
+                                    // Backend value matches (within tolerance) - keep the user's formatted value
+                                    logger.info(`✅ Backend confirmed value: ${backendValue} matches saved value: ${numValue}`);
                                   }
                                   
                                   // Log backend message if available

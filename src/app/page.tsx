@@ -6011,14 +6011,22 @@ function resolveDecisionIndexColor(value: number): string {
         const isActiveTrade = coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] === true;
         if (!isActiveTrade) return;
         
-        // Only calculate if we don't have saved values for this coin
+        // Check if user has manually set SL/TP percentages (these should not be overwritten)
+        const symbolKey = normalizeSymbolKey(coin.instrument_name);
+        const hasManualSLPercent = coinSLPercent[symbolKey] && coinSLPercent[symbolKey] !== '';
+        const hasManualTPPercent = coinTPPercent[symbolKey] && coinTPPercent[symbolKey] !== '';
+        
+        // Only calculate if we don't have saved values for this coin AND user hasn't manually set percentages
         const hasSavedSL = calculatedSL[coin.instrument_name] !== undefined && calculatedSL[coin.instrument_name] !== 0;
         const hasSavedTP = calculatedTP[coin.instrument_name] !== undefined && calculatedTP[coin.instrument_name] !== 0;
         const hasSignal = signals[coin.instrument_name];
         // Calculate even if resistance levels are missing (will use fallback percentages)
         
-        // Calculate SL/TP if we don't have saved values AND we have signal data (even without resistance levels)
-        if ((!hasSavedSL || !hasSavedTP) && hasSignal) {
+        // Calculate SL/TP if:
+        // 1. We don't have saved values AND
+        // 2. User hasn't manually set percentages AND
+        // 3. We have signal data (even without resistance levels)
+        if ((!hasSavedSL || !hasSavedTP) && !hasManualSLPercent && !hasManualTPPercent && hasSignal) {
           const values = calculateSLTPValues(coin);
           // Accept values even if they're fallback percentages (still > 0)
           if (values.sl > 0 && values.tp > 0) {
@@ -6028,18 +6036,23 @@ function resolveDecisionIndexColor(value: number): string {
             
             // IMPORTANT: Save calculated SL/TP prices to backend so they can be used for order creation
             // These are the exact values shown in the dashboard - save them directly
-            (async () => {
-              try {
-                const settingsToSave: Partial<CoinSettings> = {
-                  sl_price: values.sl,
-                  tp_price: values.tp
-                };
-                await saveCoinSettings(coin.instrument_name, settingsToSave);
-                logger.info(`✅ Saved calculated SL/TP prices to backend for ${coin.instrument_name}:`, settingsToSave);
-              } catch (err) {
-                logger.warn(`⚠️ Failed to save calculated SL/TP prices for ${coin.instrument_name}:`, err);
-              }
-            })();
+            // BUT: Only save if user hasn't manually set percentages (to avoid overwriting manual values)
+            if (!hasManualSLPercent && !hasManualTPPercent) {
+              (async () => {
+                try {
+                  const settingsToSave: Partial<CoinSettings> = {
+                    sl_price: values.sl,
+                    tp_price: values.tp
+                  };
+                  await saveCoinSettings(coin.instrument_name, settingsToSave);
+                  logger.info(`✅ Saved calculated SL/TP prices to backend for ${coin.instrument_name}:`, settingsToSave);
+                } catch (err) {
+                  logger.warn(`⚠️ Failed to save calculated SL/TP prices for ${coin.instrument_name}:`, err);
+                }
+              })();
+            } else {
+              logger.info(`⏭️ Skipping auto-save for ${coin.instrument_name} - user has manually set percentages`);
+            }
           }
         }
       });
@@ -6063,12 +6076,17 @@ function resolveDecisionIndexColor(value: number): string {
         const isActiveTrade = coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] === true;
         if (!isActiveTrade) return;
         
-        // Only calculate if we don't have saved values for this coin AND we have signals
+        // Check if user has manually set SL/TP percentages (these should not be overwritten)
+        const symbolKey = normalizeSymbolKey(coin.instrument_name);
+        const hasManualSLPercent = coinSLPercent[symbolKey] && coinSLPercent[symbolKey] !== '';
+        const hasManualTPPercent = coinTPPercent[symbolKey] && coinTPPercent[symbolKey] !== '';
+        
+        // Only calculate if we don't have saved values for this coin AND user hasn't manually set percentages AND we have signals
         const hasSavedSL = calculatedSL[coin.instrument_name] !== undefined && calculatedSL[coin.instrument_name] !== 0;
         const hasSavedTP = calculatedTP[coin.instrument_name] !== undefined && calculatedTP[coin.instrument_name] !== 0;
         const hasSignal = signals[coin.instrument_name] && signals[coin.instrument_name]?.res_up && signals[coin.instrument_name]?.res_down;
         
-        if ((!hasSavedSL || !hasSavedTP) && hasSignal) {
+        if ((!hasSavedSL || !hasSavedTP) && !hasManualSLPercent && !hasManualTPPercent && hasSignal) {
           const values = calculateSLTPValues(coin);
           if (values.sl > 0 && values.tp > 0) {
             logger.info(`Setting calculated values for ${coin.instrument_name}:`, values);
@@ -6085,23 +6103,28 @@ function resolveDecisionIndexColor(value: number): string {
             
             // IMPORTANT: Save calculated SL/TP prices to backend so they can be used for order creation
             // These are the exact values shown in the dashboard - save them directly
-            (async () => {
-              try {
-                const settingsToSave: Partial<CoinSettings> = {
-                  sl_price: values.sl,
-                  tp_price: values.tp
-                };
-                await saveCoinSettings(coin.instrument_name, settingsToSave);
-                logger.info(`✅ Saved calculated SL/TP prices to backend for ${coin.instrument_name}:`, settingsToSave);
-              } catch (err) {
-                logger.warn(`⚠️ Failed to save calculated SL/TP prices for ${coin.instrument_name}:`, err);
-              }
-            })();
+            // BUT: Only save if user hasn't manually set percentages (to avoid overwriting manual values)
+            if (!hasManualSLPercent && !hasManualTPPercent) {
+              (async () => {
+                try {
+                  const settingsToSave: Partial<CoinSettings> = {
+                    sl_price: values.sl,
+                    tp_price: values.tp
+                  };
+                  await saveCoinSettings(coin.instrument_name, settingsToSave);
+                  logger.info(`✅ Saved calculated SL/TP prices to backend for ${coin.instrument_name}:`, settingsToSave);
+                } catch (err) {
+                  logger.warn(`⚠️ Failed to save calculated SL/TP prices for ${coin.instrument_name}:`, err);
+                }
+              })();
+            } else {
+              logger.info(`⏭️ Skipping auto-save for ${coin.instrument_name} - user has manually set percentages`);
+            }
           }
         }
       });
     }
-  }, [signals, calculateSLTPValues, calculatedSL, calculatedTP, coinTradeStatus]);
+  }, [signals, calculateSLTPValues, calculatedSL, calculatedTP, coinTradeStatus, coinSLPercent, coinTPPercent]);
 
   // Load saved SL/TP values when coins are loaded (only for active trades)
   useEffect(() => {
@@ -6112,12 +6135,17 @@ function resolveDecisionIndexColor(value: number): string {
         const isActiveTrade = coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] === true;
         if (!isActiveTrade) return;
         
+        // Check if user has manually set SL/TP percentages (these should not be overwritten)
+        const symbolKey = normalizeSymbolKey(coin.instrument_name);
+        const hasManualSLPercent = coinSLPercent[symbolKey] && coinSLPercent[symbolKey] !== '';
+        const hasManualTPPercent = coinTPPercent[symbolKey] && coinTPPercent[symbolKey] !== '';
+        
         // Check if we have saved values for this coin
         const hasSavedSL = calculatedSL[coin.instrument_name] !== undefined && calculatedSL[coin.instrument_name] !== 0;
         const hasSavedTP = calculatedTP[coin.instrument_name] !== undefined && calculatedTP[coin.instrument_name] !== 0;
         
-        // If we don't have saved values, try to calculate them
-        if (!hasSavedSL || !hasSavedTP) {
+        // If we don't have saved values AND user hasn't manually set percentages, try to calculate them
+        if ((!hasSavedSL || !hasSavedTP) && !hasManualSLPercent && !hasManualTPPercent) {
           const signal = signals[coin?.instrument_name];
           if (signal && signal.res_up && signal.res_down) {
             const values = calculateSLTPValues(coin);
@@ -6130,7 +6158,7 @@ function resolveDecisionIndexColor(value: number): string {
         }
       });
     }
-  }, [topCoinsRef.current.length, signals, calculateSLTPValues, calculatedSL, calculatedTP, coinTradeStatus]);
+  }, [topCoinsRef.current.length, signals, calculateSLTPValues, calculatedSL, calculatedTP, coinTradeStatus, coinSLPercent, coinTPPercent]);
 
   return (
     <div className="container mx-auto p-8">
@@ -8051,79 +8079,26 @@ function resolveDecisionIndexColor(value: number): string {
                         </div>
                       </div>
 
-                      {/* Alert Cooldown Minutes */}
+                      {/* Alert Cooldown Minutes - DEPRECATED */}
                       <div>
-                        <h5 className="font-semibold mb-3 text-purple-700">⏱️ Alert Cooldown</h5>
+                        <h5 className="font-semibold mb-3 text-purple-700">
+                          ⏱️ Alert Cooldown <span className="text-xs text-red-600 font-normal">(Deprecated)</span>
+                        </h5>
                         <div>
                           <label className="block text-sm font-medium mb-2">Cooldown Between Alerts (minutes)</label>
                           <input
                             type="number"
-                            step="1"
-                            min="1"
-                            placeholder="5"
-                            title="Minimum minutes between same-side alerts (e.g., 5 minutes between BUY alerts)"
-                            value={currentRules.alertCooldownMinutes ?? 5}
-                            onChange={(e) => {
-                              const inputValue = e.target.value;
-                              // Allow empty input while typing
-                              if (inputValue === '') {
-                                setPresetsConfig(prev => ({
-                                  ...prev,
-                                  [selectedConfigPreset]: {
-                                    ...prev[selectedConfigPreset],
-                                    rules: {
-                                      ...prev[selectedConfigPreset].rules,
-                                      [selectedConfigRisk]: {
-                                        ...prev[selectedConfigPreset].rules[selectedConfigRisk],
-                                        alertCooldownMinutes: undefined
-                                      }
-                                    }
-                                  }
-                                }));
-                                return;
-                              }
-                              const value = parseFloat(inputValue);
-                              if (!isNaN(value) && value >= 1) {
-                                setPresetsConfig(prev => ({
-                                  ...prev,
-                                  [selectedConfigPreset]: {
-                                    ...prev[selectedConfigPreset],
-                                    rules: {
-                                      ...prev[selectedConfigPreset].rules,
-                                      [selectedConfigRisk]: {
-                                        ...prev[selectedConfigPreset].rules[selectedConfigRisk],
-                                        alertCooldownMinutes: value
-                                      }
-                                    }
-                                  }
-                                }));
-                              }
-                            }}
-                            onBlur={(e) => {
-                              // Ensure a valid value on blur
-                              const value = parseFloat(e.target.value);
-                              if (isNaN(value) || value < 1) {
-                                setPresetsConfig(prev => ({
-                                  ...prev,
-                                  [selectedConfigPreset]: {
-                                    ...prev[selectedConfigPreset],
-                                    rules: {
-                                      ...prev[selectedConfigPreset].rules,
-                                      [selectedConfigRisk]: {
-                                        ...prev[selectedConfigPreset].rules[selectedConfigRisk],
-                                        alertCooldownMinutes: 5
-                                      }
-                                    }
-                                  }
-                                }));
-                              }
-                            }}
-                            className="w-full border border-purple-300 rounded px-3 py-2"
+                            step="0.1"
+                            min="0.1"
+                            placeholder="1.0"
+                            title="Alert throttling is fixed at 60 seconds (1.0 minute) and is not configurable. This field is deprecated."
+                            value={1.0}
+                            disabled
+                            readOnly
+                            className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100 text-gray-600 cursor-not-allowed"
                           />
                           <p className="text-xs text-gray-600 mt-1">
-                            Minimum time in minutes between same-side alerts. Requires BOTH cooldown AND minimum price change to be met before sending a new alert. 
-                            Lower values = more frequent alerts (more aggressive). Higher values = fewer alerts (more conservative).
-                            Default: 5 minutes
+                            <span className="font-semibold text-red-600">Deprecated:</span> Alert throttling is fixed at <strong>60 seconds (1.0 minute)</strong> and is not configurable per coin or strategy. This field is kept for backward compatibility but does not affect system behavior.
                           </p>
                         </div>
                       </div>
@@ -9182,63 +9157,85 @@ ${marginText}
 
                           const numValue = parseFloat(rawValue);
                           if (!isNaN(numValue) && numValue > 0) {
-                            try {
-                              // Save to backend first (source of truth)
-                              const result = await saveCoinSettings(symbol, { trade_amount_usd: numValue });
-                              logger.info(`✅ Saved Amount USD=${numValue} for ${symbol} in backend`);
-                              
-                              // Update state with backend response
-                              if (result && result.symbol) {
-                                const symbolUpper = result.symbol.toUpperCase();
-                                const backendValue = result.trade_amount_usd !== null && result.trade_amount_usd !== undefined
-                                  ? result.trade_amount_usd.toString()
-                                  : '';
+                            const symbolUpper = symbol.toUpperCase();
+                            
+                            // OPTIMISTIC UPDATE: Show success message immediately
+                            setAlertSavedMessages(prev => ({
+                              ...prev,
+                              [messageKey]: { type: 'success', timestamp: Date.now() }
+                            }));
+                            
+                            // Update state immediately (optimistic)
+                            setCoinAmounts(prev => ({
+                              ...prev,
+                              [symbolUpper]: numValue.toString()
+                            }));
+                            
+                            // Update localStorage immediately
+                            const existingAmounts = localStorage.getItem('watchlist_amounts');
+                            const existingAmountsObj = existingAmounts ? JSON.parse(existingAmounts) as Record<string, string> : {};
+                            const updatedAmounts = {
+                              ...existingAmountsObj,
+                              [symbolUpper]: numValue.toString()
+                            };
+                            localStorage.setItem('watchlist_amounts', JSON.stringify(updatedAmounts));
+                            
+                            // Clear message after 3 seconds
+                            if (savedMessageTimersRef.current[messageKey]) {
+                              clearTimeout(savedMessageTimersRef.current[messageKey]);
+                            }
+                            savedMessageTimersRef.current[messageKey] = setTimeout(() => {
+                              setAlertSavedMessages(prev => {
+                                const { [messageKey]: _removed, ...rest } = prev;
+                                return rest;
+                              });
+                              delete savedMessageTimersRef.current[messageKey];
+                            }, 3000);
+                            
+                            // Save to backend (async, in background)
+                            (async () => {
+                              try {
+                                const result = await saveCoinSettings(symbol, { trade_amount_usd: numValue });
+                                logger.info(`✅ Saved Amount USD=${numValue} for ${symbol} in backend`);
                                 
-                                // Update state with backend value
-                                setCoinAmounts(prev => ({
-                                  ...prev,
-                                  [symbolUpper]: backendValue
-                                }));
-                                
-                                // Update localStorage with backend value
-                                const existingAmounts = localStorage.getItem('watchlist_amounts');
-                                const existingAmountsObj = existingAmounts ? JSON.parse(existingAmounts) as Record<string, string> : {};
-                                const updatedAmounts = {
-                                  ...existingAmountsObj,
-                                  [symbolUpper]: backendValue
-                                };
-                                localStorage.setItem('watchlist_amounts', JSON.stringify(updatedAmounts));
-                                
-                                // Show success message
+                                // Update with backend response (source of truth)
+                                if (result && result.symbol) {
+                                  const backendSymbolUpper = result.symbol.toUpperCase();
+                                  const backendValue = result.trade_amount_usd !== null && result.trade_amount_usd !== undefined
+                                    ? result.trade_amount_usd.toString()
+                                    : '';
+                                  
+                                  // Only update if backend value differs (sync with backend)
+                                  if (backendValue !== numValue.toString()) {
+                                    setCoinAmounts(prev => ({
+                                      ...prev,
+                                      [backendSymbolUpper]: backendValue
+                                    }));
+                                    
+                                    // Update localStorage with backend value
+                                    const existingAmounts = localStorage.getItem('watchlist_amounts');
+                                    const existingAmountsObj = existingAmounts ? JSON.parse(existingAmounts) as Record<string, string> : {};
+                                    const updatedAmounts = {
+                                      ...existingAmountsObj,
+                                      [backendSymbolUpper]: backendValue
+                                    };
+                                    localStorage.setItem('watchlist_amounts', JSON.stringify(updatedAmounts));
+                                  }
+                                  
+                                  // Log backend message if available
+                                  if (result.message) {
+                                    logger.info(`✅ Backend: ${result.message}`);
+                                  }
+                                }
+                              } catch (err) {
+                                logger.warn(`⚠️ Backend save failed for ${symbol}:`, err);
+                                // Update message to error if save failed
                                 setAlertSavedMessages(prev => ({
                                   ...prev,
-                                  [messageKey]: { type: 'success', timestamp: Date.now() }
+                                  [messageKey]: { type: 'error', timestamp: Date.now() }
                                 }));
-                                
-                                // Clear message after 3 seconds
-                                if (savedMessageTimersRef.current[messageKey]) {
-                                  clearTimeout(savedMessageTimersRef.current[messageKey]);
-                                }
-                                savedMessageTimersRef.current[messageKey] = setTimeout(() => {
-                                  setAlertSavedMessages(prev => {
-                                    const { [messageKey]: _removed, ...rest } = prev;
-                                    return rest;
-                                  });
-                                  delete savedMessageTimersRef.current[messageKey];
-                                }, 3000);
-                                
-                                // Log backend message if available
-                                if (result.message) {
-                                  logger.info(`✅ Backend: ${result.message}`);
-                                }
                               }
-                            } catch (err) {
-                              logger.warn(`⚠️ Backend save failed for ${symbol}:`, err);
-                              setAlertSavedMessages(prev => ({
-                                ...prev,
-                                [messageKey]: { type: 'error', timestamp: Date.now() }
-                              }));
-                            }
+                            })();
                             return;
                           }
 
@@ -9563,76 +9560,95 @@ ${marginText}
                               }));
                             }
                           } else if (!isNaN(numValue) && numValue > 0) {
-                            // Valid value - save to backend first (source of truth)
-                            try {
-                              const result = await saveCoinSettings(symbol, { sl_percentage: numValue });
-                              logger.info(`✅ Saved SL%=${numValue} for ${symbol} in backend`);
-                              
-                              // Update state with backend response
-                              if (result && result.symbol) {
-                                const symbolUpper = result.symbol.toUpperCase();
-                                const backendValue = result.sl_percentage !== null && result.sl_percentage !== undefined && result.sl_percentage !== 0
-                                  ? result.sl_percentage.toString()
-                                  : '';
-                                
-                                // Update state with backend value
-                                if (backendValue) {
-                                  setCoinSLPercent(prev => ({
-                                    ...prev,
-                                    [symbolUpper]: backendValue
-                                  }));
-                                  
-                                  // Update localStorage with backend value
-                                  const existingSLPercent = localStorage.getItem('watchlist_sl_percent');
-                                  const existingSLPercentObj = existingSLPercent ? JSON.parse(existingSLPercent) as Record<string, string> : {};
-                                  const updatedSLPercent = {
-                                    ...existingSLPercentObj,
-                                    [symbolUpper]: backendValue
-                                  };
-                                  localStorage.setItem('watchlist_sl_percent', JSON.stringify(updatedSLPercent));
-                                } else {
-                                  // Backend returned null/0 - clear from state
-                                  setCoinSLPercent(prev => {
-                                    const { [symbolUpper]: _removed, ...rest } = prev;
-                                    return rest;
-                                  });
-                                  
-                                  const existingSLPercent = localStorage.getItem('watchlist_sl_percent');
-                                  const existingSLPercentObj = existingSLPercent ? JSON.parse(existingSLPercent) as Record<string, string> : {};
-                                  const { [symbolUpper]: _removed2, ...cleanedSLPercent } = existingSLPercentObj;
-                                  localStorage.setItem('watchlist_sl_percent', JSON.stringify(cleanedSLPercent));
-                                }
-                              }
-                              
-                              // Show success message
-                              setAlertSavedMessages(prev => ({
-                                ...prev,
-                                [messageKey]: { type: 'success', timestamp: Date.now() }
-                              }));
-                              
-                              // Clear message after 3 seconds
-                              if (savedMessageTimersRef.current[messageKey]) {
-                                clearTimeout(savedMessageTimersRef.current[messageKey]);
-                              }
-                              savedMessageTimersRef.current[messageKey] = setTimeout(() => {
-                                setAlertSavedMessages(prev => {
-                                  const { [messageKey]: _removed, ...rest } = prev;
-                                  return rest;
-                                });
-                                delete savedMessageTimersRef.current[messageKey];
-                              }, 3000);
-                              
-                              // Log backend message if available
-                              if (result.message) {
-                                logger.info(`✅ Backend: ${result.message}`);
-                              }
-                            } catch (err) {
-                              logger.warn('⚠️ Backend save failed for SL%', err);
-                              setAlertSavedMessages(prev => ({
-                                ...prev,
-                                [messageKey]: { type: 'error', timestamp: Date.now() }
-                              }));
+                            // Valid value - OPTIMISTIC UPDATE: Show success message immediately
+                            const symbolUpper = symbol.toUpperCase();
+                            
+                            setAlertSavedMessages(prev => ({
+                              ...prev,
+                              [messageKey]: { type: 'success', timestamp: Date.now() }
+                            }));
+                            
+                            // Update state immediately (optimistic)
+                            setCoinSLPercent(prev => ({
+                              ...prev,
+                              [symbolUpper]: numValue.toString()
+                            }));
+                            
+                            // Update localStorage immediately
+                            const existingSLPercent = localStorage.getItem('watchlist_sl_percent');
+                            const existingSLPercentObj = existingSLPercent ? JSON.parse(existingSLPercent) as Record<string, string> : {};
+                            const updatedSLPercent = {
+                              ...existingSLPercentObj,
+                              [symbolUpper]: numValue.toString()
+                            };
+                            localStorage.setItem('watchlist_sl_percent', JSON.stringify(updatedSLPercent));
+                            
+                            // Clear message after 3 seconds
+                            if (savedMessageTimersRef.current[messageKey]) {
+                              clearTimeout(savedMessageTimersRef.current[messageKey]);
                             }
+                            savedMessageTimersRef.current[messageKey] = setTimeout(() => {
+                              setAlertSavedMessages(prev => {
+                                const { [messageKey]: _removed, ...rest } = prev;
+                                return rest;
+                              });
+                              delete savedMessageTimersRef.current[messageKey];
+                            }, 3000);
+                            
+                            // Save to backend (async, in background)
+                            (async () => {
+                              try {
+                                const result = await saveCoinSettings(symbol, { sl_percentage: numValue });
+                                logger.info(`✅ Saved SL%=${numValue} for ${symbol} in backend`);
+                                
+                                // Update with backend response (source of truth)
+                                if (result && result.symbol) {
+                                  const backendSymbolUpper = result.symbol.toUpperCase();
+                                  const backendValue = result.sl_percentage !== null && result.sl_percentage !== undefined && result.sl_percentage !== 0
+                                    ? result.sl_percentage.toString()
+                                    : '';
+                                  
+                                  // Only update if backend value differs (sync with backend)
+                                  if (backendValue && backendValue !== numValue.toString()) {
+                                    setCoinSLPercent(prev => ({
+                                      ...prev,
+                                      [backendSymbolUpper]: backendValue
+                                    }));
+                                    
+                                    // Update localStorage with backend value
+                                    const existingSLPercent = localStorage.getItem('watchlist_sl_percent');
+                                    const existingSLPercentObj = existingSLPercent ? JSON.parse(existingSLPercent) as Record<string, string> : {};
+                                    const updatedSLPercent = {
+                                      ...existingSLPercentObj,
+                                      [backendSymbolUpper]: backendValue
+                                    };
+                                    localStorage.setItem('watchlist_sl_percent', JSON.stringify(updatedSLPercent));
+                                  } else if (!backendValue) {
+                                    // Backend returned null/0 - clear from state
+                                    setCoinSLPercent(prev => {
+                                      const { [symbolUpper]: _removed, ...rest } = prev;
+                                      return rest;
+                                    });
+                                    
+                                    const existingSLPercent = localStorage.getItem('watchlist_sl_percent');
+                                    const existingSLPercentObj = existingSLPercent ? JSON.parse(existingSLPercent) as Record<string, string> : {};
+                                    const { [symbolUpper]: _removed2, ...cleanedSLPercent } = existingSLPercentObj;
+                                    localStorage.setItem('watchlist_sl_percent', JSON.stringify(cleanedSLPercent));
+                                  }
+                                  
+                                  // Log backend message if available
+                                  if (result.message) {
+                                    logger.info(`✅ Backend: ${result.message}`);
+                                  }
+                                }
+                              } catch (err) {
+                                logger.warn('⚠️ Backend save failed for SL%', err);
+                                setAlertSavedMessages(prev => ({
+                                  ...prev,
+                                  [messageKey]: { type: 'error', timestamp: Date.now() }
+                                }));
+                              }
+                            })();
                           }
                         }}
                         onKeyDown={(e) => {
@@ -9784,76 +9800,96 @@ ${marginText}
                               }));
                             }
                           } else if (!isNaN(numValue) && numValue > 0) {
-                            // Valid value - save to backend first (source of truth)
-                            try {
-                              const result = await saveCoinSettings(symbol, { tp_percentage: numValue });
-                              logger.info(`✅ Saved TP%=${numValue} for ${symbol} in backend`);
-                              
-                              // Update state with backend response
-                              if (result && result.symbol) {
-                                const symbolUpper = result.symbol.toUpperCase();
-                                const backendValue = result.tp_percentage !== null && result.tp_percentage !== undefined && result.tp_percentage !== 0
-                                  ? result.tp_percentage.toString()
-                                  : '';
-                                
-                                // Update state with backend value
-                                if (backendValue) {
-                                  setCoinTPPercent(prev => ({
-                                    ...prev,
-                                    [symbolUpper]: backendValue
-                                  }));
-                                  
-                                  // Update localStorage with backend value
-                                  const existingTPPercent = localStorage.getItem('watchlist_tp_percent');
-                                  const existingTPPercentObj = existingTPPercent ? JSON.parse(existingTPPercent) as Record<string, string> : {};
-                                  const updatedTPPercent = {
-                                    ...existingTPPercentObj,
-                                    [symbolUpper]: backendValue
-                                  };
-                                  localStorage.setItem('watchlist_tp_percent', JSON.stringify(updatedTPPercent));
-                                } else {
-                                  // Backend returned null/0 - clear from state
-                                  setCoinTPPercent(prev => {
-                                    const { [symbolUpper]: _removed, ...rest } = prev;
-                                    return rest;
-                                  });
-                                  
-                                  const existingTPPercent = localStorage.getItem('watchlist_tp_percent');
-                                  const existingTPPercentObj = existingTPPercent ? JSON.parse(existingTPPercent) as Record<string, string> : {};
-                                  const { [symbolUpper]: _removed2, ...cleanedTPPercent } = existingTPPercentObj;
-                                  localStorage.setItem('watchlist_tp_percent', JSON.stringify(cleanedTPPercent));
-                                }
-                              }
-                              
-                              // Show success message
-                              setAlertSavedMessages(prev => ({
-                                ...prev,
-                                [messageKey]: { type: 'success', timestamp: Date.now() }
-                              }));
-                              
-                              // Clear message after 3 seconds
-                              if (savedMessageTimersRef.current[messageKey]) {
-                                clearTimeout(savedMessageTimersRef.current[messageKey]);
-                              }
-                              savedMessageTimersRef.current[messageKey] = setTimeout(() => {
-                                setAlertSavedMessages(prev => {
-                                  const { [messageKey]: _removed, ...rest } = prev;
-                                  return rest;
-                                });
-                                delete savedMessageTimersRef.current[messageKey];
-                              }, 3000);
-                              
-                              // Log backend message if available
-                              if (result.message) {
-                                logger.info(`✅ Backend: ${result.message}`);
-                              }
-                            } catch (err) {
-                              logger.warn('⚠️ Backend save failed for TP%', err);
-                              setAlertSavedMessages(prev => ({
-                                ...prev,
-                                [messageKey]: { type: 'error', timestamp: Date.now() }
-                              }));
+                            // Valid value - OPTIMISTIC UPDATE: Show success message immediately
+                            const symbolUpper = symbol.toUpperCase();
+                            
+                            setAlertSavedMessages(prev => ({
+                              ...prev,
+                              [messageKey]: { type: 'success', timestamp: Date.now() }
+                            }));
+                            
+                            // Update state immediately (optimistic)
+                            setCoinTPPercent(prev => ({
+                              ...prev,
+                              [symbolUpper]: numValue.toString()
+                            }));
+                            
+                            // Update localStorage immediately
+                            const existingTPPercent = localStorage.getItem('watchlist_tp_percent');
+                            const existingTPPercentObj = existingTPPercent ? JSON.parse(existingTPPercent) as Record<string, string> : {};
+                            const updatedTPPercent = {
+                              ...existingTPPercentObj,
+                              [symbolUpper]: numValue.toString()
+                            };
+                            localStorage.setItem('watchlist_tp_percent', JSON.stringify(updatedTPPercent));
+                            
+                            // Clear message after 3 seconds
+                            if (savedMessageTimersRef.current[messageKey]) {
+                              clearTimeout(savedMessageTimersRef.current[messageKey]);
                             }
+                            savedMessageTimersRef.current[messageKey] = setTimeout(() => {
+                              setAlertSavedMessages(prev => {
+                                const { [messageKey]: _removed, ...rest } = prev;
+                                return rest;
+                              });
+                              delete savedMessageTimersRef.current[messageKey];
+                            }, 3000);
+                            
+                            // Save to backend (async, in background)
+                            (async () => {
+                              try {
+                                const result = await saveCoinSettings(symbol, { tp_percentage: numValue });
+                                logger.info(`✅ Saved TP%=${numValue} for ${symbol} in backend`);
+                                
+                                // Update with backend response (source of truth)
+                                if (result && result.symbol) {
+                                  const backendSymbolUpper = result.symbol.toUpperCase();
+                                  const backendValue = result.tp_percentage !== null && result.tp_percentage !== undefined && result.tp_percentage !== 0
+                                    ? result.tp_percentage.toString()
+                                    : '';
+                                  
+                                  // Only update if backend value differs (sync with backend)
+                                  if (backendValue && backendValue !== numValue.toString()) {
+                                    setCoinTPPercent(prev => ({
+                                      ...prev,
+                                      [backendSymbolUpper]: backendValue
+                                    }));
+                                    
+                                    // Update localStorage with backend value
+                                    const existingTPPercent = localStorage.getItem('watchlist_tp_percent');
+                                    const existingTPPercentObj = existingTPPercent ? JSON.parse(existingTPPercent) as Record<string, string> : {};
+                                    const updatedTPPercent = {
+                                      ...existingTPPercentObj,
+                                      [backendSymbolUpper]: backendValue
+                                    };
+                                    localStorage.setItem('watchlist_tp_percent', JSON.stringify(updatedTPPercent));
+                                  } else if (!backendValue) {
+                                    // Backend returned null/0 - clear from state
+                                    setCoinTPPercent(prev => {
+                                      const { [backendSymbolUpper]: _removed, ...rest } = prev;
+                                      return rest;
+                                    });
+                                    
+                                    const existingTPPercent = localStorage.getItem('watchlist_tp_percent');
+                                    const existingTPPercentObj = existingTPPercent ? JSON.parse(existingTPPercent) as Record<string, string> : {};
+                                    const { [backendSymbolUpper]: _removed2, ...cleanedTPPercent } = existingTPPercentObj;
+                                    localStorage.setItem('watchlist_tp_percent', JSON.stringify(cleanedTPPercent));
+                                  }
+                                  
+                                  // Log backend message if available
+                                  if (result.message) {
+                                    logger.info(`✅ Backend: ${result.message}`);
+                                  }
+                                }
+                              } catch (err) {
+                                logger.warn('⚠️ Backend save failed for TP%', err);
+                                // Update message to error if save failed
+                                setAlertSavedMessages(prev => ({
+                                  ...prev,
+                                  [messageKey]: { type: 'error', timestamp: Date.now() }
+                                }));
+                              }
+                            })();
                           }
                         }}
                         onKeyDown={(e) => {

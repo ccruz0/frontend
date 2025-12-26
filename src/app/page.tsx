@@ -4242,15 +4242,31 @@ function resolveDecisionIndexColor(value: number): string {
             let cleanedAlertStatus: Record<string, boolean> = { ...backendAlertStatus };
             
             try {
-              // Amounts: Backend values + preserve non-backend symbols from localStorage
+              // Amounts: Backend values + preserve user values from localStorage if they differ
+              // This allows user changes to persist until backend confirms
               const existingAmounts = localStorage.getItem('watchlist_amounts');
               const existingAmountsObj = existingAmounts ? JSON.parse(existingAmounts) as Record<string, string> : {};
               cleanedAmounts = { ...backendAmounts };
-              Object.entries(existingAmountsObj).forEach(([symbol, value]) => {
+              Object.entries(existingAmountsObj).forEach(([symbol, localStorageValue]) => {
                 const symbolUpper = symbol.toUpperCase();
-                if (!backendSymbols.has(symbolUpper) && !(symbolUpper in cleanedAmounts)) {
+                if (!localStorageValue) return; // Skip empty values
+                
+                const localStorageNum = parseFloat(localStorageValue);
+                if (isNaN(localStorageNum) || localStorageNum <= 0) return; // Skip invalid values
+                
+                const backendValue = backendAmounts[symbolUpper];
+                if (backendValue) {
+                  const backendNum = parseFloat(backendValue);
+                  const tolerance = 0.01;
+                  // If localStorage value differs significantly from backend, preserve localStorage value
+                  // (user may have just changed it and backend hasn't confirmed yet)
+                  if (Math.abs(localStorageNum - backendNum) > tolerance) {
+                    // User value is different - preserve it until backend confirms
+                    cleanedAmounts[symbolUpper] = localStorageValue;
+                  }
+                } else {
                   // Symbol not in backend - preserve localStorage value
-                  cleanedAmounts[symbolUpper] = value;
+                  cleanedAmounts[symbolUpper] = localStorageValue;
                 }
               });
               localStorage.setItem('watchlist_amounts', JSON.stringify(cleanedAmounts));

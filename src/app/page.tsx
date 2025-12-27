@@ -3341,7 +3341,7 @@ function resolveDecisionIndexColor(value: number): string {
   const calculateSLTPValues = useCallback((coin: TopCoin) => {
     const currentPrice = coin?.current_price;
     const signal = signals[coin?.instrument_name];
-    const isAggressive = coinTradeStatus[coin?.instrument_name + '_sl_tp'];
+    const isAggressive = coinTradeStatus[normalizeSymbolKey(coin?.instrument_name) + '_SL_TP'];
     const slOverride = coinSLPercent[coin?.instrument_name];
     const tpOverride = coinTPPercent[coin?.instrument_name];
     
@@ -4206,10 +4206,10 @@ function resolveDecisionIndexColor(value: number): string {
                   backendSellAlertStatus[symbolUpper] = item.sell_alert_enabled;
                 }
                 if (item.trade_on_margin !== undefined && item.trade_on_margin !== null) {
-                  backendMarginStatus[symbolUpper + '_margin'] = item.trade_on_margin;
+                  backendMarginStatus[symbolUpper + '_MARGIN'] = item.trade_on_margin;
                 }
                 if (item.sl_tp_mode === 'aggressive') {
-                  backendSlTpStatus[symbolUpper + '_sl_tp'] = true;
+                  backendSlTpStatus[symbolUpper + '_SL_TP'] = true;
                 }
                 // Only load percentages from backend if they are explicitly set (not null/undefined/0)
                 if (item.sl_percentage !== undefined && item.sl_percentage !== null && item.sl_percentage !== 0) {
@@ -5494,7 +5494,7 @@ function resolveDecisionIndexColor(value: number): string {
     const isAggressive = riskMode === 'Aggressive';
     setCoinTradeStatus(prev => ({
       ...prev,
-      [symbol + '_sl_tp']: isAggressive
+      [normalizeSymbolKey(symbol) + '_SL_TP']: isAggressive
     }));
     
     // Get current coin data for calculations
@@ -5768,8 +5768,8 @@ function resolveDecisionIndexColor(value: number): string {
       delete updatedSL[symbol];
       delete updatedTP[symbol];
       delete updatedStatus[symbol];
-      delete updatedStatus[symbol + '_margin'];
-      delete updatedStatus[symbol + '_sl_tp'];
+      delete updatedStatus[normalizeSymbolKey(symbol) + '_MARGIN'];
+      delete updatedStatus[normalizeSymbolKey(symbol) + '_SL_TP'];
       setCoinAmounts(updatedAmounts);
       setCoinSLPercent(updatedSL);
       setCoinTPPercent(updatedTP);
@@ -9581,7 +9581,7 @@ ${marginText}
                         }`}
                         onClick={async () => {
                           const symbolKey = normalizeSymbolKey(coin.instrument_name);
-                          const marginKey = symbolKey + '_margin';
+                          const marginKey = symbolKey + '_MARGIN';
                           const newValue = !coinTradeStatus[marginKey];
                           setCoinTradeStatus(prev => {
                             const updated = {
@@ -9596,7 +9596,7 @@ ${marginText}
                           await saveCoinSettings(coin.instrument_name, { trade_on_margin: newValue });
                         }}
                       >
-                        {coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_margin'] ? 'YES' : 'NO'}
+                        {coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_MARGIN'] ? 'YES' : 'NO'}
                       </div>
                       {alertSavedMessages[`${coin.instrument_name}_margin`] && (
                         <span className="text-xs text-green-600 font-medium animate-[fadeIn_0.2s_ease-in-out_forwards] whitespace-nowrap">
@@ -9613,8 +9613,9 @@ ${marginText}
                         }`}
                         onClick={async () => {
                           const symbol = coin.instrument_name;
+                          const symbolKey = normalizeSymbolKey(symbol);
                           const messageKey = `${symbol}_risk`;
-                          const newValue = !coinTradeStatus[symbol + '_sl_tp'];
+                          const newValue = !coinTradeStatus[symbolKey + '_SL_TP'];
                           
                           try {
                             // Save to backend first (source of truth)
@@ -9631,7 +9632,7 @@ ${marginText}
                               setCoinTradeStatus(prev => {
                                 const updated = {
                                   ...prev,
-                                  [symbolUpper + '_sl_tp']: backendValue
+                                  [symbolUpper + '_SL_TP']: backendValue
                                 };
                                 // Update localStorage with backend value
                                 localStorage.setItem('watchlist_trade_status', JSON.stringify(updated));
@@ -9727,7 +9728,7 @@ ${marginText}
                             presetType = 'Swing';
                           }
                           
-                          const riskMode = coinTradeStatus[coin?.instrument_name + '_sl_tp'] ? 'Aggressive' : 'Conservative';
+                          const riskMode = coinTradeStatus[normalizeSymbolKey(coin?.instrument_name) + '_SL_TP'] ? 'Aggressive' : 'Conservative';
                           const signal = signals[coin?.instrument_name];
                           return buildTooltip(presetType, riskMode, {
                             rsi: signal?.rsi,
@@ -9739,7 +9740,7 @@ ${marginText}
                           });
                         })()}
                       >
-                        {coinTradeStatus[coin.instrument_name + '_sl_tp'] ? 'Aggressive' : 'Conservative'}
+                        {coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_SL_TP'] ? 'Aggressive' : 'Conservative'}
                       </div>
                       {alertSavedMessages[`${coin.instrument_name}_risk`] && (
                         <span className="text-xs text-green-600 font-medium animate-[fadeIn_0.2s_ease-in-out_forwards] whitespace-nowrap">

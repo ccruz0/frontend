@@ -4275,11 +4275,15 @@ function resolveDecisionIndexColor(value: number): string {
               // This allows user changes (like Margin toggle) to persist until backend confirms
               const existingTradeStatus = localStorage.getItem('watchlist_trade_status');
               const existingTradeStatusObj = existingTradeStatus ? JSON.parse(existingTradeStatus) as Record<string, boolean> : {};
+              
+              // Start with backend values
               cleanedTradeStatus = {
                 ...backendTradeStatus,
                 ...backendMarginStatus,
                 ...backendSlTpStatus
               };
+              
+              // Preserve user values from localStorage if they differ from backend
               Object.entries(existingTradeStatusObj).forEach(([symbol, localStorageValue]) => {
                 const symbolUpper = symbol.toUpperCase();
                 
@@ -4288,8 +4292,10 @@ function resolveDecisionIndexColor(value: number): string {
                 const isSlTpKey = symbolUpper.endsWith('_SL_TP');
                 
                 if (isMarginKey || isSlTpKey) {
-                  // For margin and sl_tp keys, preserve localStorage value if it differs from backend
-                  const backendValue = cleanedTradeStatus[symbolUpper];
+                  // For margin and sl_tp keys, compare with backend values directly
+                  const backendValue = isMarginKey 
+                    ? backendMarginStatus[symbolUpper]
+                    : backendSlTpStatus[symbolUpper];
                   
                   // If localStorage value differs from backend, preserve localStorage value
                   // (user may have just changed it and backend hasn't confirmed yet)

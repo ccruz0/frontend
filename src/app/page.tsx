@@ -9580,11 +9580,13 @@ ${marginText}
                             : 'bg-gray-100 text-gray-500 border border-gray-300'
                         }`}
                         onClick={async () => {
-                          const newValue = !coinTradeStatus[coin.instrument_name + '_margin'];
+                          const symbolKey = normalizeSymbolKey(coin.instrument_name);
+                          const marginKey = symbolKey + '_margin';
+                          const newValue = !coinTradeStatus[marginKey];
                           setCoinTradeStatus(prev => {
                             const updated = {
                               ...prev,
-                              [coin.instrument_name + '_margin']: newValue
+                              [marginKey]: newValue
                             };
                             // Save to localStorage
                             localStorage.setItem('watchlist_trade_status', JSON.stringify(updated));
@@ -9594,7 +9596,7 @@ ${marginText}
                           await saveCoinSettings(coin.instrument_name, { trade_on_margin: newValue });
                         }}
                       >
-                        {coinTradeStatus[coin.instrument_name + '_margin'] ? 'YES' : 'NO'}
+                        {coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_margin'] ? 'YES' : 'NO'}
                       </div>
                       {alertSavedMessages[`${coin.instrument_name}_margin`] && (
                         <span className="text-xs text-green-600 font-medium animate-[fadeIn_0.2s_ease-in-out_forwards] whitespace-nowrap">

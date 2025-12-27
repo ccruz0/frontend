@@ -8986,7 +8986,7 @@ function resolveDecisionIndexColor(value: number): string {
                                     alert(`Por favor configura el Amount USD para ${coin.instrument_name}`);
                                     return;
                                   }
-                                  const useMargin = coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_margin'] || false;
+                                  const useMargin = coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_MARGIN'] || false;
                                   // Use the current price from the dashboard (should be the latest price)
                                   const price = coin.current_price;
                                   if (price == null || price <= 0) {
@@ -9057,7 +9057,7 @@ ${marginText}
                                     alert(`Por favor configura el Amount USD para ${coin.instrument_name}`);
                                     return;
                                   }
-                                  const useMargin = coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_margin'] || false;
+                                  const useMargin = coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_MARGIN'] || false;
                                   // Use the current price from the dashboard (should be the latest price)
                                   const price = coin.current_price;
                                   if (price == null || price <= 0) {
@@ -9575,7 +9575,7 @@ ${marginText}
                     <td className="px-4 py-3 text-center w-14">
                       <div 
                         className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 transition-all w-12 justify-center ${
-                          coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_margin']
+                          coinTradeStatus[normalizeSymbolKey(coin.instrument_name) + '_MARGIN']
                             ? 'bg-yellow-400 text-yellow-900 border border-yellow-500 font-bold'
                             : 'bg-gray-100 text-gray-500 border border-gray-300'
                         }`}

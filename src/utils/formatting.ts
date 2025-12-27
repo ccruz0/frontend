@@ -163,3 +163,6 @@ export function formatTime(date: Date): string {
 export function normalizeSymbolKey(symbol: string | undefined | null): string {
   return symbol ? symbol.toUpperCase() : '';
 }
+
+
+

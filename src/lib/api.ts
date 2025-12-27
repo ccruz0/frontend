@@ -172,6 +172,7 @@ export interface PortfolioAsset {
   reserved_qty: number;
   haircut: number;
   value_usd: number;
+  usd_value?: number;  // Optional alternative field name (backend may return either)
   updated_at: string;
   open_orders_count?: number;
   tp?: number | null;
@@ -336,7 +337,12 @@ const normalizeDashboardBalance = (raw: RawDashboardBalance): DashboardBalance |
   const free = coerceNumber(raw.free ?? raw.available ?? raw.available_qty);
   const locked = coerceNumber(raw.locked ?? raw.reserved ?? raw.reserved_qty);
   const balance = coerceNumber(raw.balance ?? raw.total ?? free + locked);
-  const usdValue = coerceNumber(raw.usd_value ?? raw.market_value ?? raw.value_usd);
+  // IMPORTANT: Preserve 0 values - don't convert to undefined
+  // Check all possible field names for USD value
+  const usdValue = coerceNumber(
+    raw.usd_value ?? raw.market_value ?? raw.value_usd,
+    0  // Default to 0, not undefined
+  );
 
   return {
     asset,
@@ -344,8 +350,13 @@ const normalizeDashboardBalance = (raw: RawDashboardBalance): DashboardBalance |
     free: free || balance,
     locked,
     total: balance,
-    usd_value: usdValue || undefined,
-    market_value: raw.market_value ?? (usdValue || undefined),
+    // Preserve 0 values - only use undefined if the value was never provided
+    usd_value: raw.usd_value !== undefined || raw.market_value !== undefined || raw.value_usd !== undefined
+      ? usdValue
+      : undefined,
+    market_value: raw.market_value !== undefined
+      ? coerceNumber(raw.market_value, 0)
+      : (raw.usd_value !== undefined || raw.value_usd !== undefined ? usdValue : undefined),
     quantity: raw.quantity !== undefined ? coerceNumber(raw.quantity) : undefined,
     max_withdrawal: raw.max_withdrawal !== undefined ? coerceNumber(raw.max_withdrawal) : undefined,
   };
@@ -658,6 +669,8 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
           timeoutMs = 15000; // 15s for watchlist alert updates (increased from 10s to allow for network delays)
         } else if (endpoint.includes('/market/top-coins/custom')) {
           timeoutMs = 30000; // 30s for adding custom coins (database operations)
+        } else if (endpoint.includes('/monitoring/workflows')) {
+          timeoutMs = 150000; // 150s (2.5 minutes) for workflows - may need time for file system operations and initialization
         }
         const controller = new AbortController();
         const timeoutId = setTimeout(() => {
@@ -812,6 +825,8 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
             timeoutSeconds = 10; // 10s for watchlist alert updates (matches timeoutMs)
           } else if (endpoint.includes('/market/top-coins/custom')) {
             timeoutSeconds = 30; // 30s for adding custom coins (matches timeoutMs)
+          } else if (endpoint.includes('/monitoring/workflows')) {
+            timeoutSeconds = 150; // 150s for workflows (matches timeoutMs)
           }
           logRequestIssue(
             endpoint,

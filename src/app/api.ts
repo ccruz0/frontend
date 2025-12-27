@@ -33,6 +33,10 @@ export interface WatchlistItem {
   res_up?: number;
   res_down?: number;
   signals?: TradingSignals;
+  // Per-field update timestamps (from master table)
+  field_updated_at?: Record<string, string>;  // Maps field names to ISO timestamps
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface WatchlistInput {
@@ -95,6 +99,7 @@ export interface PortfolioAsset {
   reserved_qty: number;
   haircut: number;
   value_usd: number;
+  usd_value?: number;  // Optional alternative field name (backend may return either)
   updated_at: string;
   tp?: number;  // Take profit price
   sl?: number;  // Stop loss price
@@ -568,8 +573,19 @@ export async function saveCoinSettings(symbol: string, settings: Partial<CoinSet
     if (settings.min_price_change_pct !== undefined) watchlistUpdate.min_price_change_pct = settings.min_price_change_pct;
     if (settings.sl_percentage !== undefined) watchlistUpdate.sl_percentage = settings.sl_percentage;
     if (settings.tp_percentage !== undefined) watchlistUpdate.tp_percentage = settings.tp_percentage;
-    if (settings.sl_price !== undefined) watchlistUpdate.stop_loss = settings.sl_price;
-    if (settings.tp_price !== undefined) watchlistUpdate.take_profit = settings.tp_price;
+    // CRITICAL: Map sl_price/tp_price to the correct backend fields
+    // Backend has both sl_price/tp_price (calculated) and stop_loss/take_profit (legacy)
+    // We should update sl_price/tp_price for consistency
+    if (settings.sl_price !== undefined) {
+      watchlistUpdate.sl_price = settings.sl_price;
+      // Also update stop_loss for backward compatibility
+      watchlistUpdate.stop_loss = settings.sl_price;
+    }
+    if (settings.tp_price !== undefined) {
+      watchlistUpdate.tp_price = settings.tp_price;
+      // Also update take_profit for backward compatibility
+      watchlistUpdate.take_profit = settings.tp_price;
+    }
     
     // Update the item using the existing updateDashboardItem function
     const updated = await updateDashboardItem(item.id, watchlistUpdate);
@@ -1185,6 +1201,35 @@ export async function updateSellAlert(symbol: string, sellAlertEnabled: boolean)
     logRequestIssue(
       `updateSellAlert:${symbol}`,
       'Handled sell alert update failure',
+      error,
+      'warn'
+    );
+    throw error;
+  }
+}
+
+// Update watchlist item in master table (new unified endpoint)
+export interface UpdateWatchlistItemResponse {
+  ok: boolean;
+  message: string;
+  item: WatchlistItem;
+  updated_fields: string[];
+}
+
+export async function updateWatchlistItem(
+  symbol: string,
+  updates: Partial<WatchlistItem>
+): Promise<UpdateWatchlistItemResponse> {
+  try {
+    const data = await fetchAPI<UpdateWatchlistItemResponse>(`/dashboard/symbol/${symbol}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates)
+    });
+    return data;
+  } catch (error) {
+    logRequestIssue(
+      `updateWatchlistItem:${symbol}`,
+      'Handled watchlist item update failure',
       error,
       'warn'
     );

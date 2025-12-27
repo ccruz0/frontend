@@ -4271,7 +4271,8 @@ function resolveDecisionIndexColor(value: number): string {
               });
               localStorage.setItem('watchlist_amounts', JSON.stringify(cleanedAmounts));
               
-              // Trade Status: Backend values + preserve non-backend symbols
+              // Trade Status: Backend values + preserve user values from localStorage if they differ
+              // This allows user changes (like Margin toggle) to persist until backend confirms
               const existingTradeStatus = localStorage.getItem('watchlist_trade_status');
               const existingTradeStatusObj = existingTradeStatus ? JSON.parse(existingTradeStatus) as Record<string, boolean> : {};
               cleanedTradeStatus = {
@@ -4279,12 +4280,32 @@ function resolveDecisionIndexColor(value: number): string {
                 ...backendMarginStatus,
                 ...backendSlTpStatus
               };
-              Object.entries(existingTradeStatusObj).forEach(([symbol, value]) => {
+              Object.entries(existingTradeStatusObj).forEach(([symbol, localStorageValue]) => {
                 const symbolUpper = symbol.toUpperCase();
-                const isBackendSymbol = backendSymbols.has(symbolUpper) || 
-                  Array.from(backendSymbols).some(bs => symbolUpper.startsWith(bs));
-                if (!isBackendSymbol && !(symbolUpper in cleanedTradeStatus)) {
-                  cleanedTradeStatus[symbolUpper] = value;
+                
+                // Check if this is a margin or sl_tp key (ends with _margin or _sl_tp)
+                const isMarginKey = symbolUpper.endsWith('_MARGIN');
+                const isSlTpKey = symbolUpper.endsWith('_SL_TP');
+                
+                if (isMarginKey || isSlTpKey) {
+                  // For margin and sl_tp keys, preserve localStorage value if it differs from backend
+                  const backendValue = cleanedTradeStatus[symbolUpper];
+                  
+                  // If localStorage value differs from backend, preserve localStorage value
+                  // (user may have just changed it and backend hasn't confirmed yet)
+                  if (backendValue !== undefined && backendValue !== localStorageValue) {
+                    cleanedTradeStatus[symbolUpper] = localStorageValue;
+                  } else if (backendValue === undefined) {
+                    // Backend doesn't have this value - preserve localStorage value
+                    cleanedTradeStatus[symbolUpper] = localStorageValue;
+                  }
+                } else {
+                  // Regular trade status key
+                  const isBackendSymbol = backendSymbols.has(symbolUpper) || 
+                    Array.from(backendSymbols).some(bs => symbolUpper.startsWith(bs));
+                  if (!isBackendSymbol && !(symbolUpper in cleanedTradeStatus)) {
+                    cleanedTradeStatus[symbolUpper] = localStorageValue;
+                  }
                 }
               });
               localStorage.setItem('watchlist_trade_status', JSON.stringify(cleanedTradeStatus));

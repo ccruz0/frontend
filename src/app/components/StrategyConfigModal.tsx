@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { saveTradingConfig, TradingConfig } from '@/app/api';
-import { StrategyRules, Preset, RiskMode } from '@/types/dashboard';
+import type { StrategyRules, Preset, RiskMode } from '@/types/dashboard';
 import { logger } from '@/utils/logger';
 
 interface StrategyConfigModalProps {

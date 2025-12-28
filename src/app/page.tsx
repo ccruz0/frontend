@@ -7,6 +7,7 @@ import { getApiUrl } from '@/lib/environment';
 import { MonitoringNotificationsProvider, useMonitoringNotifications } from '@/app/context/MonitoringNotificationsContext';
 import MonitoringPanel from '@/app/components/MonitoringPanel';
 import ErrorBoundary from '@/app/components/ErrorBoundary';
+import StrategyConfigModal from '@/app/components/StrategyConfigModal';
 import { palette } from '@/theme/palette';
 import { logger } from '@/utils/logger';
 
@@ -4319,12 +4320,63 @@ function resolveDecisionIndexColor(value: number): string {
       }
     }, [coinTradeStatus]);
 
+  // Handler for saving strategy configuration
+  const handleSaveStrategyConfig = useCallback(async (preset: Preset, riskMode: RiskMode, updatedRules: StrategyRules) => {
+    try {
+      // Update local state
+      setPresetsConfig(prev => ({
+        ...prev,
+        [preset]: {
+          ...prev[preset],
+          rules: {
+            ...prev[preset].rules,
+            [riskMode]: updatedRules
+          }
+        }
+      }));
+      
+      logger.info(`Strategy config saved for ${preset} - ${riskMode}`, updatedRules);
+      
+      // Optionally save to backend
+      // Note: Backend expects TradingConfig format, which may differ from PresetConfig
+      // For now, we're updating local state only
+      // TODO: Implement backend save if needed
+    } catch (error) {
+      logger.error('Failed to save strategy config:', error);
+      throw error;
+    }
+  }, []);
+
+  // Get current rules for the selected preset and risk mode
+  const currentRules = presetsConfig[selectedConfigPreset]?.rules[selectedConfigRisk] || PRESET_CONFIG[selectedConfigPreset].rules[selectedConfigRisk];
+
   // TODO: Component return statement and JSX rendering logic should be here
   // This is a placeholder to allow the file to compile
   // The actual JSX that renders the dashboard tabs and content needs to be restored
   return (
-    <div>
-      <p>Dashboard content placeholder - component structure needs to be completed</p>
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
+      <div className="container mx-auto p-4">
+        <div className="mb-4 flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Trading Dashboard</h1>
+          <button
+            onClick={() => setShowSignalConfig(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            ⚙️ Configure Strategy
+          </button>
+        </div>
+        <p className="text-gray-600 dark:text-gray-400">Dashboard content placeholder - component structure needs to be completed</p>
+      </div>
+
+      {/* Strategy Configuration Modal */}
+      <StrategyConfigModal
+        isOpen={showSignalConfig}
+        onClose={() => setShowSignalConfig(false)}
+        preset={selectedConfigPreset}
+        riskMode={selectedConfigRisk}
+        rules={currentRules}
+        onSave={handleSaveStrategyConfig}
+      />
     </div>
   );
 }

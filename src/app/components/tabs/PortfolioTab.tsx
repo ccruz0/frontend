@@ -50,10 +50,6 @@ export default function PortfolioTab({
     return <div className="text-red-500">{portfolioError}</div>;
   }
 
-  if (!portfolio) {
-    return <div>No portfolio data available</div>;
-  }
-
   return (
     <div>
       <div className="mb-4 flex justify-between items-center">
@@ -104,45 +100,60 @@ export default function PortfolioTab({
         </button>
       </div>
 
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold mb-2">Portfolio Summary</h2>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
-            <div className="text-sm text-gray-500">Total Value</div>
-            <div className="text-2xl font-bold">{formatNumber(portfolio.total_value_usd)}</div>
-          </div>
-          {totalBorrowed > 0 && (
-            <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
-              <div className="text-sm text-gray-500">Borrowed</div>
-              <div className="text-2xl font-bold text-red-600">{formatNumber(totalBorrowed)}</div>
-            </div>
-          )}
+      {portfolioError && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded text-red-700">
+          {portfolioError}
         </div>
-      </div>
+      )}
 
-      <div>
-        <h2 className="text-xl font-semibold mb-2">Assets</h2>
-        <div className="overflow-x-auto">
-          <table className="min-w-full">
-            <thead>
-              <tr>
-                <th>Coin</th>
-                <th>Balance</th>
-                <th>Value (USD)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {portfolio.assets.map((asset) => (
-                <tr key={asset.coin}>
-                  <td>{asset.coin}</td>
-                  <td>{formatNumber(asset.balance)}</td>
-                  <td>{formatNumber(asset.value_usd)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {!portfolio || !portfolio.assets || portfolio.assets.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="text-gray-500 text-lg mb-2">No portfolio data available</div>
+          <div className="text-gray-400 text-sm">The portfolio will appear here once you have assets in your account.</div>
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold mb-2">Portfolio Summary</h2>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
+                <div className="text-sm text-gray-500">Total Value</div>
+                <div className="text-2xl font-bold">{formatNumber(portfolio.total_value_usd)}</div>
+              </div>
+              {totalBorrowed > 0 && (
+                <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
+                  <div className="text-sm text-gray-500">Borrowed</div>
+                  <div className="text-2xl font-bold text-red-600">{formatNumber(totalBorrowed)}</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-xl font-semibold mb-2">Assets</h2>
+            <div className="overflow-x-auto">
+              <table className="min-w-full bg-white dark:bg-gray-800 rounded shadow">
+                <thead className="bg-gray-50 dark:bg-gray-700">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Coin</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Balance</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Value (USD)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {portfolio.assets.map((asset) => (
+                    <tr key={asset.coin} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{asset.coin}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{formatNumber(asset.balance)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">{formatNumber(asset.value_usd)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

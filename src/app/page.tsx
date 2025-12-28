@@ -8,6 +8,11 @@ import { MonitoringNotificationsProvider, useMonitoringNotifications } from '@/a
 import MonitoringPanel from '@/app/components/MonitoringPanel';
 import ErrorBoundary from '@/app/components/ErrorBoundary';
 import StrategyConfigModal from '@/app/components/StrategyConfigModal';
+import PortfolioTab from '@/app/components/tabs/PortfolioTab';
+import WatchlistTab from '@/app/components/tabs/WatchlistTab';
+import OrdersTab from '@/app/components/tabs/OrdersTab';
+import ExpectedTakeProfitTab from '@/app/components/tabs/ExpectedTakeProfitTab';
+import ExecutedOrdersTab from '@/app/components/tabs/ExecutedOrdersTab';
 import { palette } from '@/theme/palette';
 import { logger } from '@/utils/logger';
 
@@ -4320,6 +4325,19 @@ function resolveDecisionIndexColor(value: number): string {
       }
     }, [coinTradeStatus]);
 
+  // Set refs for functions to avoid circular dependencies
+  useEffect(() => {
+    fetchPortfolioRef.current = fetchPortfolio;
+    fetchTopCoinsRef.current = fetchTopCoins;
+  }, [fetchPortfolio, fetchTopCoins]);
+
+  // Initial data load on mount
+  useEffect(() => {
+    // Load initial data
+    fetchPortfolio({ showLoader: true });
+    fetchTopCoins(false);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Handler for saving strategy configuration
   const handleSaveStrategyConfig = useCallback(async (preset: Preset, riskMode: RiskMode, updatedRules: StrategyRules) => {
     try {
@@ -4350,12 +4368,22 @@ function resolveDecisionIndexColor(value: number): string {
   // Get current rules for the selected preset and risk mode
   const currentRules = presetsConfig[selectedConfigPreset]?.rules[selectedConfigRisk] || PRESET_CONFIG[selectedConfigPreset].rules[selectedConfigRisk];
 
-  // TODO: Component return statement and JSX rendering logic should be here
-  // This is a placeholder to allow the file to compile
-  // The actual JSX that renders the dashboard tabs and content needs to be restored
+  // Tab navigation configuration
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'portfolio', label: 'Portfolio' },
+    { id: 'watchlist', label: 'Watchlist' },
+    { id: 'signals', label: 'Signals' },
+    { id: 'orders', label: 'Orders' },
+    { id: 'expected-take-profit', label: 'Expected TP' },
+    { id: 'executed-orders', label: 'Executed Orders' },
+    { id: 'monitoring', label: 'Monitoring' },
+    { id: 'version-history', label: 'Version History' },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
       <div className="container mx-auto p-4">
+        {/* Header */}
         <div className="mb-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Trading Dashboard</h1>
           <button
@@ -4365,7 +4393,202 @@ function resolveDecisionIndexColor(value: number): string {
             ⚙️ Configure Strategy
           </button>
         </div>
-        <p className="text-gray-600 dark:text-gray-400">Dashboard content placeholder - component structure needs to be completed</p>
+
+        {/* Tab Navigation Menu */}
+        <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
+          <nav className="flex flex-wrap gap-2 -mb-px">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`
+                  px-4 py-2 text-sm font-medium transition-colors
+                  ${
+                    activeTab === tab.id
+                      ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-400'
+                      : 'text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                  }
+                `}
+              >
+                {tab.label}
+                {tab.id === 'monitoring' && unreadMonitoringCount > 0 && (
+                  <span className="ml-2 px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                    {unreadMonitoringCount}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        <ErrorBoundary>
+          {activeTab === 'portfolio' && (
+            <PortfolioTab
+              portfolio={portfolio}
+              portfolioLoading={portfolioLoading}
+              portfolioError={portfolioError}
+              totalBorrowed={totalBorrowed}
+              snapshotLastUpdated={snapshotLastUpdated}
+              snapshotStale={snapshotStale}
+              snapshotStaleSeconds={snapshotStaleSeconds}
+              botStatus={botStatus}
+              togglingLiveTrading={togglingLiveTrading}
+              isUpdating={isUpdating}
+              topCoinsLoading={topCoinsLoading}
+              onToggleLiveTrading={async () => {
+                setTogglingLiveTrading(true);
+                try {
+                  await toggleLiveTrading();
+                  // Refresh portfolio to get updated bot status
+                  await fetchPortfolio({ showLoader: false, backgroundRefresh: true });
+                } catch (err) {
+                  logger.error('Failed to toggle live trading:', err);
+                } finally {
+                  setTogglingLiveTrading(false);
+                }
+              }}
+              onRefreshPortfolio={() => fetchPortfolio({ showLoader: true })}
+            />
+          )}
+
+          {activeTab === 'watchlist' && (
+            <WatchlistTab
+              botStatus={botStatus}
+              togglingLiveTrading={togglingLiveTrading}
+              isUpdating={isUpdating}
+              topCoinsLoading={topCoinsLoading}
+              portfolioLoading={portfolioLoading}
+              dataSourceStatus={dataSourceStatus ? Object.fromEntries(
+                Object.entries(dataSourceStatus).map(([key, value]) => [
+                  key,
+                  {
+                    available: value.available,
+                    priority: value.priority,
+                    response_time: value.response_time,
+                    last_check: value.last_check
+                  }
+                ])
+              ) : null}
+              fastQueueRateLimited={false}
+              onToggleLiveTrading={async () => {
+                setTogglingLiveTrading(true);
+                try {
+                  await toggleLiveTrading();
+                  await fetchPortfolio({ showLoader: false, backgroundRefresh: true });
+                } catch (err) {
+                  logger.error('Failed to toggle live trading:', err);
+                } finally {
+                  setTogglingLiveTrading(false);
+                }
+              }}
+            />
+          )}
+
+          {activeTab === 'signals' && (
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Signal Configuration</h2>
+              <p>Signals content - to be implemented</p>
+            </div>
+          )}
+
+          {activeTab === 'orders' && (
+            <OrdersTab
+              botStatus={botStatus}
+              togglingLiveTrading={togglingLiveTrading}
+              isUpdating={isUpdating}
+              topCoinsLoading={topCoinsLoading}
+              portfolioLoading={portfolioLoading}
+              hideCancelledOpenOrders={hideCancelledOpenOrders}
+              onToggleLiveTrading={async () => {
+                setTogglingLiveTrading(true);
+                try {
+                  await toggleLiveTrading();
+                  await fetchPortfolio({ showLoader: false, backgroundRefresh: true });
+                } catch (err) {
+                  logger.error('Failed to toggle live trading:', err);
+                } finally {
+                  setTogglingLiveTrading(false);
+                }
+              }}
+              onToggleHideCancelled={setHideCancelledOpenOrders}
+            />
+          )}
+
+          {activeTab === 'expected-take-profit' && (
+            <ExpectedTakeProfitTab
+              expectedTPSummary={expectedTPSummary}
+              expectedTPLoading={expectedTPLoading}
+              expectedTPLastUpdate={expectedTPLastUpdate}
+              expectedTPDetails={expectedTPDetails}
+              expectedTPDetailsLoading={expectedTPDetailsLoading}
+              expectedTPDetailsSymbol={expectedTPDetailsSymbol}
+              showExpectedTPDetailsDialog={showExpectedTPDetailsDialog}
+              onFetchExpectedTakeProfitSummary={async () => {
+                setExpectedTPLoading(true);
+                try {
+                  const summary = await getExpectedTakeProfitSummary();
+                  setExpectedTPSummary(summary.items || []);
+                  setExpectedTPLastUpdate(new Date());
+                } catch (err) {
+                  logger.error('Failed to fetch expected take profit summary:', err);
+                } finally {
+                  setExpectedTPLoading(false);
+                }
+              }}
+              onFetchExpectedTakeProfitDetails={async (symbol: string) => {
+                setExpectedTPDetailsLoading(true);
+                setExpectedTPDetailsSymbol(symbol);
+                try {
+                  const details = await getExpectedTakeProfitDetails(symbol);
+                  setExpectedTPDetails(details);
+                  setShowExpectedTPDetailsDialog(true);
+                } catch (err) {
+                  logger.error('Failed to fetch expected take profit details:', err);
+                } finally {
+                  setExpectedTPDetailsLoading(false);
+                }
+              }}
+              onCloseDetailsDialog={() => setShowExpectedTPDetailsDialog(false)}
+            />
+          )}
+
+          {activeTab === 'executed-orders' && (
+            <ExecutedOrdersTab
+              orderFilter={orderFilter}
+              hideCancelled={hideCancelled}
+              onFilterChange={setOrderFilter}
+              onToggleHideCancelled={setHideCancelled}
+            />
+          )}
+
+          {activeTab === 'monitoring' && (
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Monitoring</h2>
+              <MonitoringPanel />
+            </div>
+          )}
+
+          {activeTab === 'version-history' && (
+            <div>
+              <h2 className="text-xl font-semibold mb-4">Version History</h2>
+              <div className="space-y-4">
+                {VERSION_HISTORY.map((version, index) => (
+                  <div key={index} className="border-b border-gray-200 dark:border-gray-700 pb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="font-semibold text-lg">{version.version}</span>
+                      <span className="text-sm text-gray-500">{version.date}</span>
+                    </div>
+                    <p className="font-medium mb-1">{version.change}</p>
+                    <div className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-line">
+                      {version.details}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </ErrorBoundary>
       </div>
 
       {/* Strategy Configuration Modal */}

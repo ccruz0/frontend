@@ -3,11 +3,12 @@
  * Extracted from page.tsx for better organization
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { 
   getDashboardState, 
   getDashboardSnapshot, 
   getOpenOrders,
+  getOrderHistory,
   DashboardState, 
   OpenOrder 
 } from '@/app/api';
@@ -129,17 +130,40 @@ export function useOrders(): UseOrdersReturn {
           try {
             const dashboardState = await getDashboardState();
             logger.info('✅ Background refresh completed - updating orders with fresh data');
-            updateOrdersFromState(dashboardState, 'fetchOpenOrders:background');
+            const ordersUpdated = updateOrdersFromState(dashboardState, 'fetchOpenOrders:background');
+            
+            // If dashboard state didn't have orders, try direct API call as fallback
+            if (!ordersUpdated && !snapshotLoaded) {
+              logger.info('⚠️ No orders found in dashboard state, trying direct API call...');
+              try {
+                const response = await getOpenOrders();
+                logger.info(`✅ Direct API call returned ${response.orders?.length || 0} orders`);
+                setOpenOrders(response.orders || []);
+                setOpenOrdersLastUpdate(new Date());
+                setOpenOrdersError(null);
+              } catch (fallbackErr) {
+                logger.logHandledError(
+                  'fetchOpenOrders:fallback',
+                  'Legacy open orders fallback also failed',
+                  fallbackErr,
+                  'warn'
+                );
+                setOpenOrdersError('Failed to refresh orders. Showing cached data if available.');
+              }
+            }
           } catch (refreshErr) {
             logger.logHandledError(
               'fetchOpenOrders:background',
-              'Background refresh failed - keeping snapshot data visible',
+              'Background refresh failed - trying direct API call',
               refreshErr,
               'warn'
             );
+            // Always try direct API call if background refresh fails and snapshot didn't load
             if (!snapshotLoaded) {
               try {
+                logger.info('🔄 Trying direct API call after background refresh failure...');
                 const response = await getOpenOrders();
+                logger.info(`✅ Direct API call returned ${response.orders?.length || 0} orders`);
                 setOpenOrders(response.orders || []);
                 setOpenOrdersLastUpdate(new Date());
                 setOpenOrdersError(null);
@@ -155,6 +179,24 @@ export function useOrders(): UseOrdersReturn {
             }
           }
         })();
+      } else if (!snapshotLoaded) {
+        // If background refresh is disabled and snapshot didn't load, try direct API call immediately
+        logger.info('🔄 Snapshot didn\'t load, trying direct API call...');
+        try {
+          const response = await getOpenOrders();
+          logger.info(`✅ Direct API call returned ${response.orders?.length || 0} orders`);
+          setOpenOrders(response.orders || []);
+          setOpenOrdersLastUpdate(new Date());
+          setOpenOrdersError(null);
+        } catch (fallbackErr) {
+          logger.logHandledError(
+            'fetchOpenOrders:direct',
+            'Direct API call failed',
+            fallbackErr,
+            'warn'
+          );
+          setOpenOrdersError('Failed to load orders. Please try refreshing.');
+        }
       }
     } catch (err) {
       logger.logHandledError(
@@ -178,7 +220,7 @@ export function useOrders(): UseOrdersReturn {
     
     try {
       logger.info('🔄 Fetching executed orders...');
-      const response = await getOrderHistory(100, 0, false);
+      const response = await getOrderHistory(100, 0, true); // sync=true to fetch latest from exchange
       const orders = response.orders || [];
       
       setExecutedOrders(orders);
@@ -198,6 +240,12 @@ export function useOrders(): UseOrdersReturn {
       setExecutedOrdersLoading(false);
     }
   }, []);
+
+  // Fetch orders on mount
+  useEffect(() => {
+    logger.info('🔄 useOrders: Fetching open orders on mount');
+    fetchOpenOrders({ showLoader: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     openOrders,

@@ -440,6 +440,14 @@ function normalizeSymbolKey(symbol: string | undefined | null): string {
   return symbol ? symbol.toUpperCase() : '';
 }
 
+// Helper function to get Trade button color based on trade status
+// Returns: 'bg-green-500 text-white' for YES (true), 'bg-red-500 text-white' for NO (false), 'bg-yellow-500 text-white' for unknown
+function getTradeButtonColor(tradeStatus: boolean | undefined | null): string {
+  if (tradeStatus === true) return 'bg-green-500 text-white';
+  if (tradeStatus === false) return 'bg-red-500 text-white';
+  return 'bg-yellow-500 text-white'; // Default/unknown
+}
+
 // Strategy configuration types and constants (moved outside component)
 type Preset = 'Swing' | 'Intraday' | 'Scalp';
 type RiskMode = 'Conservative' | 'Aggressive';
@@ -447,11 +455,28 @@ type RiskMode = 'Conservative' | 'Aggressive';
 type StrategyRules = {
   rsi: { buyBelow?: number; sellAbove?: number };
   maChecks: { ema10: boolean; ma50: boolean; ma200: boolean };
-  sl: { pct?: number; atrMult?: number };     // si hay ATR, usar atrMult; si no, pct
+  sl: { pct?: number; atrMult?: number; fallbackPct?: number };     // si hay ATR, usar atrMult; si no, pct. fallbackPct for ATR fallback
   tp: { pct?: number; rr?: number };          // rr = risk:reward basado en SL
   volumeMinRatio?: number;                    // Minimum volume ratio (e.g., 0.5, 1, 1.5, 2)
   minPriceChangePct?: number;                 // Minimum price change % required for order creation/alerts (default: 1.0)
   alertCooldownMinutes?: number;              // Cooldown in minutes between same-side alerts (default: 5.0)
+  trendFilters?: {
+    require_price_above_ma200?: boolean;
+    require_ema10_above_ma50?: boolean;
+  };
+  rsiConfirmation?: {
+    require_rsi_cross_up?: boolean;
+    rsi_cross_level?: number;
+  };
+  candleConfirmation?: {
+    require_close_above_ema10?: boolean;
+    require_rsi_rising_n_candles?: number;
+  };
+  atr?: {
+    period?: number;
+    multiplier_sl?: number;
+    multiplier_tp?: number | null;
+  };
   notes?: string[];
 };
 
@@ -465,14 +490,31 @@ const PRESET_CONFIG: PresetConfig = {
     notificationProfile: 'swing',
     rules: {
       Conservative: {
-        rsi: { buyBelow: 40, sellAbove: 70 },
+        rsi: { buyBelow: 30, sellAbove: 70 },
         maChecks: { ema10: true, ma50: true, ma200: true },
-        sl: { atrMult: 1.5 },
+        sl: { atrMult: 1.5, fallbackPct: 3.0 },
         tp: { rr: 1.5 },
-        volumeMinRatio: 0.5,
-        minPriceChangePct: 1.0,
+        volumeMinRatio: 1.0,
+        minPriceChangePct: 3.0,
         alertCooldownMinutes: 5.0,
-        notes: ['Operaciones multi-día', 'Confirmación MA50/MA200']
+        trendFilters: {
+          require_price_above_ma200: true,
+          require_ema10_above_ma50: true
+        },
+        rsiConfirmation: {
+          require_rsi_cross_up: true,
+          rsi_cross_level: 30
+        },
+        candleConfirmation: {
+          require_close_above_ema10: true,
+          require_rsi_rising_n_candles: 2
+        },
+        atr: {
+          period: 14,
+          multiplier_sl: 1.5,
+          multiplier_tp: null
+        },
+        notes: ['Operaciones multi-día', 'Confirmación MA50/MA200', 'Filtros estrictos de reversión de tendencia']
       },
       Aggressive: {
         rsi: { buyBelow: 45, sellAbove: 68 },
@@ -4233,9 +4275,7 @@ function resolveDecisionIndexColor(value: number): string {
                   backendSellAlertStatus[symbolUpper] = item.sell_alert_enabled;
                 }
                 if (item.trade_on_margin !== undefined && item.trade_on_margin !== null) {
-                  // Use normalizeSymbolKey to match how it's read in the render code
-                  const normalizedSymbol = normalizeSymbolKey(item.symbol || '');
-                  backendMarginStatus[normalizedSymbol + '_margin'] = item.trade_on_margin;
+                  backendMarginStatus[symbolUpper] = item.trade_on_margin;
                 }
               }
             });

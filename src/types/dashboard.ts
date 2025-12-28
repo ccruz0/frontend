@@ -12,11 +12,28 @@ export type RiskMode = 'Conservative' | 'Aggressive';
 export interface StrategyRules {
   rsi: { buyBelow?: number; sellAbove?: number };
   maChecks: { ema10: boolean; ma50: boolean; ma200: boolean };
-  sl: { pct?: number; atrMult?: number };     // si hay ATR, usar atrMult; si no, pct
+  sl: { pct?: number; atrMult?: number; fallbackPct?: number };     // si hay ATR, usar atrMult; si no, pct. fallbackPct for ATR fallback
   tp: { pct?: number; rr?: number };          // rr = risk:reward basado en SL
   volumeMinRatio?: number;                    // Minimum volume ratio (e.g., 0.5, 1, 1.5, 2)
   minPriceChangePct?: number;                 // Minimum price change % required for order creation/alerts (default: 1.0)
   alertCooldownMinutes?: number;              // Cooldown in minutes between same-side alerts (default: 5.0)
+  trendFilters?: {
+    require_price_above_ma200?: boolean;
+    require_ema10_above_ma50?: boolean;
+  };
+  rsiConfirmation?: {
+    require_rsi_cross_up?: boolean;
+    rsi_cross_level?: number;
+  };
+  candleConfirmation?: {
+    require_close_above_ema10?: boolean;
+    require_rsi_rising_n_candles?: number;
+  };
+  atr?: {
+    period?: number;
+    multiplier_sl?: number;
+    multiplier_tp?: number | null;
+  };
   notes?: string[];
 }
 

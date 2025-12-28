@@ -4482,13 +4482,258 @@ function resolveDecisionIndexColor(value: number): string {
                   setTogglingLiveTrading(false);
                 }
               }}
+              topCoins={topCoins}
+              signals={signals}
+              coinTradeStatus={coinTradeStatus}
+              coinAmounts={coinAmounts}
+              coinSLPercent={coinSLPercent}
+              coinTPPercent={coinTPPercent}
+              coinBuyAlertStatus={coinBuyAlertStatus}
+              coinSellAlertStatus={coinSellAlertStatus}
+              coinAlertStatus={coinAlertStatus}
+              watchlistFilter={watchlistFilter}
+              onWatchlistFilterChange={setWatchlistFilter}
             />
           )}
 
           {activeTab === 'signals' && (
+            <div className="space-y-6">
+              {/* Header Section */}
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Signal Configuration</h2>
+                <button
+                  onClick={() => setShowSignalConfig(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  <span>⚙️</span>
+                  <span>Configure Strategy</span>
+                </button>
+              </div>
+
+              {/* Preset and Risk Mode Selectors */}
+              <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Current Strategy</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <h2 className="text-xl font-semibold mb-4">Signal Configuration</h2>
-              <p>Signals content - to be implemented</p>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Preset
+                    </label>
+                    <select
+                      value={selectedConfigPreset}
+                      onChange={(e) => setSelectedConfigPreset(e.target.value as Preset)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="Swing">Swing</option>
+                      <option value="Intraday">Intraday</option>
+                      <option value="Scalp">Scalp</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Risk Mode
+                    </label>
+                    <select
+                      value={selectedConfigRisk}
+                      onChange={(e) => setSelectedConfigRisk(e.target.value as RiskMode)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="Conservative">Conservative</option>
+                      <option value="Aggressive">Aggressive</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Configuration Summary */}
+              <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Configuration Summary</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* RSI Settings */}
+                  <div className="border-l-4 border-blue-500 pl-4">
+                    <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">RSI Thresholds</h4>
+                    <div className="space-y-1 text-sm">
+                      <div className="text-gray-600 dark:text-gray-400">
+                        Buy Below: <span className="font-semibold text-gray-900 dark:text-white">{currentRules.rsi?.buyBelow ?? 'N/A'}</span>
+                      </div>
+                      <div className="text-gray-600 dark:text-gray-400">
+                        Sell Above: <span className="font-semibold text-gray-900 dark:text-white">{currentRules.rsi?.sellAbove ?? 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Volume Settings */}
+                  <div className="border-l-4 border-green-500 pl-4">
+                    <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Volume & Price</h4>
+                    <div className="space-y-1 text-sm">
+                      <div className="text-gray-600 dark:text-gray-400">
+                        Min Volume Ratio: <span className="font-semibold text-gray-900 dark:text-white">{currentRules.volumeMinRatio ?? 'N/A'}x</span>
+                      </div>
+                      <div className="text-gray-600 dark:text-gray-400">
+                        Min Price Change: <span className="font-semibold text-gray-900 dark:text-white">{currentRules.minPriceChangePct ?? 'N/A'}%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SL/TP Settings */}
+                  <div className="border-l-4 border-red-500 pl-4">
+                    <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Stop Loss / Take Profit</h4>
+                    <div className="space-y-1 text-sm">
+                      <div className="text-gray-600 dark:text-gray-400">
+                        SL Fallback: <span className="font-semibold text-gray-900 dark:text-white">{currentRules.sl?.fallbackPct ?? 'N/A'}%</span>
+                      </div>
+                      <div className="text-gray-600 dark:text-gray-400">
+                        Risk:Reward: <span className="font-semibold text-gray-900 dark:text-white">{currentRules.tp?.rr ?? 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ATR Settings */}
+                  {currentRules.atr && (
+                    <div className="border-l-4 border-purple-500 pl-4">
+                      <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">ATR Configuration</h4>
+                      <div className="space-y-1 text-sm">
+                        <div className="text-gray-600 dark:text-gray-400">
+                          Period: <span className="font-semibold text-gray-900 dark:text-white">{currentRules.atr.period ?? 'N/A'}</span>
+                        </div>
+                        <div className="text-gray-600 dark:text-gray-400">
+                          SL Multiplier: <span className="font-semibold text-gray-900 dark:text-white">{currentRules.atr.multiplier_sl ?? 'N/A'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Moving Averages */}
+                  <div className="border-l-4 border-yellow-500 pl-4">
+                    <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Moving Averages</h4>
+                    <div className="space-y-1 text-sm">
+                      <div className="text-gray-600 dark:text-gray-400">
+                        EMA10: <span className={`font-semibold ${currentRules.maChecks?.ema10 ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>
+                          {currentRules.maChecks?.ema10 ? '✓ Enabled' : '✗ Disabled'}
+                        </span>
+                      </div>
+                      <div className="text-gray-600 dark:text-gray-400">
+                        MA50: <span className={`font-semibold ${currentRules.maChecks?.ma50 ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>
+                          {currentRules.maChecks?.ma50 ? '✓ Enabled' : '✗ Disabled'}
+                        </span>
+                      </div>
+                      <div className="text-gray-600 dark:text-gray-400">
+                        MA200: <span className={`font-semibold ${currentRules.maChecks?.ma200 ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>
+                          {currentRules.maChecks?.ma200 ? '✓ Enabled' : '✗ Disabled'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Trend Filters */}
+                  {currentRules.trendFilters && (
+                    <div className="border-l-4 border-indigo-500 pl-4">
+                      <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Trend Filters</h4>
+                      <div className="space-y-1 text-sm">
+                        <div className="text-gray-600 dark:text-gray-400">
+                          Price above MA200: <span className={`font-semibold ${currentRules.trendFilters.require_price_above_ma200 ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>
+                            {currentRules.trendFilters.require_price_above_ma200 ? '✓ Required' : '✗ Optional'}
+                          </span>
+                        </div>
+                        <div className="text-gray-600 dark:text-gray-400">
+                          EMA10 above MA50: <span className={`font-semibold ${currentRules.trendFilters.require_ema10_above_ma50 ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`}>
+                            {currentRules.trendFilters.require_ema10_above_ma50 ? '✓ Required' : '✗ Optional'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Active Signals */}
+              <div className="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Active Signals</h3>
+                {topCoins.length === 0 ? (
+                  <p className="text-gray-500 dark:text-gray-400 text-center py-8">No coins available</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                      <thead className="bg-gray-50 dark:bg-slate-700">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Symbol</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Signal</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Price</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">RSI</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">TP</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">SL</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {(() => {
+                          const activeSignals = topCoins
+                            .map(coin => {
+                              const signal = signals[coin.instrument_name];
+                              if (!signal || (!signal.signals?.buy && !signal.signals?.sell)) {
+                                return null;
+                              }
+                              return { coin, signal };
+                            })
+                            .filter((item): item is { coin: TopCoin; signal: TradingSignals } => item !== null)
+                            .slice(0, 20);
+                          
+                          if (activeSignals.length === 0) {
+                            return (
+                              <tr>
+                                <td colSpan={6} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                                  No active signals at the moment
+                                </td>
+                              </tr>
+                            );
+                          }
+                          
+                          return activeSignals.map(({ coin, signal }) => {
+                            const currentPrice = coin.current_price || signal.price || 0;
+                            const rsi = signal.rsi ?? coin.rsi ?? null;
+                            const tpPrice = signal.signals?.tp ?? null;
+                            const slPrice = signal.signals?.sl ?? null;
+                            const signalType = signal.signals?.buy ? 'BUY' : signal.signals?.sell ? 'SELL' : 'NEUTRAL';
+                            
+                            return (
+                              <tr key={coin.instrument_name} className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                  {coin.instrument_name}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  {signalType === 'BUY' ? (
+                                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                      BUY
+                                    </span>
+                                  ) : signalType === 'SELL' ? (
+                                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                      SELL
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                                      NEUTRAL
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                  ${formatNumber(currentPrice, coin.instrument_name)}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                  {rsi !== null ? rsi.toFixed(2) : 'N/A'}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm text-green-600 dark:text-green-400">
+                                  {tpPrice !== null ? `$${formatNumber(tpPrice, coin.instrument_name)}` : 'N/A'}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm text-red-600 dark:text-red-400">
+                                  {slPrice !== null ? `$${formatNumber(slPrice, coin.instrument_name)}` : 'N/A'}
+                                </td>
+                              </tr>
+                            );
+                          });
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

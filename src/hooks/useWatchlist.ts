@@ -62,9 +62,22 @@ export function useWatchlist(): UseWatchlistReturn {
       logger.info('📊 getTopCoins response:', data);
       let fetchedCoins: TopCoin[] = data.coins || [];
       
+      // Update coinTradeStatus from backend data
+      const backendTradeStatus: Record<string, boolean> = {};
+      fetchedCoins.forEach(coin => {
+        if (coin.instrument_name && coin.trade_enabled !== undefined && coin.trade_enabled !== null) {
+          backendTradeStatus[normalizeSymbolKey(coin.instrument_name)] = coin.trade_enabled;
+        }
+      });
+      if (Object.keys(backendTradeStatus).length > 0) {
+        setCoinTradeStatus(prev => ({ ...prev, ...backendTradeStatus }));
+      }
+      
       if (filterTradeYes !== undefined) {
+        // Use backendTradeStatus for filtering since it's the fresh data from backend
         const filteredCoins = fetchedCoins.filter(coin => {
-          const isTradeYes = coinTradeStatus[normalizeSymbolKey(coin.instrument_name)] === true;
+          const symbolKey = normalizeSymbolKey(coin.instrument_name);
+          const isTradeYes = backendTradeStatus[symbolKey] === true;
           return filterTradeYes ? isTradeYes : !isTradeYes;
         });
         logger.info(`📊 Filtered to ${filterType}: ${filteredCoins.length} coins`);
@@ -75,11 +88,7 @@ export function useWatchlist(): UseWatchlistReturn {
       setLastTopCoinsFetchAt(new Date());
       setTopCoinsError(null);
     } catch (err) {
-      logger.logHandledError(
-        'fetchTopCoins',
-        'Failed to fetch top coins; using cached data if available',
-        err
-      );
+      logger.error('Failed to fetch top coins:', err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       setTopCoinsError(errorMessage);
       setLastTopCoinsFetchAt(new Date());
@@ -88,20 +97,26 @@ export function useWatchlist(): UseWatchlistReturn {
         setTopCoinsLoading(false);
       }
     }
-  }, [coinTradeStatus]);
+  }, []);
 
-  // Load watchlist items
+  // Load watchlist items and top coins on mount
   useEffect(() => {
-    const loadWatchlist = async () => {
+    const loadData = async () => {
       try {
         const items = await getDashboard();
         setWatchlistItems(items);
       } catch (err) {
         logger.error('Failed to load watchlist:', err);
       }
+      // Fetch top coins on mount
+      try {
+        await fetchTopCoins(false);
+      } catch (err) {
+        logger.error('Failed to fetch top coins on mount:', err);
+      }
     };
-    loadWatchlist();
-  }, []);
+    loadData();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     watchlistItems,

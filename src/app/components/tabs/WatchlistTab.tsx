@@ -42,12 +42,11 @@ export default function WatchlistTab({
     coinBuyAlertStatus,
     coinSellAlertStatus,
     coinAlertStatus,
+    fetchTopCoins,
   } = useWatchlist();
 
-  // This is a placeholder - the actual implementation will be migrated from page.tsx
-  // For now, this demonstrates the component structure
-  
-  if (watchlistLoading) {
+
+  if (watchlistLoading && topCoins.length === 0) {
     return <div>Loading watchlist...</div>;
   }
 
@@ -86,10 +85,27 @@ export default function WatchlistTab({
         </div>
       </div>
 
-      <div>
-        <p className="text-gray-500">Watchlist content will be migrated here from page.tsx</p>
-        <p className="text-sm text-gray-400 mt-2">Total coins: {topCoins.length}</p>
-      </div>
+      {topCoins.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="text-gray-500 text-lg mb-2">No watchlist data available</div>
+          <div className="text-gray-400 text-sm">The watchlist will appear here once data is loaded.</div>
+        </div>
+      ) : (
+        <div>
+          <p className="text-gray-500">Watchlist content will be migrated here from page.tsx</p>
+          <p className="text-sm text-gray-400 mt-2">Total coins: {topCoins.length}</p>
+          <div className="mt-4">
+            <p className="text-sm text-gray-600">First few coins:</p>
+            <ul className="list-disc list-inside mt-2">
+              {topCoins.slice(0, 5).map(coin => (
+                <li key={coin.instrument_name} className="text-sm">
+                  {coin.instrument_name} - ${coin.current_price?.toFixed(2) || 'N/A'}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -6,11 +6,7 @@
 import React from 'react';
 import MonitoringPanel from '@/app/components/MonitoringPanel';
 
-interface MonitoringTabProps {
-  // Add props as needed
-}
-
-export default function MonitoringTab({}: MonitoringTabProps) {
+export default function MonitoringTab() {
   return (
     <div>
       <h2 className="text-xl font-semibold mb-4">Monitoring</h2>

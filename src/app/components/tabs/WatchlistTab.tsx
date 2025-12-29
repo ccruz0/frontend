@@ -249,38 +249,71 @@ export default function WatchlistTab({
     const symbolKey = normalizeSymbolKey(symbol);
     setUpdatingCoins(prev => new Set(prev).add(symbol));
     
+    // Store previous state for rollback
+    let previousStatus: boolean;
+    let previousStateSetter: ((prev: Record<string, boolean>) => Record<string, boolean>) | null = null;
+    
     try {
       if (alertType === 'master') {
-        const currentStatus = coinAlertStatus[symbolKey] || false;
-        const newStatus = !currentStatus;
+        previousStatus = coinAlertStatus[symbolKey] || false;
+        const newStatus = !previousStatus;
         
         // Optimistic update
         setCoinAlertStatus(prev => ({ ...prev, [symbolKey]: newStatus }));
+        previousStateSetter = (prev: Record<string, boolean>) => ({ ...prev, [symbolKey]: previousStatus });
         
-        await updateWatchlistAlert(symbol, newStatus);
-        logger.info(`✅ Master alert status updated for ${symbol}: ${newStatus}`);
+        const result = await updateWatchlistAlert(symbol, newStatus);
+        logger.info(`✅ Master alert status updated for ${symbol}: ${newStatus}`, result);
+        
+        // Sync with response if available
+        if (result?.alert_enabled !== undefined) {
+          setCoinAlertStatus(prev => ({ ...prev, [symbolKey]: result.alert_enabled }));
+        }
       } else if (alertType === 'buy') {
-        const currentStatus = coinBuyAlertStatus[symbolKey] || false;
-        const newStatus = !currentStatus;
+        previousStatus = coinBuyAlertStatus[symbolKey] || false;
+        const newStatus = !previousStatus;
         
         // Optimistic update
         setCoinBuyAlertStatus(prev => ({ ...prev, [symbolKey]: newStatus }));
+        previousStateSetter = (prev: Record<string, boolean>) => ({ ...prev, [symbolKey]: previousStatus });
         
-        await updateBuyAlert(symbol, newStatus);
-        logger.info(`✅ Buy alert status updated for ${symbol}: ${newStatus}`);
+        const result = await updateBuyAlert(symbol, newStatus);
+        logger.info(`✅ Buy alert status updated for ${symbol}: ${newStatus}`, result);
+        
+        // Sync with response if available
+        if (result?.buy_alert_enabled !== undefined) {
+          setCoinBuyAlertStatus(prev => ({ ...prev, [symbolKey]: result.buy_alert_enabled }));
+        }
       } else if (alertType === 'sell') {
-        const currentStatus = coinSellAlertStatus[symbolKey] || false;
-        const newStatus = !currentStatus;
+        previousStatus = coinSellAlertStatus[symbolKey] || false;
+        const newStatus = !previousStatus;
         
         // Optimistic update
         setCoinSellAlertStatus(prev => ({ ...prev, [symbolKey]: newStatus }));
+        previousStateSetter = (prev: Record<string, boolean>) => ({ ...prev, [symbolKey]: previousStatus });
         
-        await updateSellAlert(symbol, newStatus);
-        logger.info(`✅ Sell alert status updated for ${symbol}: ${newStatus}`);
+        const result = await updateSellAlert(symbol, newStatus);
+        logger.info(`✅ Sell alert status updated for ${symbol}: ${newStatus}`, result);
+        
+        // Sync with response if available
+        if (result?.sell_alert_enabled !== undefined) {
+          setCoinSellAlertStatus(prev => ({ ...prev, [symbolKey]: result.sell_alert_enabled }));
+        }
       }
     } catch (err) {
       logger.error(`Failed to update ${alertType} alert for ${symbol}:`, err);
-      // Revert would require storing previous state, simplified for now
+      // Revert optimistic update
+      if (previousStateSetter) {
+        if (alertType === 'master') {
+          setCoinAlertStatus(previousStateSetter);
+        } else if (alertType === 'buy') {
+          setCoinBuyAlertStatus(previousStateSetter);
+        } else if (alertType === 'sell') {
+          setCoinSellAlertStatus(previousStateSetter);
+        }
+      }
+      // Show error to user
+      alert(`Error al actualizar la alerta ${alertType} para ${symbol}. Por favor, intenta de nuevo.`);
     } finally {
       setUpdatingCoins(prev => {
         const next = new Set(prev);
@@ -302,15 +335,22 @@ export default function WatchlistTab({
       setLocalCoinMarginStatus(prev => ({ ...prev, [symbolKey]: newStatus }));
       
       // Save to backend
-      await saveCoinSettings(symbol, {
+      const result = await saveCoinSettings(symbol, {
         trade_on_margin: newStatus,
       });
       
-      logger.info(`✅ Margin status updated for ${symbol}: ${newStatus}`);
+      logger.info(`✅ Margin status updated for ${symbol}: ${newStatus}`, result);
+      
+      // Sync with response if available
+      if (result?.trade_on_margin !== undefined) {
+        setLocalCoinMarginStatus(prev => ({ ...prev, [symbolKey]: result.trade_on_margin }));
+      }
     } catch (err) {
       logger.error(`Failed to update margin status for ${symbol}:`, err);
       // Revert optimistic update
       setLocalCoinMarginStatus(prev => ({ ...prev, [symbolKey]: currentStatus }));
+      // Show error to user
+      alert(`Error al actualizar el estado de margen para ${symbol}. Por favor, intenta de nuevo.`);
     } finally {
       setUpdatingCoins(prev => {
         const next = new Set(prev);
@@ -1000,37 +1040,58 @@ export default function WatchlistTab({
                     <td className="px-4 py-2">
                       <div className="flex gap-2">
                         <button
-                          onClick={() => handleAlertToggle(coin?.instrument_name, 'master')}
-                          disabled={isCoinUpdating}
-                          className={`px-2 py-1 rounded text-xs ${
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (!isCoinUpdating && coin?.instrument_name) {
+                              handleAlertToggle(coin.instrument_name, 'master');
+                            }
+                          }}
+                          disabled={isCoinUpdating || !coin?.instrument_name}
+                          className={`px-2 py-1 rounded text-xs transition-colors ${
                             masterAlertEnabled
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-gray-300 text-gray-700'
-                          } disabled:opacity-50`}
+                              ? 'bg-blue-500 text-white hover:bg-blue-600'
+                              : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+                          } disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer`}
                           title="Master Alert"
                         >
                           M
                         </button>
                         <button
-                          onClick={() => handleAlertToggle(coin?.instrument_name, 'buy')}
-                          disabled={isCoinUpdating}
-                          className={`px-2 py-1 rounded text-xs ${
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (!isCoinUpdating && coin?.instrument_name) {
+                              handleAlertToggle(coin.instrument_name, 'buy');
+                            }
+                          }}
+                          disabled={isCoinUpdating || !coin?.instrument_name}
+                          className={`px-2 py-1 rounded text-xs transition-colors ${
                             buyAlertEnabled
-                              ? 'bg-green-500 text-white'
-                              : 'bg-gray-300 text-gray-700'
-                          } disabled:opacity-50`}
+                              ? 'bg-green-500 text-white hover:bg-green-600'
+                              : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+                          } disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer`}
                           title="Buy Alert"
                         >
                           B
                         </button>
                         <button
-                          onClick={() => handleAlertToggle(coin?.instrument_name, 'sell')}
-                          disabled={isCoinUpdating}
-                          className={`px-2 py-1 rounded text-xs ${
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (!isCoinUpdating && coin?.instrument_name) {
+                              handleAlertToggle(coin.instrument_name, 'sell');
+                            }
+                          }}
+                          disabled={isCoinUpdating || !coin?.instrument_name}
+                          className={`px-2 py-1 rounded text-xs transition-colors ${
                             sellAlertEnabled
-                              ? 'bg-red-500 text-white'
-                              : 'bg-gray-300 text-gray-700'
-                          } disabled:opacity-50`}
+                              ? 'bg-red-500 text-white hover:bg-red-600'
+                              : 'bg-gray-300 text-gray-700 hover:bg-gray-400'
+                          } disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer`}
                           title="Sell Alert"
                         >
                           S

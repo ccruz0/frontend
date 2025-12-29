@@ -544,17 +544,9 @@ export async function updateDashboardItem(id: number, item: Partial<WatchlistIte
 }
 
 // Save coin settings by symbol
-// Finds the watchlist item by symbol and updates it with the provided settings
+// Uses the direct /dashboard/symbol/{symbol} endpoint for more reliable updates
 export async function saveCoinSettings(symbol: string, settings: Partial<CoinSettings>): Promise<CoinSettings> {
   try {
-    // Get dashboard to find the item by symbol
-    const dashboard = await getDashboard();
-    const item = dashboard.find(item => item.symbol === symbol.toUpperCase());
-    
-    if (!item) {
-      throw new Error(`Watchlist item not found for symbol: ${symbol}`);
-    }
-    
     // Convert CoinSettings to WatchlistItem format (handle null values and type mismatches)
     const watchlistUpdate: Partial<WatchlistItem> = {};
     
@@ -589,25 +581,25 @@ export async function saveCoinSettings(symbol: string, settings: Partial<CoinSet
       watchlistUpdate.take_profit = settings.tp_price;
     }
     
-    // Update the item using the existing updateDashboardItem function
-    const updated = await updateDashboardItem(item.id, watchlistUpdate);
+    // Use the direct symbol endpoint for more reliable updates
+    const updated = await updateWatchlistItem(symbol, watchlistUpdate);
     
     // Return the updated settings in CoinSettings format
     return {
-      symbol: updated.symbol,
-      exchange: updated.exchange,
-      trade_enabled: updated.trade_enabled,
-      trade_amount_usd: updated.trade_amount_usd,
-      trade_on_margin: updated.trade_on_margin,
-      alert_enabled: updated.alert_enabled,
-      buy_alert_enabled: updated.buy_alert_enabled,
-      sell_alert_enabled: updated.sell_alert_enabled,
-      sl_tp_mode: updated.sl_tp_mode,
-      min_price_change_pct: updated.min_price_change_pct,
-      sl_percentage: updated.sl_percentage,
-      tp_percentage: updated.tp_percentage,
-      sl_price: updated.stop_loss,
-      tp_price: updated.take_profit,
+      symbol: updated.item.symbol,
+      exchange: updated.item.exchange,
+      trade_enabled: updated.item.trade_enabled,
+      trade_amount_usd: updated.item.trade_amount_usd,
+      trade_on_margin: updated.item.trade_on_margin,
+      alert_enabled: updated.item.alert_enabled,
+      buy_alert_enabled: updated.item.buy_alert_enabled,
+      sell_alert_enabled: updated.item.sell_alert_enabled,
+      sl_tp_mode: updated.item.sl_tp_mode,
+      min_price_change_pct: updated.item.min_price_change_pct,
+      sl_percentage: updated.item.sl_percentage,
+      tp_percentage: updated.item.tp_percentage,
+      sl_price: updated.item.stop_loss || updated.item.sl_price,
+      tp_price: updated.item.take_profit || updated.item.tp_price,
     };
   } catch (error) {
     logRequestIssue(

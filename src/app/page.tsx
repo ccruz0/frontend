@@ -964,7 +964,7 @@ function DashboardPageContent() {
   const [_openOrdersSummaryLastUpdate, setOpenOrdersSummaryLastUpdate] = useState<Date | null>(null);
   const [expectedTPSummary, setExpectedTPSummary] = useState<ExpectedTPSummaryItem[]>([]);
   const [expectedTPDetails, setExpectedTPDetails] = useState<ExpectedTPDetails | null>(null);
-  const [expectedTPLoading, setExpectedTPLoading] = useState<boolean>(true);
+  const [expectedTPLoading, setExpectedTPLoading] = useState<boolean>(false);
   const [expectedTPDetailsLoading, setExpectedTPDetailsLoading] = useState<boolean>(false);
   const [expectedTPLastUpdate, setExpectedTPLastUpdate] = useState<Date | null>(null);
   const [expectedTPDetailsSymbol, setExpectedTPDetailsSymbol] = useState<string | null>(null);
@@ -4306,9 +4306,8 @@ function resolveDecisionIndexColor(value: number): string {
             }
 
             // Set margin status from backend (after processing all items)
-            // Note: margin status is stored in coinTradeStatus with '_margin' suffix to match rendering code
             if (Object.keys(backendMarginStatus).length > 0) {
-              setCoinTradeStatus(prev => ({ ...prev, ...backendMarginStatus }));
+              setCoinMarginStatus(prev => ({ ...prev, ...backendMarginStatus }));
               logger.info('✅ Initialized trade_on_margin from backend:', Object.keys(backendMarginStatus).length, 'coins');
             }
           } catch (err) {
@@ -4337,6 +4336,51 @@ function resolveDecisionIndexColor(value: number): string {
     fetchPortfolio({ showLoader: true });
     fetchTopCoins(false);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load expected TP data when tab is selected
+  useEffect(() => {
+    if (activeTab === 'expected-take-profit') {
+      // Use a ref to track if we're already loading to prevent duplicate requests
+      let isMounted = true;
+      let isLoading = false;
+      
+      const loadExpectedTP = async () => {
+        // Prevent duplicate concurrent requests
+        if (isLoading) {
+          return;
+        }
+        isLoading = true;
+        
+        setExpectedTPLoading(true);
+        try {
+          logger.info('Loading expected take profit summary...');
+          const summary = await getExpectedTakeProfitSummary();
+          logger.info('Expected take profit summary loaded:', summary);
+          if (isMounted) {
+            setExpectedTPSummary(summary.summary || []);
+            setExpectedTPLastUpdate(new Date());
+          }
+        } catch (err) {
+          logger.error('Failed to fetch expected take profit summary:', err);
+          // Set empty array on error so UI doesn't stay in loading state
+          if (isMounted) {
+            setExpectedTPSummary([]);
+          }
+        } finally {
+          isLoading = false;
+          if (isMounted) {
+            setExpectedTPLoading(false);
+          }
+        }
+      };
+      
+      loadExpectedTP();
+      
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handler for saving strategy configuration
   const handleSaveStrategyConfig = useCallback(async (preset: Preset, riskMode: RiskMode, updatedRules: StrategyRules) => {
@@ -4485,6 +4529,7 @@ function resolveDecisionIndexColor(value: number): string {
               topCoins={topCoins}
               signals={signals}
               coinTradeStatus={coinTradeStatus}
+              coinMarginStatus={coinMarginStatus}
               coinAmounts={coinAmounts}
               coinSLPercent={coinSLPercent}
               coinTPPercent={coinTPPercent}
@@ -4773,7 +4818,7 @@ function resolveDecisionIndexColor(value: number): string {
                 setExpectedTPLoading(true);
                 try {
                   const summary = await getExpectedTakeProfitSummary();
-                  setExpectedTPSummary(summary.items || []);
+                  setExpectedTPSummary(summary.summary || []);
                   setExpectedTPLastUpdate(new Date());
                 } catch (err) {
                   logger.error('Failed to fetch expected take profit summary:', err);

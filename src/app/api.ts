@@ -359,6 +359,8 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
           timeoutMs = 15000; // 15s for watchlist alert updates (increased from 10s to allow for network delays)
         } else if (endpoint.includes('/market/top-coins/custom')) {
           timeoutMs = 30000; // 30s for adding custom coins (database operations)
+        } else if (endpoint.includes('/dashboard/expected-take-profit')) {
+          timeoutMs = 60000; // 60s for expected-take-profit (database queries and calculations)
         }
         const controller = new AbortController();
         const timeoutId = setTimeout(() => {

@@ -4330,6 +4330,32 @@ function resolveDecisionIndexColor(value: number): string {
     fetchTopCoinsRef.current = fetchTopCoins;
   }, [fetchPortfolio, fetchTopCoins]);
 
+  // Load trading config and initialize coin presets
+  useEffect(() => {
+    const loadTradingConfig = async () => {
+      try {
+        const config = await getTradingConfig();
+        if (config) {
+          setTradingConfig(config);
+          // Extract coin presets from trading config
+          if (config.coins) {
+            const presets: Record<string, string> = {};
+            Object.entries(config.coins).forEach(([symbol, coinConfig]) => {
+              if (coinConfig.preset) {
+                presets[normalizeSymbolKey(symbol)] = coinConfig.preset;
+              }
+            });
+            setCoinPresets(presets);
+            logger.info('✅ Loaded trading config and coin presets:', Object.keys(presets).length, 'coins');
+          }
+        }
+      } catch (err) {
+        logger.warn('Failed to load trading config:', err);
+      }
+    };
+    loadTradingConfig();
+  }, []);
+
   // Initial data load on mount
   useEffect(() => {
     // Load initial data
@@ -4538,6 +4564,18 @@ function resolveDecisionIndexColor(value: number): string {
               coinAlertStatus={coinAlertStatus}
               watchlistFilter={watchlistFilter}
               onWatchlistFilterChange={setWatchlistFilter}
+              tradingConfig={tradingConfig}
+              coinPresets={coinPresets}
+              onCoinPresetChange={async (symbol: string, preset: string) => {
+                const symbolKey = normalizeSymbolKey(symbol);
+                setCoinPresets(prev => ({ ...prev, [symbolKey]: preset }));
+                try {
+                  await updateCoinConfig(symbol, { preset });
+                  logger.info(`✅ Strategy updated for ${symbol}: ${preset}`);
+                } catch (err) {
+                  logger.error(`Failed to update strategy for ${symbol}:`, err);
+                }
+              }}
             />
           )}
 

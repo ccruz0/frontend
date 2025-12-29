@@ -4411,7 +4411,7 @@ function resolveDecisionIndexColor(value: number): string {
   // Handler for saving strategy configuration
   const handleSaveStrategyConfig = useCallback(async (preset: Preset, riskMode: RiskMode, updatedRules: StrategyRules) => {
     try {
-      // Update local state
+      // Update local state first (optimistic update)
       setPresetsConfig(prev => ({
         ...prev,
         [preset]: {
@@ -4425,15 +4425,66 @@ function resolveDecisionIndexColor(value: number): string {
       
       logger.info(`Strategy config saved for ${preset} - ${riskMode}`, updatedRules);
       
-      // Optionally save to backend
-      // Note: Backend expects TradingConfig format, which may differ from PresetConfig
-      // For now, we're updating local state only
-      // TODO: Implement backend save if needed
+      // Save to backend - convert PresetConfig format to backend strategy_rules format
+      try {
+        // Get current trading config to preserve other settings
+        const currentConfig = await getTradingConfig() || {};
+        
+        // Convert preset name to lowercase (backend expects "swing", not "Swing")
+        const presetLower = preset.toLowerCase();
+        
+        // Build strategy_rules structure matching backend format
+        const strategyRules: Record<string, any> = currentConfig.strategy_rules || {};
+        
+        // Get notification profile from current preset config
+        const currentPresetConfig = presetsConfig[preset] || PRESET_CONFIG[preset];
+        const notificationProfile = currentPresetConfig?.notificationProfile || presetLower;
+        
+        // Update or create preset entry
+        if (!strategyRules[presetLower]) {
+          strategyRules[presetLower] = {
+            notificationProfile: notificationProfile,
+            rules: {}
+          };
+        }
+        
+        // Update the specific risk mode rules
+        strategyRules[presetLower].rules[riskMode] = updatedRules;
+        
+        // Build the config payload
+        const configPayload: TradingConfig = {
+          ...currentConfig,
+          strategy_rules: strategyRules
+        };
+        
+        // Save to backend
+        const result = await saveTradingConfig(configPayload);
+        
+        if (result.ok) {
+          logger.info(`✅ Strategy config saved to backend for ${preset} - ${riskMode}`);
+          
+          // Update local state with backend response if available
+          if (result.config) {
+            // Reload config to ensure sync
+            const updatedConfig = await getTradingConfig();
+            if (updatedConfig) {
+              setTradingConfig(updatedConfig);
+            }
+          }
+        } else {
+          logger.warn('Backend save returned ok=false');
+        }
+      } catch (backendError) {
+        // Log error but don't fail the UI update (optimistic update already applied)
+        logger.error('Failed to save strategy config to backend:', backendError);
+        // Show user-friendly error message
+        throw new Error('Failed to save to backend. Local changes saved, but may not persist after reload.');
+      }
     } catch (error) {
       logger.error('Failed to save strategy config:', error);
       throw error;
     }
-  }, []);
+  }, [presetsConfig]);
 
   // Get current rules for the selected preset and risk mode
   const currentRules = presetsConfig[selectedConfigPreset]?.rules[selectedConfigRisk] || PRESET_CONFIG[selectedConfigPreset].rules[selectedConfigRisk];

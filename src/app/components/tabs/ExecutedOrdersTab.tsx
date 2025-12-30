@@ -3,7 +3,7 @@
  * Extracted from page.tsx for better organization
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { OpenOrder } from '@/app/api';
 import { formatDateTime, formatNumber } from '@/utils/formatting';
 import { useOrders } from '@/hooks/useOrders';
@@ -49,6 +49,16 @@ export default function ExecutedOrdersTab({
 
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  // Fetch executed orders on mount (Strict Mode safe)
+  const didFetchRef = useRef(false);
+  useEffect(() => {
+    if (didFetchRef.current) return;
+    didFetchRef.current = true;
+
+    fetchExecutedOrders({ showLoader: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps: only run on mount. fetchExecutedOrders is stable (useCallback with empty deps).
 
   // Filter orders
   const filteredOrders = useMemo(() => {

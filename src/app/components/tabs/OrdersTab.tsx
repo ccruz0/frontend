@@ -3,7 +3,7 @@
  * Extracted from page.tsx for better organization
  */
 
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { OpenOrder, quickOrder } from '@/app/api';
 import { formatDateTime, formatNumber } from '@/utils/formatting';
 import { useOrders } from '@/hooks/useOrders';
@@ -52,17 +52,8 @@ export default function OrdersTab({
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
 
-  // Fetch open orders on mount (Strict Mode safe)
-  // Note: useOrders hook also calls fetchOpenOrders on mount, but this ensures
-  // the component explicitly triggers the fetch when it mounts
-  const didFetchRef = useRef(false);
-  useEffect(() => {
-    if (didFetchRef.current) return;
-    didFetchRef.current = true;
-
-    fetchOpenOrders({ showLoader: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty deps: only run on mount. fetchOpenOrders is stable (useCallback with empty deps).
+  // Note: fetchOpenOrders is already called on mount by the useOrders hook (line 280 in useOrders.ts)
+  // No need to call it again here to avoid duplicate API requests
 
   // Filter orders
   const filteredOrders = useMemo(() => {

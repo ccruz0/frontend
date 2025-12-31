@@ -287,23 +287,194 @@ export default function ExpectedTakeProfitTab({
       )}
 
       {/* Details Dialog */}
-      {showExpectedTPDetailsDialog && expectedTPDetails && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      {showExpectedTPDetailsDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onCloseDetailsDialog}>
+          <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold">Expected TP Details: {expectedTPDetailsSymbol}</h3>
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Expected TP Details: {expectedTPDetailsSymbol}
+              </h3>
               <button
                 onClick={onCloseDetailsDialog}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-2xl leading-none"
               >
                 ✕
               </button>
             </div>
             {expectedTPDetailsLoading ? (
-              <div>Loading details...</div>
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="mt-2">Loading details...</p>
+              </div>
+            ) : expectedTPDetails ? (
+              <div className="space-y-6">
+                {/* Summary Section */}
+                <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-4">
+                  <h4 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">Summary</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Net Qty</div>
+                      <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {formatNumber(expectedTPDetails.net_qty)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Position Value</div>
+                      <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {formatNumber(expectedTPDetails.position_value, '$')}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Covered Qty</div>
+                      <div className="text-lg font-semibold text-green-600 dark:text-green-400">
+                        {formatNumber(expectedTPDetails.covered_qty)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Uncovered Qty</div>
+                      <div className="text-lg font-semibold text-orange-600 dark:text-orange-400">
+                        {formatNumber(expectedTPDetails.uncovered_qty)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Expected Profit</div>
+                      <div className={`text-lg font-semibold ${
+                        (expectedTPDetails.total_expected_profit || 0) >= 0
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }`}>
+                        {formatNumber(expectedTPDetails.total_expected_profit, '$')}
+                      </div>
+                    </div>
+                    {expectedTPDetails.current_price !== undefined && (
+                      <div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Current Price</div>
+                        <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                          {formatNumber(expectedTPDetails.current_price, expectedTPDetailsSymbol || '')}
+                        </div>
+                      </div>
+                    )}
+                    {expectedTPDetails.uncovered_entry && (
+                      <div className="col-span-2">
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Uncovered Entry</div>
+                        <div className="text-lg font-semibold text-orange-600 dark:text-orange-400">
+                          {formatNumber(expectedTPDetails.uncovered_entry.uncovered_qty)} - {expectedTPDetails.uncovered_entry.label}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Matched Lots Section */}
+                {expectedTPDetails.matched_lots && expectedTPDetails.matched_lots.length > 0 ? (
+                  <div>
+                    <h4 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
+                      Matched Lots ({expectedTPDetails.matched_lots.length})
+                    </h4>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-slate-700">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Buy Order
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Buy Price
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Buy Time
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Qty
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              TP Order
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              TP Price
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              TP Qty
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              TP Status
+                            </th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Expected Profit
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-gray-700">
+                          {expectedTPDetails.matched_lots.map((lot, index) => (
+                            <tr key={index} className="hover:bg-gray-50 dark:hover:bg-slate-700">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">
+                                {lot.is_grouped && lot.buy_order_ids ? (
+                                  <div>
+                                    <div className="font-medium">{lot.buy_order_count || lot.buy_order_ids.length} orders</div>
+                                    <div className="text-xs text-gray-500 dark:text-gray-400">{lot.buy_order_id}...</div>
+                                  </div>
+                                ) : (
+                                  <div className="font-mono text-xs">{lot.buy_order_id}</div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">
+                                {formatNumber(lot.buy_price, lot.symbol)}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {lot.buy_time ? formatDateTime(new Date(lot.buy_time)) : 'N/A'}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">
+                                {formatNumber(lot.lot_qty)}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">
+                                <div className="font-mono text-xs">{lot.tp_order_id}</div>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">
+                                {formatNumber(lot.tp_price, lot.symbol)}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">
+                                {formatNumber(lot.tp_qty)}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  lot.tp_status === 'FILLED' || lot.tp_status === 'ACTIVE'
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                    : lot.tp_status === 'CANCELLED' || lot.tp_status === 'REJECTED'
+                                    ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                    : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                                }`}>
+                                  {lot.tp_status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
+                                <div className={`font-semibold ${
+                                  (lot.expected_profit || 0) >= 0
+                                    ? 'text-green-600 dark:text-green-400'
+                                    : 'text-red-600 dark:text-red-400'
+                                }`}>
+                                  {formatNumber(lot.expected_profit, '$')}
+                                </div>
+                                {lot.expected_profit_pct !== undefined && (
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    ({lot.expected_profit_pct >= 0 ? '+' : ''}{lot.expected_profit_pct.toFixed(2)}%)
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    No matched lots found
+                  </div>
+                )}
+              </div>
             ) : (
-              <div>
-                <p className="text-gray-500">Details content will be migrated here from page.tsx</p>
+              <div className="text-center py-8 text-red-500 dark:text-red-400">
+                Failed to load details. Please try again.
               </div>
             )}
           </div>

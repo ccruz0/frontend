@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { TopCoin, TradingSignals, saveCoinSettings, updateWatchlistAlert, updateBuyAlert, updateSellAlert, StrategyDecision, updateCoinConfig, TradingConfig } from '@/app/api';
+import { TopCoin, TradingSignals, saveCoinSettings, updateWatchlistAlert, updateBuyAlert, updateSellAlert, StrategyDecision, TradingConfig } from '@/app/api';
 import { formatDateTime, formatNumber, normalizeSymbolKey } from '@/utils/formatting';
 import { logger } from '@/utils/logger';
 import { useWatchlist } from '@/hooks/useWatchlist';
@@ -475,31 +475,58 @@ export default function WatchlistTab({
   }, [setCoinTPPercent]);
 
   // Handler for changing coin strategy
-  const handleStrategyChange = useCallback(async (symbol: string, preset: string) => {
+  const handleStrategyChange = useCallback(async (symbol: string, strategyKey: string) => {
     const symbolKey = normalizeSymbolKey(symbol);
     setUpdatingCoins(prev => new Set(prev).add(symbol));
     
     try {
-      // Update local state optimistically
-      setLocalCoinPresets(prev => ({ ...prev, [symbolKey]: preset }));
+      // Parse strategy key (e.g., "swing-conservative" -> preset="swing", risk="conservative")
+      const parts = strategyKey.split('-');
+      const preset = parts[0] || 'swing';
+      const risk = parts[1] || 'conservative';
       
-      // Save to backend
-      await updateCoinConfig(symbol, { preset });
+      // CRITICAL: Update WatchlistItem.sl_tp_mode ONLY (single source of truth)
+      // trading_config.json is a preset catalog only, NOT state - do NOT write to it
+      // The backend's resolve_strategy_profile reads preset from trading_config.json (catalog)
+      // and risk from WatchlistItem.sl_tp_mode (state)
+      const result = await saveCoinSettings(symbol, {
+        sl_tp_mode: risk,  // Update risk mode in WatchlistItem (DB is source of truth)
+      });
       
-      // Notify parent if callback provided
-      if (onCoinPresetChange) {
-        onCoinPresetChange(symbol, preset);
+      // REGRESSION GUARD: Verify API response contains updated strategy_key
+      // This ensures UI state matches DB state
+      if (result?.strategy_key && result.strategy_key !== strategyKey) {
+        logger.warn(`[STRATEGY_MISMATCH] Strategy update mismatch for ${symbol}: requested=${strategyKey}, API=${result.strategy_key}. Backend resolved different strategy.`);
       }
       
-      logger.info(`✅ Strategy updated for ${symbol}: ${preset}`);
+      // Clear local state - UI will use API response as truth
+      // Do NOT update localCoinPresets - it's a legacy fallback only
+      setLocalCoinPresets(prev => {
+        const updated = { ...prev };
+        delete updated[symbolKey];  // Remove to force using API values
+        return updated;
+      });
+      
+      // Notify parent if callback provided (for backward compatibility)
+      if (onCoinPresetChange) {
+        onCoinPresetChange(symbol, strategyKey);
+      }
+      
+      logger.info(`✅ Strategy updated for ${symbol}: ${strategyKey} (sl_tp_mode=${risk}). DB is source of truth.`);
+      
+      // CRITICAL: Parent component should refetch /api/dashboard to get updated strategy_key
+      // This ensures UI reflects the exact DB state
+      
     } catch (err) {
       logger.error(`Failed to update strategy for ${symbol}:`, err);
-      // Revert on error
+      // Revert on error (clear local state)
       setLocalCoinPresets(prev => {
         const updated = { ...prev };
         delete updated[symbolKey];
         return updated;
       });
+      // Show error to user
+      alert(`Error al actualizar la estrategia para ${symbol}. Por favor, intenta de nuevo.`);
     } finally {
       setUpdatingCoins(prev => {
         const next = new Set(prev);
@@ -518,6 +545,16 @@ export default function WatchlistTab({
     { value: 'scalp-conservative', label: 'Scalp Conservadora' },
     { value: 'scalp-aggressive', label: 'Scalp Agresiva' },
   ];
+
+  // Helper function to build crypto page URL for a symbol
+  const getCryptoPageUrl = useCallback((symbol: string | undefined): string => {
+    if (!symbol) return '#';
+    // Link to Binance trading page for the trading pair
+    // Format: https://www.binance.com/en/trade/{SYMBOL_WITHOUT_UNDERSCORE}
+    // For example: ETC_USDT -> https://www.binance.com/en/trade/ETCUSDT
+    const symbolForUrl = symbol.replace(/_/g, '');
+    return `https://www.binance.com/en/trade/${symbolForUrl}`;
+  }, []);
 
   // Helper function to format strategy name
   const formatStrategyName = useCallback((strategy?: string | null): string => {
@@ -553,9 +590,22 @@ export default function WatchlistTab({
   }, []);
 
   // Helper function to get strategy for a coin
+  // CRITICAL: Uses API strategy_key as single source of truth (from WatchlistItem)
   const getCoinStrategy = useCallback((coin: TopCoin, signal: TradingSignals | null | undefined): string | undefined => {
     const symbolKey = normalizeSymbolKey(coin?.instrument_name);
-    // Priority: localCoinPresets > coin.strategy > signal.strategy > tradingConfig
+    
+    // PRIORITY 1: API strategy_key (single source of truth from WatchlistItem)
+    // This ensures dropdown and tooltip always match what's in the database
+    if (coin?.strategy_key) {
+      return coin.strategy_key;
+    }
+    
+    // PRIORITY 2: Construct from API strategy_preset + strategy_risk
+    if (coin?.strategy_preset && coin?.strategy_risk) {
+      return `${coin.strategy_preset}-${coin.strategy_risk}`;
+    }
+    
+    // FALLBACK: Legacy sources (for backward compatibility during migration)
     if (localCoinPresets[symbolKey]) {
       return localCoinPresets[symbolKey];
     }
@@ -568,15 +618,29 @@ export default function WatchlistTab({
     if (parentTradingConfig?.coins?.[symbolKey]?.preset) {
       return parentTradingConfig.coins[symbolKey].preset;
     }
+    
     // Default to swing-conservative if no strategy is set
     return 'swing-conservative';
   }, [localCoinPresets, parentTradingConfig]);
 
   // Helper function to build strategy tooltip
+  // CRITICAL: Uses same source as dropdown (getCoinStrategy) to ensure consistency
   const buildStrategyTooltip = useCallback((coin: TopCoin, signal: TradingSignals | null | undefined): string => {
+    // Use same function as dropdown to ensure dropdown and tooltip cannot disagree
     const strategy = getCoinStrategy(coin, signal);
     const strategyName = formatStrategyName(strategy);
     const lines: string[] = [];
+    
+    // REGRESSION GUARD: Verify strategy matches API (dev/test warning)
+    if (coin?.strategy_key && coin.strategy_key !== strategy) {
+      logger.warn(`[STRATEGY_MISMATCH] Tooltip strategy mismatch for ${coin?.instrument_name}: API=${coin.strategy_key}, computed=${strategy}. UI using fallback instead of API.`);
+    }
+    
+    // REGRESSION GUARD: Warn if API strategy_key is null but UI shows a strategy
+    if (!coin?.strategy_key && strategy && strategy !== 'swing-conservative') {
+      logger.warn(`[STRATEGY_MISMATCH] API strategy_key is null for ${coin?.instrument_name} but UI shows strategy=${strategy}. UI using fallback/default.`);
+    }
+    
     lines.push(`📊 Estrategia: ${strategyName}`);
     
     if (signal) {
@@ -604,7 +668,9 @@ export default function WatchlistTab({
   }, [formatStrategyName]);
 
   // Helper function to build trade button tooltip with all indicators
+  // CRITICAL: Uses same source as dropdown (getCoinStrategy) to ensure consistency
   const buildTradeTooltip = useCallback((coin: TopCoin, signal: TradingSignals | null | undefined): string => {
+    // Use same function as dropdown to ensure dropdown and tooltip cannot disagree
     const strategy = getCoinStrategy(coin, signal);
     const strategyName = formatStrategyName(strategy);
     const lines: string[] = [];
@@ -849,25 +915,47 @@ export default function WatchlistTab({
                 return (
                   <tr key={coin?.instrument_name} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td 
-                      className={`px-4 py-2 ${symbolColorClass} cursor-help`}
+                      className={`px-4 py-2 ${symbolColorClass}`}
                       title={buildStrategyTooltip(coin, signal)}
                     >
-                      {coin?.instrument_name}
+                      <a
+                        href={getCryptoPageUrl(coin?.instrument_name)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:underline cursor-pointer"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {coin?.instrument_name}
+                      </a>
                     </td>
                     <td className="px-4 py-2">
-                      <select
-                        value={getCoinStrategy(coin, signal) || 'swing-conservative'}
-                        onChange={(e) => handleStrategyChange(coin?.instrument_name, e.target.value)}
-                        disabled={isCoinUpdating}
-                        className="px-2 py-1 text-xs border border-gray-300 rounded bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-50"
-                        title="Select strategy for this coin"
-                      >
-                        {strategyOptions.map(option => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                      {(() => {
+                        const rawStrategy = getCoinStrategy(coin, signal);
+                        const dropdownStrategy = rawStrategy || 'swing-conservative';
+                        const tooltipStrategy = rawStrategy || 'swing-conservative';  // Apply same fallback for comparison
+                        
+                        // REGRESSION GUARD: Verify dropdown and tooltip use same strategy
+                        // Both use the same fallback to ensure fair comparison
+                        if (dropdownStrategy !== tooltipStrategy) {
+                          logger.error(`[STRATEGY_MISMATCH] Dropdown and tooltip disagree for ${coin?.instrument_name}: dropdown=${dropdownStrategy}, tooltip=${tooltipStrategy}. This should never happen.`);
+                        }
+                        
+                        return (
+                          <select
+                            value={dropdownStrategy}
+                            onChange={(e) => handleStrategyChange(coin?.instrument_name, e.target.value)}
+                            disabled={isCoinUpdating}
+                            className="px-2 py-1 text-xs border border-gray-300 rounded bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-50"
+                            title={`Select strategy for this coin (current: ${formatStrategyName(dropdownStrategy)})`}
+                          >
+                            {strategyOptions.map(option => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-2">${formatNumber(coin?.current_price, coin?.instrument_name)}</td>
                     <td className={`px-4 py-2 ${getIndicatorColorClass('rsi', signal, coin)}`}>

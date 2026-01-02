@@ -343,7 +343,7 @@ export default function WatchlistTab({
       
       // Sync with response if available
       if (result?.trade_on_margin !== undefined) {
-        setLocalCoinMarginStatus(prev => ({ ...prev, [symbolKey]: result.trade_on_margin }));
+        setLocalCoinMarginStatus(prev => ({ ...prev, [symbolKey]: Boolean(result.trade_on_margin) }));
       }
     } catch (err) {
       logger.error(`Failed to update margin status for ${symbol}:`, err);
@@ -364,6 +364,9 @@ export default function WatchlistTab({
     const symbolKey = normalizeSymbolKey(symbol);
     setUpdatingCoins(prev => new Set(prev).add(symbol));
     
+    // Store previous value for rollback
+    const previousValue = coinAmounts[symbolKey];
+    
     try {
       const numValue = parseFloat(value);
       if (isNaN(numValue) || numValue < 0) {
@@ -375,19 +378,30 @@ export default function WatchlistTab({
       setCoinAmounts(prev => ({ ...prev, [symbolKey]: value }));
       
       // Save to backend
-      await saveCoinSettings(symbol, {
+      const result = await saveCoinSettings(symbol, {
         trade_amount_usd: numValue,
       });
       
       logger.info(`✅ Amount updated for ${symbol}: $${value}`);
+      
+      // Sync with response if available
+      if (result?.trade_amount_usd !== undefined && result.trade_amount_usd !== null) {
+        setCoinAmounts(prev => ({ ...prev, [symbolKey]: result.trade_amount_usd!.toString() }));
+      }
     } catch (err) {
       logger.error(`Failed to update amount for ${symbol}:`, err);
-      // Revert optimistic update
+      // Revert optimistic update to previous value
       setCoinAmounts(prev => {
         const updated = { ...prev };
-        delete updated[symbolKey];
+        if (previousValue !== undefined) {
+          updated[symbolKey] = previousValue;
+        } else {
+          delete updated[symbolKey];
+        }
         return updated;
       });
+      // Show error to user
+      alert(`Error al actualizar el monto USD para ${symbol}. Por favor, intenta de nuevo.`);
     } finally {
       setUpdatingCoins(prev => {
         const next = new Set(prev);
@@ -400,7 +414,7 @@ export default function WatchlistTab({
         return updated;
       });
     }
-  }, [setCoinAmounts]);
+  }, [coinAmounts, setCoinAmounts]);
 
   const handleSLPercentSave = useCallback(async (symbol: string, value: string) => {
     const symbolKey = normalizeSymbolKey(symbol);
@@ -1001,6 +1015,7 @@ export default function WatchlistTab({
                               });
                             }
                           }}
+                          aria-label={`Trade amount in USD for ${coin?.instrument_name}`}
                           className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
                           autoFocus
                         />

@@ -13,6 +13,7 @@ import WatchlistTab from '@/app/components/tabs/WatchlistTab';
 import OrdersTab from '@/app/components/tabs/OrdersTab';
 import ExpectedTakeProfitTab from '@/app/components/tabs/ExpectedTakeProfitTab';
 import ExecutedOrdersTab from '@/app/components/tabs/ExecutedOrdersTab';
+import SystemHealthPanel from '@/components/SystemHealth';
 import { palette } from '@/theme/palette';
 import { logger } from '@/utils/logger';
 
@@ -938,7 +939,7 @@ function DashboardPageContent() {
   const [activeTab, setActiveTab] = useState<Tab>('portfolio');
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [portfolio, setPortfolio] = useState<{ assets: PortfolioAsset[], total_value_usd: number } | null>(null);
+  const [portfolio, setPortfolio] = useState<{ assets: PortfolioAsset[], total_value_usd: number; total_assets_usd?: number; total_collateral_usd?: number; total_borrowed_usd?: number; portfolio_value_source?: string } | null>(null);
   const [totalBorrowed, setTotalBorrowed] = useState<number>(0);
   const [realBalances, setRealBalances] = useState<DashboardBalance[]>([]);
   const [topCoins, setTopCoins] = useState<TopCoin[]>([]);
@@ -3179,7 +3180,14 @@ function resolveDecisionIndexColor(value: number): string {
           ?? dashboardState.total_usd_value
           ?? fallbackAssets.reduce((sum, asset) => sum + (asset.value_usd ?? 0), 0);
         logger.info(`📊 Falling back to embedded portfolio data (${fallbackAssets.length} assets, total=$${fallbackTotal.toFixed(2)})`);
-        setPortfolio({ assets: fallbackAssets, total_value_usd: fallbackTotal });
+        setPortfolio({ 
+          assets: fallbackAssets, 
+          total_value_usd: fallbackTotal,
+          total_assets_usd: dashboardState.portfolio?.total_assets_usd,
+          total_collateral_usd: dashboardState.portfolio?.total_collateral_usd,
+          total_borrowed_usd: dashboardState.portfolio?.total_borrowed_usd,
+          portfolio_value_source: dashboardState.portfolio?.portfolio_value_source
+        });
         // setPortfolioLastUpdate(new Date()); // Removed - not currently used
         setPortfolioError(dashboardFetchFailed ? PORTFOLIO_UNAVAILABLE_MESSAGE : null);
       };
@@ -3188,10 +3196,10 @@ function resolveDecisionIndexColor(value: number): string {
         // Normalize balances: ensure 'asset' field exists (use currency/coin as fallback)
         // Also ensure usd_value and market_value are preserved
         const normalizedBalances = dashboardState.balances
-          .filter(bal => bal && (bal.asset || bal.currency || bal.coin))
+          .filter(bal => bal && (bal.asset || bal.currency))
           .map(bal => ({
             ...bal,
-            asset: bal.asset || bal.currency || bal.coin || '',
+            asset: bal.asset || bal.currency || '',
             // Preserve USD values - prioritize usd_value, then market_value
             // Don't filter by > 0 - preserve all values including 0
             usd_value: (bal.usd_value !== undefined && bal.usd_value !== null)
@@ -3268,7 +3276,14 @@ function resolveDecisionIndexColor(value: number): string {
             });
           }
 
-          setPortfolio({ assets: assetsWithValues, total_value_usd: totalUsd });
+          setPortfolio({ 
+            assets: assetsWithValues, 
+            total_value_usd: totalUsd,
+            total_assets_usd: dashboardState.portfolio?.total_assets_usd,
+            total_collateral_usd: dashboardState.portfolio?.total_collateral_usd,
+            total_borrowed_usd: dashboardState.portfolio?.total_borrowed_usd,
+            portfolio_value_source: dashboardState.portfolio?.portfolio_value_source
+          });
           // setPortfolioLastUpdate(new Date()); // Removed - not currently used
           setPortfolioError(dashboardFetchFailed ? PORTFOLIO_UNAVAILABLE_MESSAGE : null);
           return true; // Successfully updated
@@ -4268,6 +4283,12 @@ function resolveDecisionIndexColor(value: number): string {
                 if (item.trade_amount_usd !== undefined && item.trade_amount_usd !== null) {
                   backendAmounts[symbolUpper] = item.trade_amount_usd.toString();
                 }
+                if (item.sl_percentage !== undefined && item.sl_percentage !== null) {
+                  backendSLPercent[symbolUpper] = item.sl_percentage.toString();
+                }
+                if (item.tp_percentage !== undefined && item.tp_percentage !== null) {
+                  backendTPPercent[symbolUpper] = item.tp_percentage.toString();
+                }
                 if (item.trade_enabled !== undefined && item.trade_enabled !== null) {
                   backendTradeStatus[symbolUpper] = item.trade_enabled;
                 }
@@ -4309,6 +4330,22 @@ function resolveDecisionIndexColor(value: number): string {
             if (Object.keys(backendMarginStatus).length > 0) {
               setCoinMarginStatus(prev => ({ ...prev, ...backendMarginStatus }));
               logger.info('✅ Initialized trade_on_margin from backend:', Object.keys(backendMarginStatus).length, 'coins');
+            }
+
+            // Set amounts from backend (after processing all items)
+            if (Object.keys(backendAmounts).length > 0) {
+              setCoinAmounts(prev => ({ ...prev, ...backendAmounts }));
+              logger.info('✅ Initialized trade_amount_usd from backend:', Object.keys(backendAmounts).length, 'coins');
+            }
+
+            // Set SL/TP percentages from backend (after processing all items)
+            if (Object.keys(backendSLPercent).length > 0) {
+              setCoinSLPercent(prev => ({ ...prev, ...backendSLPercent }));
+              logger.info('✅ Initialized sl_percentage from backend:', Object.keys(backendSLPercent).length, 'coins');
+            }
+            if (Object.keys(backendTPPercent).length > 0) {
+              setCoinTPPercent(prev => ({ ...prev, ...backendTPPercent }));
+              logger.info('✅ Initialized tp_percentage from backend:', Object.keys(backendTPPercent).length, 'coins');
             }
           } catch (err) {
             logger.warn('Failed to load from backend:', err);
@@ -4515,6 +4552,9 @@ function resolveDecisionIndexColor(value: number): string {
           </button>
         </div>
 
+        {/* System Health Panel */}
+        <SystemHealthPanel className="mb-4" />
+
         {/* Tab Navigation Menu */}
         <div className="mb-6 border-b border-gray-200 dark:border-gray-700">
           <nav className="flex flex-wrap gap-2 -mb-px">
@@ -4560,7 +4600,7 @@ function resolveDecisionIndexColor(value: number): string {
               onToggleLiveTrading={async () => {
                 setTogglingLiveTrading(true);
                 try {
-                  await toggleLiveTrading();
+                  await toggleLiveTrading(!botStatus?.live_trading_enabled);
                   // Refresh portfolio to get updated bot status
                   await fetchPortfolio({ showLoader: false, backgroundRefresh: true });
                 } catch (err) {
@@ -4595,7 +4635,7 @@ function resolveDecisionIndexColor(value: number): string {
               onToggleLiveTrading={async () => {
                 setTogglingLiveTrading(true);
                 try {
-                  await toggleLiveTrading();
+                  await toggleLiveTrading(!botStatus?.live_trading_enabled);
                   await fetchPortfolio({ showLoader: false, backgroundRefresh: true });
                 } catch (err) {
                   logger.error('Failed to toggle live trading:', err);
@@ -4655,6 +4695,7 @@ function resolveDecisionIndexColor(value: number): string {
                     <select
                       value={selectedConfigPreset}
                       onChange={(e) => setSelectedConfigPreset(e.target.value as Preset)}
+                      aria-label="Strategy preset selection"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="Swing">Swing</option>
@@ -4669,6 +4710,7 @@ function resolveDecisionIndexColor(value: number): string {
                     <select
                       value={selectedConfigRisk}
                       onChange={(e) => setSelectedConfigRisk(e.target.value as RiskMode)}
+                      aria-label="Risk mode selection"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="Conservative">Conservative</option>
@@ -4882,7 +4924,7 @@ function resolveDecisionIndexColor(value: number): string {
               onToggleLiveTrading={async () => {
                 setTogglingLiveTrading(true);
                 try {
-                  await toggleLiveTrading();
+                  await toggleLiveTrading(!botStatus?.live_trading_enabled);
                   await fetchPortfolio({ showLoader: false, backgroundRefresh: true });
                 } catch (err) {
                   logger.error('Failed to toggle live trading:', err);
@@ -4944,7 +4986,11 @@ function resolveDecisionIndexColor(value: number): string {
           {activeTab === 'monitoring' && (
             <div>
               <h2 className="text-xl font-semibold mb-4">Monitoring</h2>
-              <MonitoringPanel />
+              <MonitoringPanel 
+                telegramMessages={telegramMessages}
+                telegramMessagesLoading={telegramMessagesLoading}
+                onRequestTelegramRefresh={fetchTelegramMessages}
+              />
             </div>
           )}
 

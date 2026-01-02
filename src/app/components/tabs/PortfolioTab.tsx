@@ -3,16 +3,19 @@
  * Extracted from page.tsx for better organization
  */
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { PortfolioAsset } from '@/app/api';
 import { formatNumber, formatDateTime } from '@/utils/formatting';
 import { logger } from '@/utils/logger';
 
+type SortField = 'coin' | 'balance' | 'value';
+type SortDirection = 'asc' | 'desc';
+
 interface PortfolioTabProps {
-  portfolio: { assets: PortfolioAsset[]; total_value_usd: number } | null;
+  portfolio: { assets: PortfolioAsset[]; total_value_usd: number; total_assets_usd?: number; total_collateral_usd?: number; total_borrowed_usd?: number; portfolio_value_source?: string } | null;
   portfolioLoading: boolean;
   portfolioError: string | null;
-  totalBorrowed: number;
+  totalBorrowed: number; // Legacy prop, prefer portfolio.total_borrowed_usd
   snapshotLastUpdated: Date | null;
   snapshotStale: boolean;
   snapshotStaleSeconds: number | null;
@@ -39,15 +42,67 @@ export default function PortfolioTab({
   onToggleLiveTrading,
   onRefreshPortfolio,
 }: PortfolioTabProps) {
-  // This is a placeholder - the actual implementation will be migrated from page.tsx
-  // For now, this demonstrates the component structure
-  
-  if (portfolioLoading) {
-    return <div>Loading portfolio...</div>;
-  }
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
-  if (portfolioError) {
-    return <div className="text-red-500">{portfolioError}</div>;
+  // Sort assets
+  const sortedAssets = useMemo(() => {
+    if (!portfolio?.assets || portfolio.assets.length === 0) return [];
+    if (!sortField) {
+      // Default: sort by value (highest first)
+      return [...portfolio.assets].sort((a, b) => (b.value_usd || 0) - (a.value_usd || 0));
+    }
+
+    return [...portfolio.assets].sort((a, b) => {
+      let aVal: unknown = 0;
+      let bVal: unknown = 0;
+
+      switch (sortField) {
+        case 'coin':
+          aVal = (a.coin || '').toLowerCase();
+          bVal = (b.coin || '').toLowerCase();
+          break;
+        case 'balance':
+          aVal = a.balance || 0;
+          bVal = b.balance || 0;
+          break;
+        case 'value':
+          aVal = a.value_usd || 0;
+          bVal = b.value_usd || 0;
+          break;
+      }
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      }
+
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      }
+
+      return 0;
+    });
+  }, [portfolio?.assets, sortField, sortDirection]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  if (portfolioLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-gray-500 text-lg">Loading portfolio...</div>
+      </div>
+    );
   }
 
   return (
@@ -115,17 +170,47 @@ export default function PortfolioTab({
         <>
           <div className="mb-4">
             <h2 className="text-xl font-semibold mb-2">Portfolio Summary</h2>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
                 <div className="text-sm text-gray-500">Total Value</div>
+                <div className="text-xs text-gray-400 mb-1">Wallet Balance (after haircut)</div>
                 <div className="text-2xl font-bold">{formatNumber(portfolio.total_value_usd)}</div>
+                {portfolio.portfolio_value_source && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    Source: {portfolio.portfolio_value_source === "exchange_margin_equity" 
+                      ? "Exchange Wallet Balance" 
+                      : "Derived (fallback)"}
+                  </div>
+                )}
               </div>
-              {totalBorrowed > 0 && (
+              {portfolio.total_assets_usd !== undefined && (
                 <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
-                  <div className="text-sm text-gray-500">Borrowed</div>
-                  <div className="text-2xl font-bold text-red-600">{formatNumber(totalBorrowed)}</div>
+                  <div className="text-sm text-gray-500">Gross Assets</div>
+                  <div className="text-xs text-gray-400 mb-1">(raw, before haircut)</div>
+                  <div className="text-2xl font-bold text-blue-600">{formatNumber(portfolio.total_assets_usd)}</div>
                 </div>
               )}
+              {portfolio.total_collateral_usd !== undefined && (
+                <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
+                  <div className="text-sm text-gray-500">Collateral</div>
+                  <div className="text-xs text-gray-400 mb-1">(after haircut)</div>
+                  <div className="text-2xl font-bold text-green-600">{formatNumber(portfolio.total_collateral_usd)}</div>
+                </div>
+              )}
+              {(() => {
+                // Use portfolio.total_borrowed_usd if available, otherwise fall back to totalBorrowed prop
+                const borrowedAmount = portfolio.total_borrowed_usd !== undefined 
+                  ? portfolio.total_borrowed_usd 
+                  : totalBorrowed;
+                
+                return borrowedAmount > 0 ? (
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded shadow">
+                    <div className="text-sm text-gray-500">Borrowed</div>
+                    <div className="text-xs text-gray-400 mb-1">(margin loans)</div>
+                    <div className="text-2xl font-bold text-red-600">{formatNumber(borrowedAmount)}</div>
+                  </div>
+                ) : null;
+              })()}
             </div>
           </div>
 
@@ -135,13 +220,34 @@ export default function PortfolioTab({
               <table className="min-w-full bg-white dark:bg-gray-800 rounded shadow">
                 <thead className="bg-gray-50 dark:bg-gray-700">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Coin</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Balance</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Value (USD)</th>
+                    <th
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                      onClick={() => handleSort('coin')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Coin {sortField === 'coin' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                      onClick={() => handleSort('balance')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Balance {sortField === 'balance' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                      onClick={() => handleSort('value')}
+                    >
+                      <div className="flex items-center gap-1">
+                        Value (USD) {sortField === 'value' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {portfolio.assets.map((asset) => (
+                  {sortedAssets.map((asset) => (
                     <tr key={asset.coin} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                       <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{asset.coin}</td>
                       <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{formatNumber(asset.balance)}</td>

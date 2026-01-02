@@ -3141,7 +3141,7 @@ function resolveDecisionIndexColor(value: number): string {
       
       // Set bot status - only update if we have valid status data
       // Preserve last known status on transient errors (don't immediately mark as stopped)
-      if (dashboardState.bot_status) {
+      if (dashboardState.bot_status && dashboardState.bot_status.status) {
         // Only update to "stopped" if we have a clear reason or explicit stopped status
         // If reason is "Status unavailable (checking...)", preserve last known status
         if (dashboardState.bot_status.status === 'stopped' && 

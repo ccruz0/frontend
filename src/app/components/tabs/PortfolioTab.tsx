@@ -155,13 +155,11 @@ export default function PortfolioTab({
         </button>
       </div>
 
-      {portfolioError && (
+      {portfolioError ? (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded text-red-700">
           {portfolioError}
         </div>
-      )}
-
-      {!portfolio || !portfolio.assets || portfolio.assets.length === 0 ? (
+      ) : !portfolio || !portfolio.assets || portfolio.assets.length === 0 ? (
         <div className="text-center py-12">
           <div className="text-gray-500 text-lg mb-2">No portfolio data available</div>
           <div className="text-gray-400 text-sm">The portfolio will appear here once you have assets in your account.</div>

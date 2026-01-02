@@ -24,8 +24,11 @@ export default function SystemHealthPanel({ className = '' }: SystemHealthProps)
       const data = await getSystemHealth();
       setHealth(data);
     } catch (err) {
+      // Silently handle errors - don't crash the app
       setError(err instanceof Error ? err.message : 'Failed to fetch system health');
       console.error('Error fetching system health:', err);
+      // Set health to null to show error state instead of crashing
+      setHealth(null);
     } finally {
       setLoading(false);
     }

@@ -32,6 +32,10 @@ export interface WatchlistItem {
   is_deleted?: boolean;
   updated_at?: string;
   created_at?: string;
+  // Strategy fields (resolved from trading_config.json + sl_tp_mode)
+  strategy_preset?: string | null;  // "swing", "intraday", "scalp"
+  strategy_risk?: string | null;    // "conservative", "aggressive"
+  strategy_key?: string | null;     // "swing-conservative" (canonical identifier)
 }
 
 export interface WatchlistInput {
@@ -226,6 +230,10 @@ export interface TopCoin {
   res_down?: number;
   strategy?: StrategyDecision;  // Legacy field
   strategy_state?: StrategyDecision;  // Backend source of truth (preferred)
+  // Strategy fields from WatchlistItem (single source of truth)
+  strategy_preset?: string | null;  // "swing", "intraday", "scalp"
+  strategy_risk?: string | null;    // "conservative", "aggressive"
+  strategy_key?: string | null;     // "swing-conservative" (canonical identifier)
 }
 
 // Dashboard State Types (new unified endpoint)
@@ -2549,5 +2557,82 @@ export async function restartBackend(): Promise<RestartBackendResponse> {
       'error'
     );
     throw error;
+  }
+}
+
+export interface SystemHealth {
+  global_status: 'PASS' | 'WARN' | 'FAIL';
+  timestamp: string;
+  market_data: {
+    status: 'PASS' | 'FAIL';
+    fresh_symbols: number;
+    stale_symbols: number;
+    max_age_minutes: number | null;
+  };
+  market_updater: {
+    status: 'PASS' | 'FAIL';
+    is_running: boolean;
+    last_heartbeat_age_minutes: number | null;
+  };
+  signal_monitor: {
+    status: 'PASS' | 'FAIL';
+    is_running: boolean;
+    last_cycle_age_minutes: number | null;
+  };
+  telegram: {
+    status: 'PASS' | 'FAIL';
+    enabled: boolean;
+    chat_id_set: boolean;
+    last_send_ok: boolean | null;
+  };
+  trade_system: {
+    status: 'PASS' | 'WARN' | 'FAIL';
+    open_orders: number;
+    max_open_orders: number | null;
+    last_check_ok: boolean | null;
+  };
+}
+
+export async function getSystemHealth(): Promise<SystemHealth> {
+  const cacheBust = `?_ts=${Date.now()}`;
+  return fetchAPI<SystemHealth>(`/health/system${cacheBust}`, { cache: 'no-store' });
+}
+
+export interface TestTelegramResponse {
+  ok: boolean;
+  error?: string;
+}
+
+export async function testTelegram(adminKey: string): Promise<TestTelegramResponse> {
+  try {
+    const response = await fetch(`${DEFAULT_API_URL}/api/admin/test-telegram`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Key': adminKey,
+      },
+      cache: 'no-store',
+    });
+
+    if (response.status === 401) {
+      return { ok: false, error: 'unauthorized' };
+    }
+
+    if (response.status === 429) {
+      const data = await response.json();
+      return { ok: false, error: data.detail || 'rate_limited' };
+    }
+
+    if (!response.ok) {
+      const data = await response.json();
+      return { ok: false, error: data.error || data.detail || 'unknown_error' };
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ testTelegram: Error:', errorMsg);
+    return { ok: false, error: errorMsg };
   }
 }

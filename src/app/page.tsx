@@ -4349,8 +4349,26 @@ function resolveDecisionIndexColor(value: number): string {
                 }
               });
               if (Object.keys(filteredBackendAmounts).length > 0) {
-                setCoinAmounts(prev => ({ ...prev, ...filteredBackendAmounts }));
+                // CRITICAL: Backend is source of truth - always overwrite localStorage values
+                // Use functional update to ensure we're using the latest backend values
+                setCoinAmounts(prev => {
+                  const updated = { ...prev, ...filteredBackendAmounts };
+                  // Log specific values for debugging
+                  if (filteredBackendAmounts['LTC_USDT']) {
+                    logger.info(`🔍 LTC_USDT amount from backend: ${filteredBackendAmounts['LTC_USDT']}, overwriting localStorage value`);
+                  }
+                  return updated;
+                });
                 logger.info('✅ Initialized trade_amount_usd from backend:', Object.keys(filteredBackendAmounts).length, 'coins');
+                // Update localStorage with backend values to keep them in sync
+                try {
+                  const currentAmounts = JSON.parse(localStorage.getItem('watchlist_amounts') || '{}');
+                  const updatedAmounts = { ...currentAmounts, ...filteredBackendAmounts };
+                  localStorage.setItem('watchlist_amounts', JSON.stringify(updatedAmounts));
+                  logger.info('✅ Updated localStorage with backend amounts');
+                } catch (err) {
+                  logger.warn('Failed to update localStorage with backend amounts:', err);
+                }
               }
             }
 

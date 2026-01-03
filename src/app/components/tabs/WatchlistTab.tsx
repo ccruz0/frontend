@@ -388,10 +388,20 @@ export default function WatchlistTab({
       
       // Sync with response if available
       if (result?.trade_amount_usd !== undefined && result.trade_amount_usd !== null) {
-        setCoinAmounts(prev => ({ ...prev, [symbolKey]: result.trade_amount_usd!.toString() }));
+        const savedValue = result.trade_amount_usd.toString();
+        setCoinAmounts(prev => ({ ...prev, [symbolKey]: savedValue }));
         // Mark as recently saved to prevent overwriting with stale backend data
         if (onAmountSaved) {
           onAmountSaved(symbolKey);
+        }
+        // Update localStorage to keep it in sync with backend
+        try {
+          const currentAmounts = JSON.parse(localStorage.getItem('watchlist_amounts') || '{}');
+          currentAmounts[symbolKey] = savedValue;
+          localStorage.setItem('watchlist_amounts', JSON.stringify(currentAmounts));
+          logger.info(`✅ Updated localStorage for ${symbolKey}: ${savedValue}`);
+        } catch (err) {
+          logger.warn(`Failed to update localStorage for ${symbolKey}:`, err);
         }
       }
     } catch (err) {

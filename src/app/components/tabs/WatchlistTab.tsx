@@ -34,6 +34,7 @@ interface WatchlistTabProps {
   tradingConfig?: TradingConfig | null;
   coinPresets?: Record<string, string>;
   onCoinPresetChange?: (symbol: string, preset: string) => void;
+  onAmountSaved?: (symbol: string) => void; // Callback to mark amount as recently saved
 }
 
 type SortField = 'symbol' | 'last_price' | 'rsi' | 'ema10' | 'ma50' | 'ma200' | 'volume' | 'amount_usd';
@@ -63,6 +64,7 @@ export default function WatchlistTab({
   tradingConfig: parentTradingConfig,
   coinPresets: parentCoinPresets,
   onCoinPresetChange,
+  onAmountSaved,
 }: WatchlistTabProps) {
   const {
     topCoins: hookTopCoins,
@@ -387,6 +389,10 @@ export default function WatchlistTab({
       // Sync with response if available
       if (result?.trade_amount_usd !== undefined && result.trade_amount_usd !== null) {
         setCoinAmounts(prev => ({ ...prev, [symbolKey]: result.trade_amount_usd!.toString() }));
+        // Mark as recently saved to prevent overwriting with stale backend data
+        if (onAmountSaved) {
+          onAmountSaved(symbolKey);
+        }
       }
     } catch (err) {
       logger.error(`Failed to update amount for ${symbol}:`, err);

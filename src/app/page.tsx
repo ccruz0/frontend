@@ -1002,6 +1002,8 @@ function DashboardPageContent() {
   const [coinAmounts, setCoinAmounts] = useState<Record<string, string>>({});
   const [coinSLPercent, setCoinSLPercent] = useState<Record<string, string>>({});
   const [coinTPPercent, setCoinTPPercent] = useState<Record<string, string>>({});
+  // Track recently saved amounts to prevent overwriting with stale backend data
+  const recentlySavedAmounts = useRef<Record<string, number>>({});
   const [calculatedSL, setCalculatedSL] = useState<Record<string, number>>({});
   const [calculatedTP, setCalculatedTP] = useState<Record<string, number>>({});
   const [showOverrideValues, setShowOverrideValues] = useState<Record<string, {sl: boolean, tp: boolean}>>({});
@@ -4333,9 +4335,23 @@ function resolveDecisionIndexColor(value: number): string {
             }
 
             // Set amounts from backend (after processing all items)
+            // Don't overwrite recently saved values (within last 5 seconds) to prevent race conditions
             if (Object.keys(backendAmounts).length > 0) {
-              setCoinAmounts(prev => ({ ...prev, ...backendAmounts }));
-              logger.info('✅ Initialized trade_amount_usd from backend:', Object.keys(backendAmounts).length, 'coins');
+              const now = Date.now();
+              const filteredBackendAmounts: Record<string, string> = {};
+              Object.entries(backendAmounts).forEach(([symbol, value]) => {
+                const lastSaved = recentlySavedAmounts.current[symbol];
+                // Only use backend value if it wasn't recently saved (within 5 seconds)
+                if (!lastSaved || (now - lastSaved) > 5000) {
+                  filteredBackendAmounts[symbol] = value;
+                } else {
+                  logger.debug(`Skipping backend amount for ${symbol} (saved ${now - lastSaved}ms ago)`);
+                }
+              });
+              if (Object.keys(filteredBackendAmounts).length > 0) {
+                setCoinAmounts(prev => ({ ...prev, ...filteredBackendAmounts }));
+                logger.info('✅ Initialized trade_amount_usd from backend:', Object.keys(filteredBackendAmounts).length, 'coins');
+              }
             }
 
             // Set SL/TP percentages from backend (after processing all items)
@@ -4668,6 +4684,10 @@ function resolveDecisionIndexColor(value: number): string {
                 } catch (err) {
                   logger.error(`Failed to update strategy for ${symbol}:`, err);
                 }
+              }}
+              onAmountSaved={(symbol) => {
+                // Mark amount as recently saved to prevent overwriting with stale backend data
+                recentlySavedAmounts.current[symbol] = Date.now();
               }}
             />
           )}

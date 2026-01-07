@@ -23,6 +23,34 @@ const nextConfig: NextConfig = {
         : false,
   },
 
+  // Dev proxy: Rewrite API paths to backend
+  async rewrites() {
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8002';
+    
+    return [
+      {
+        source: '/health/:path*',
+        destination: `${backendUrl}/api/health/:path*`,
+      },
+      {
+        source: '/dashboard/:path*',
+        destination: `${backendUrl}/api/dashboard/:path*`,
+      },
+      {
+        source: '/market/:path*',
+        destination: `${backendUrl}/api/market/:path*`,
+      },
+      {
+        source: '/orders/:path*',
+        destination: `${backendUrl}/api/orders/:path*`,
+      },
+      {
+        source: '/signals/:path*',
+        destination: `${backendUrl}/api/signals/:path*`,
+      },
+    ];
+  },
+
   // Headers to prevent browser caching (especially useful after deployments)
   async headers() {
     return [

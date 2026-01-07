@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev:clean": "bash scripts/dev-clean.sh",
-    "dev": "npm run dev:clean && cross-env PORT=3001 next dev -H 0.0.0.0",
+    "dev": "npm run dev:clean && node scripts/start-next-dev.mjs",
     "build": "next build",
     "start": "node server.js",
     "lint": "eslint",
@@ -27,7 +27,6 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.21",
-    "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "16.0.0",
     "playwright": "^1.56.1",

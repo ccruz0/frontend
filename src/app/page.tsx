@@ -2844,12 +2844,40 @@ function resolveDecisionIndexColor(value: number): string {
       res_up: chooseValue(incoming.res_up, existing.res_up),
       res_down: chooseValue(incoming.res_down, existing.res_down),
       strategy: incoming.strategy ?? existing.strategy,
+      // Strategy fields from backend
+      strategy_key: incoming.strategy_key ?? existing.strategy_key,
+      strategy_preset: incoming.strategy_preset ?? existing.strategy_preset,
+      strategy_risk: incoming.strategy_risk ?? existing.strategy_risk,
+      // SL/TP fields from backend
+      sl_price: chooseValue(incoming.sl_price, existing.sl_price),
+      tp_price: chooseValue(incoming.tp_price, existing.tp_price),
     };
   }, []);
 
   useEffect(() => {
     lastUpdateTimesRef.current = lastUpdateTimes;
   }, [lastUpdateTimes]);
+
+  // Helper function to update a single coin in the topCoins array
+  const updateSingleCoin = useCallback((symbol: string, updates: Partial<TopCoin>) => {
+    const symbolUpper = symbol.toUpperCase();
+    const currentCoins = topCoinsRef.current;
+    const coinIndex = currentCoins.findIndex(c => c.instrument_name?.toUpperCase() === symbolUpper);
+    
+    if (coinIndex === -1) {
+      logger.warn(`Coin ${symbol} not found in topCoins, cannot update`);
+      return;
+    }
+    
+    const existingCoin = currentCoins[coinIndex];
+    const updatedCoin = mergeCoinData(existingCoin, { ...existingCoin, ...updates } as TopCoin);
+    const updatedCoins = [...currentCoins];
+    updatedCoins[coinIndex] = updatedCoin;
+    
+    topCoinsRef.current = updatedCoins;
+    setTopCoins(updatedCoins);
+    logger.info(`✅ Updated coin ${symbol} in topCoins array`);
+  }, [mergeCoinData]);
 
   const updateTopCoins = useCallback((newCoins: TopCoin[], filterSymbols?: string[]) => {
     logger.info('🔄 updateTopCoins called with', newCoins.length, 'coins', filterSymbols ? `(filtered to ${filterSymbols.length})` : '');
@@ -4722,6 +4750,35 @@ function resolveDecisionIndexColor(value: number): string {
               onAmountSaved={(symbol) => {
                 // Mark amount as recently saved to prevent overwriting with stale backend data
                 recentlySavedAmounts.current[symbol] = Date.now();
+              }}
+              onCoinUpdated={(symbol, updates) => {
+                // Update the coin in topCoins array immediately after mutation
+                updateSingleCoin(symbol, updates);
+                
+                // Also update SL/TP percentage state if provided in updates
+                const symbolKey = normalizeSymbolKey(symbol);
+                if (updates.sl_percentage !== undefined) {
+                  setCoinSLPercent(prev => {
+                    const updated = { ...prev };
+                    if (updates.sl_percentage === null || updates.sl_percentage === undefined) {
+                      delete updated[symbolKey];
+                    } else {
+                      updated[symbolKey] = updates.sl_percentage.toString();
+                    }
+                    return updated;
+                  });
+                }
+                if (updates.tp_percentage !== undefined) {
+                  setCoinTPPercent(prev => {
+                    const updated = { ...prev };
+                    if (updates.tp_percentage === null || updates.tp_percentage === undefined) {
+                      delete updated[symbolKey];
+                    } else {
+                      updated[symbolKey] = updates.tp_percentage.toString();
+                    }
+                    return updated;
+                  });
+                }
               }}
             />
           )}

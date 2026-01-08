@@ -35,6 +35,7 @@ interface WatchlistTabProps {
   coinPresets?: Record<string, string>;
   onCoinPresetChange?: (symbol: string, preset: string) => void;
   onAmountSaved?: (symbol: string) => void; // Callback to mark amount as recently saved
+  onCoinUpdated?: (symbol: string, updates: Partial<TopCoin>) => void; // Callback to update coin in parent's topCoins array
 }
 
 type SortField = 'symbol' | 'last_price' | 'rsi' | 'ema10' | 'ma50' | 'ma200' | 'volume' | 'amount_usd';
@@ -65,6 +66,7 @@ export default function WatchlistTab({
   coinPresets: parentCoinPresets,
   onCoinPresetChange,
   onAmountSaved,
+  onCoinUpdated,
 }: WatchlistTabProps) {
   const {
     topCoins: hookTopCoins,
@@ -229,9 +231,21 @@ export default function WatchlistTab({
       setCoinTradeStatus(prev => ({ ...prev, [symbolKey]: newStatus }));
       
       // Save to backend
-      await saveCoinSettings(symbol, {
+      const result = await saveCoinSettings(symbol, {
         trade_enabled: newStatus,
       });
+      
+      // Update parent's topCoins array with backend response
+      if (onCoinUpdated && result) {
+        onCoinUpdated(symbol, {
+          trade_enabled: result.trade_enabled,
+          strategy_key: result.strategy_key,
+          strategy_preset: result.strategy_preset,
+          strategy_risk: result.strategy_risk,
+          sl_price: result.sl_price,
+          tp_price: result.tp_price,
+        });
+      }
       
       logger.info(`✅ Trade status updated for ${symbol}: ${newStatus}`);
     } catch (err) {
@@ -271,6 +285,13 @@ export default function WatchlistTab({
         if (result?.alert_enabled !== undefined) {
           setCoinAlertStatus(prev => ({ ...prev, [symbolKey]: result.alert_enabled }));
         }
+        
+        // Update parent's topCoins array with backend response
+        if (onCoinUpdated) {
+          onCoinUpdated(symbol, {
+            alert_enabled: result.alert_enabled,
+          });
+        }
       } else if (alertType === 'buy') {
         previousStatus = coinBuyAlertStatus[symbolKey] || false;
         const newStatus = !previousStatus;
@@ -286,6 +307,14 @@ export default function WatchlistTab({
         if (result?.buy_alert_enabled !== undefined) {
           setCoinBuyAlertStatus(prev => ({ ...prev, [symbolKey]: result.buy_alert_enabled }));
         }
+        
+        // Update parent's topCoins array with backend response
+        if (onCoinUpdated) {
+          onCoinUpdated(symbol, {
+            buy_alert_enabled: result.buy_alert_enabled,
+            alert_enabled: result.alert_enabled,
+          });
+        }
       } else if (alertType === 'sell') {
         previousStatus = coinSellAlertStatus[symbolKey] || false;
         const newStatus = !previousStatus;
@@ -300,6 +329,14 @@ export default function WatchlistTab({
         // Sync with response if available
         if (result?.sell_alert_enabled !== undefined) {
           setCoinSellAlertStatus(prev => ({ ...prev, [symbolKey]: result.sell_alert_enabled }));
+        }
+        
+        // Update parent's topCoins array with backend response
+        if (onCoinUpdated) {
+          onCoinUpdated(symbol, {
+            sell_alert_enabled: result.sell_alert_enabled,
+            alert_enabled: result.alert_enabled,
+          });
         }
       }
     } catch (err) {
@@ -346,6 +383,18 @@ export default function WatchlistTab({
       // Sync with response if available
       if (result?.trade_on_margin !== undefined) {
         setLocalCoinMarginStatus(prev => ({ ...prev, [symbolKey]: Boolean(result.trade_on_margin) }));
+      }
+      
+      // Update parent's topCoins array with backend response
+      if (onCoinUpdated && result) {
+        onCoinUpdated(symbol, {
+          trade_on_margin: result.trade_on_margin,
+          strategy_key: result.strategy_key,
+          strategy_preset: result.strategy_preset,
+          strategy_risk: result.strategy_risk,
+          sl_price: result.sl_price,
+          tp_price: result.tp_price,
+        });
       }
     } catch (err) {
       logger.error(`Failed to update margin status for ${symbol}:`, err);
@@ -404,6 +453,18 @@ export default function WatchlistTab({
           logger.warn(`Failed to update localStorage for ${symbolKey}:`, err);
         }
       }
+      
+      // Update parent's topCoins array with backend response
+      if (onCoinUpdated && result) {
+        onCoinUpdated(symbol, {
+          trade_amount_usd: result.trade_amount_usd,
+          strategy_key: result.strategy_key,
+          strategy_preset: result.strategy_preset,
+          strategy_risk: result.strategy_risk,
+          sl_price: result.sl_price,
+          tp_price: result.tp_price,
+        });
+      }
     } catch (err) {
       logger.error(`Failed to update amount for ${symbol}:`, err);
       // Revert optimistic update to previous value
@@ -447,11 +508,23 @@ export default function WatchlistTab({
       setCoinSLPercent(prev => ({ ...prev, [symbolKey]: value }));
       
       // Save to backend
-      await saveCoinSettings(symbol, {
+      const result = await saveCoinSettings(symbol, {
         sl_percentage: numValue,
       });
       
       logger.info(`✅ SL% updated for ${symbol}: ${value || 'null'}`);
+      
+      // Update parent's topCoins array with backend response (includes updated SL/TP prices)
+      if (onCoinUpdated && result) {
+        onCoinUpdated(symbol, {
+          sl_percentage: result.sl_percentage,
+          sl_price: result.sl_price,
+          tp_price: result.tp_price,
+          strategy_key: result.strategy_key,
+          strategy_preset: result.strategy_preset,
+          strategy_risk: result.strategy_risk,
+        });
+      }
     } catch (err) {
       logger.error(`Failed to update SL% for ${symbol}:`, err);
     } finally {
@@ -483,11 +556,23 @@ export default function WatchlistTab({
       setCoinTPPercent(prev => ({ ...prev, [symbolKey]: value }));
       
       // Save to backend
-      await saveCoinSettings(symbol, {
+      const result = await saveCoinSettings(symbol, {
         tp_percentage: numValue,
       });
       
       logger.info(`✅ TP% updated for ${symbol}: ${value || 'null'}`);
+      
+      // Update parent's topCoins array with backend response (includes updated SL/TP prices)
+      if (onCoinUpdated && result) {
+        onCoinUpdated(symbol, {
+          tp_percentage: result.tp_percentage,
+          sl_price: result.sl_price,
+          tp_price: result.tp_price,
+          strategy_key: result.strategy_key,
+          strategy_preset: result.strategy_preset,
+          strategy_risk: result.strategy_risk,
+        });
+      }
     } catch (err) {
       logger.error(`Failed to update TP% for ${symbol}:`, err);
     } finally {
@@ -542,10 +627,22 @@ export default function WatchlistTab({
         onCoinPresetChange(symbol, strategyKey);
       }
       
-      logger.info(`✅ Strategy updated for ${symbol}: ${strategyKey} (sl_tp_mode=${risk}). DB is source of truth.`);
+      // CRITICAL: Update parent's topCoins array with backend response (includes updated SL/TP prices)
+      // This ensures UI immediately reflects the new strategy and its calculated SL/TP values
+      if (onCoinUpdated && result) {
+        onCoinUpdated(symbol, {
+          strategy_key: result.strategy_key || strategyKey,
+          strategy_preset: result.strategy_preset,
+          strategy_risk: result.strategy_risk || risk,
+          sl_tp_mode: result.sl_tp_mode || risk,
+          sl_price: result.sl_price,
+          tp_price: result.tp_price,
+          sl_percentage: result.sl_percentage,
+          tp_percentage: result.tp_percentage,
+        });
+      }
       
-      // CRITICAL: Parent component should refetch /api/dashboard to get updated strategy_key
-      // This ensures UI reflects the exact DB state
+      logger.info(`✅ Strategy updated for ${symbol}: ${strategyKey} (sl_tp_mode=${risk}). DB is source of truth.`);
       
     } catch (err) {
       logger.error(`Failed to update strategy for ${symbol}:`, err);

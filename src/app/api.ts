@@ -122,6 +122,7 @@ export interface TopCoin {
   strategy_key?: string;       // e.g., "swing-conservative"
   strategy_preset?: string;    // e.g., "swing"
   strategy_risk?: string;      // e.g., "conservative"
+  sl_tp_mode?: string;        // SL/TP mode (e.g., "conservative", "aggressive")
   // Technical indicators (now included in cache)
   rsi?: number;
   ma50?: number;
@@ -139,6 +140,15 @@ export interface TopCoin {
   // Strategy-related fields
   strategy?: string;  // Strategy type (swing, scalp, etc.)
   strategy_state?: string;  // Strategy state
+  // SL/TP fields from backend (calculated based on strategy)
+  sl_price?: number;  // Calculated stop loss price
+  tp_price?: number;  // Calculated take profit price
+  sl_percentage?: number | null;  // Manual SL percentage override
+  tp_percentage?: number | null;  // Manual TP percentage override
+  // Watchlist fields
+  trade_enabled?: boolean;
+  trade_amount_usd?: number | null;
+  trade_on_margin?: boolean;
 }
 
 // Dashboard State Types (new unified endpoint)
@@ -236,6 +246,8 @@ export interface CoinSettings {
   sell_alert_enabled?: boolean;
   sl_tp_mode?: string;
   strategy_key?: string; // Optional: some endpoints may return resolved strategy key
+  strategy_preset?: string; // Optional: strategy preset (e.g., "swing")
+  strategy_risk?: string; // Optional: strategy risk (e.g., "conservative")
   min_price_change_pct?: number | null;
   sl_percentage?: number | null;
   tp_percentage?: number | null;

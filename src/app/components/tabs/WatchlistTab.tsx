@@ -885,6 +885,57 @@ export default function WatchlistTab({
     }
   }, [isBuyCriteriaMet, isSellCriteriaMet]);
 
+  // Helper function to calculate SL/TP percentage from prices
+  const calculateSLTPPercent = useCallback((price: number | undefined, slPrice: number | undefined, tpPrice: number | undefined): { slPercent: number | null, tpPercent: number | null } => {
+    if (!price || price <= 0) {
+      return { slPercent: null, tpPercent: null };
+    }
+    
+    let slPercent: number | null = null;
+    let tpPercent: number | null = null;
+    
+    if (slPrice && slPrice > 0) {
+      // SL is below current price, so percentage is negative
+      slPercent = ((slPrice - price) / price) * 100;
+    }
+    
+    if (tpPrice && tpPrice > 0) {
+      // TP is above current price, so percentage is positive
+      tpPercent = ((tpPrice - price) / price) * 100;
+    }
+    
+    return { slPercent, tpPercent };
+  }, []);
+
+  // Helper function to get displayed SL/TP percentage (manual or calculated)
+  const getDisplayedSLTP = useCallback((coin: TopCoin, symbolKey: string): { slPercent: string | null, tpPercent: string | null } => {
+    // First, check for manual percentages
+    const manualSL = coinSLPercent[symbolKey];
+    const manualTP = coinTPPercent[symbolKey];
+    
+    if (manualSL || manualTP) {
+      return {
+        slPercent: manualSL || null,
+        tpPercent: manualTP || null,
+      };
+    }
+    
+    // If no manual percentages, calculate from prices
+    const currentPrice = coin?.current_price;
+    const slPrice = coin?.sl_price;
+    const tpPrice = coin?.tp_price;
+    
+    if (currentPrice && (slPrice || tpPrice)) {
+      const calculated = calculateSLTPPercent(currentPrice, slPrice, tpPrice);
+      return {
+        slPercent: calculated.slPercent !== null ? calculated.slPercent.toFixed(2) : null,
+        tpPercent: calculated.tpPercent !== null ? calculated.tpPercent.toFixed(2) : null,
+      };
+    }
+    
+    return { slPercent: null, tpPercent: null };
+  }, [coinSLPercent, coinTPPercent, calculateSLTPPercent]);
+
   // Helper function to build SL/TP tooltip
   const buildSLTPTooltip = useCallback((coin: TopCoin, signal: TradingSignals | null | undefined): string => {
     const strategy = getCoinStrategy(coin, signal);
@@ -900,6 +951,12 @@ export default function WatchlistTab({
     // Show manual SL/TP if set, otherwise show calculated from strategy
     if (slPercent) {
       lines.push(`🛑 Stop Loss (manual): ${slPercent}%`);
+    } else if (coin?.sl_price && coin?.current_price) {
+      const calculated = calculateSLTPPercent(coin.current_price, coin.sl_price, undefined);
+      if (calculated.slPercent !== null) {
+        lines.push(`🛑 Stop Loss (calculated): ${calculated.slPercent.toFixed(2)}%`);
+        lines.push(`   Price: $${formatNumber(coin.sl_price, coin?.instrument_name)}`);
+      }
     } else if (signal?.stop_loss_take_profit?.stop_loss) {
       const sl = signal.stop_loss_take_profit.stop_loss;
       lines.push(`🛑 Stop Loss:`);
@@ -909,6 +966,12 @@ export default function WatchlistTab({
     
     if (tpPercent) {
       lines.push(`🎯 Take Profit (manual): ${tpPercent}%`);
+    } else if (coin?.tp_price && coin?.current_price) {
+      const calculated = calculateSLTPPercent(coin.current_price, undefined, coin.tp_price);
+      if (calculated.tpPercent !== null) {
+        lines.push(`🎯 Take Profit (calculated): ${calculated.tpPercent.toFixed(2)}%`);
+        lines.push(`   Price: $${formatNumber(coin.tp_price, coin?.instrument_name)}`);
+      }
     } else if (signal?.stop_loss_take_profit?.take_profit) {
       const tp = signal.stop_loss_take_profit.take_profit;
       lines.push(`🎯 Take Profit:`);
@@ -926,7 +989,7 @@ export default function WatchlistTab({
     }
     
     return lines.join('\n');
-  }, [formatStrategyName, coinSLPercent, coinTPPercent]);
+  }, [formatStrategyName, coinSLPercent, coinTPPercent, calculateSLTPPercent]);
 
   const SortableHeader: React.FC<{ field: SortField; children: React.ReactNode }> = ({ field, children }) => (
     <th
@@ -1176,11 +1239,17 @@ export default function WatchlistTab({
                         />
                       ) : (
                         <span
-                          onClick={() => setEditingSLPercent(prev => ({ ...prev, [coin?.instrument_name]: coinSLPercent[symbolKey] || '' }))}
+                          onClick={() => {
+                            const displayed = getDisplayedSLTP(coin, symbolKey);
+                            setEditingSLPercent(prev => ({ ...prev, [coin?.instrument_name]: displayed.slPercent || coinSLPercent[symbolKey] || '' }));
+                          }}
                           className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 px-2 py-1 rounded border border-transparent hover:border-gray-300 cursor-help"
                           title={buildSLTPTooltip(coin, signal)}
                         >
-                          {coinSLPercent[symbolKey] ? `${coinSLPercent[symbolKey]}%` : '-'}
+                          {(() => {
+                            const displayed = getDisplayedSLTP(coin, symbolKey);
+                            return displayed.slPercent ? `${displayed.slPercent}%` : '-';
+                          })()}
                         </span>
                       )}
                     </td>
@@ -1218,11 +1287,17 @@ export default function WatchlistTab({
                         />
                       ) : (
                         <span
-                          onClick={() => setEditingTPPercent(prev => ({ ...prev, [coin?.instrument_name]: coinTPPercent[symbolKey] || '' }))}
+                          onClick={() => {
+                            const displayed = getDisplayedSLTP(coin, symbolKey);
+                            setEditingTPPercent(prev => ({ ...prev, [coin?.instrument_name]: displayed.tpPercent || coinTPPercent[symbolKey] || '' }));
+                          }}
                           className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 px-2 py-1 rounded border border-transparent hover:border-gray-300 cursor-help"
                           title={buildSLTPTooltip(coin, signal)}
                         >
-                          {coinTPPercent[symbolKey] ? `${coinTPPercent[symbolKey]}%` : '-'}
+                          {(() => {
+                            const displayed = getDisplayedSLTP(coin, symbolKey);
+                            return displayed.tpPercent ? `${displayed.tpPercent}%` : '-';
+                          })()}
                         </span>
                       )}
                     </td>

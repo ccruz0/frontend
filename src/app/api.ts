@@ -118,6 +118,10 @@ export interface TopCoin {
   alert_enabled?: boolean;  // Alert enabled status for TRADE ALERT YES
   buy_alert_enabled?: boolean;  // Enable BUY alerts specifically
   sell_alert_enabled?: boolean;  // Enable SELL alerts specifically
+  // Strategy fields (optional; backend may provide any of these)
+  strategy_key?: string;       // e.g., "swing-conservative"
+  strategy_preset?: string;    // e.g., "swing"
+  strategy_risk?: string;      // e.g., "conservative"
   // Technical indicators (now included in cache)
   rsi?: number;
   ma50?: number;
@@ -140,6 +144,7 @@ export interface TopCoin {
 // Dashboard State Types (new unified endpoint)
 export interface DashboardBalance {
   asset: string;
+  coin?: string; // Backward-compat: some payloads may use `coin` instead of `asset`
   balance: number;  // Explicit balance field from Crypto.com
   free: number;
   locked: number;
@@ -190,6 +195,17 @@ export interface DashboardOrder {
   updated_at?: string | null;
 }
 
+// Dashboard portfolio shape returned by `/dashboard/state`
+// Keep this aligned with backend fields; all are optional for backward compatibility.
+export interface DashboardPortfolio {
+  assets?: PortfolioAsset[];
+  total_value_usd?: number;
+  total_assets_usd?: number;
+  total_collateral_usd?: number;
+  total_borrowed_usd?: number;
+  portfolio_value_source?: string;
+}
+
 export interface DashboardState {
   source?: string;  // "crypto.com" when using direct API values
   total_usd_value?: number;  // Total USD value from Crypto.com
@@ -200,10 +216,7 @@ export interface DashboardState {
   open_position_counts?: { [symbol: string]: number };
   open_orders_summary?: UnifiedOpenOrder[];  // Open orders summary
   last_sync: string | null;
-  portfolio?: {
-    assets?: PortfolioAsset[];
-    total_value_usd?: number;
-  };
+  portfolio?: DashboardPortfolio;
   bot_status: {
     is_running: boolean;
     status: 'running' | 'stopped';
@@ -222,6 +235,7 @@ export interface CoinSettings {
   buy_alert_enabled?: boolean;
   sell_alert_enabled?: boolean;
   sl_tp_mode?: string;
+  strategy_key?: string; // Optional: some endpoints may return resolved strategy key
   min_price_change_pct?: number | null;
   sl_percentage?: number | null;
   tp_percentage?: number | null;
@@ -790,7 +804,7 @@ export async function getPortfolio(): Promise<{ assets: PortfolioAsset[], total_
   try {
     // Use /dashboard/state endpoint which uses PostgreSQL with up-to-date portfolio data
     // instead of /assets which uses outdated SQLite database
-    const data = await fetchAPI<{ portfolio?: { assets?: PortfolioAsset[]; total_value_usd?: number } }>('/dashboard/state');
+    const data = await fetchAPI<{ portfolio?: DashboardPortfolio }>('/dashboard/state');
     const portfolio = data.portfolio || {};
     return { 
       assets: portfolio.assets || [], 
@@ -1363,6 +1377,43 @@ export async function fixBackendHealth(): Promise<{ ok: boolean; message?: strin
       'error'
     );
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+// Portfolio refresh - force fresh snapshot from Crypto.com
+export interface RefreshPortfolioResponse {
+  success: boolean;
+  snapshot?: {
+    assets: PortfolioAsset[];
+    total_value_usd: number;
+    total_assets_usd?: number;
+    total_collateral_usd?: number;
+    total_borrowed_usd?: number;
+    portfolio_value_source: string;
+    as_of: string;
+  };
+  message?: string;
+  error?: string;
+}
+
+export async function refreshPortfolio(): Promise<RefreshPortfolioResponse> {
+  try {
+    const data = await fetchAPI<RefreshPortfolioResponse>('/portfolio/refresh', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    return data;
+  } catch (error) {
+    logRequestIssue(
+      'refreshPortfolio',
+      'Failed to refresh portfolio snapshot',
+      error,
+      'error'
+    );
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : String(error) 
+    };
   }
 }
 

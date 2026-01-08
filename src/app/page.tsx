@@ -2,7 +2,7 @@
 
 import '@/lib/polyfill';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { getDashboard, getOpenOrders, getOrderHistory, getTopCoins, saveCoinSettings, getTradingSignals, getDataSourcesStatus, getTradingConfig, saveTradingConfig, updateCoinConfig, addCustomTopCoin, removeCustomTopCoin, getDashboardState, getDashboardSnapshot, quickOrder, updateWatchlistAlert, updateBuyAlert, updateSellAlert, simulateAlert, deleteDashboardItemBySymbol, toggleLiveTrading, getTPSLOrderValues, getOpenOrdersSummary, dashboardBalancesToPortfolioAssets, getExpectedTakeProfitSummary, getExpectedTakeProfitDetails, getTelegramMessages, fixBackendHealth, DashboardState, DashboardBalance, WatchlistItem, OpenOrder, PortfolioAsset, TradingSignals, TopCoin, DataSourceStatus, TradingConfig, CoinSettings, TPSLOrderValues, UnifiedOpenOrder, OpenPosition, ExpectedTPSummary, ExpectedTPSummaryItem, ExpectedTPDetails, ExpectedTPMatchedLot, SimulateAlertResponse, TelegramMessage, StrategyDecision } from '@/app/api';
+import { getDashboard, getOpenOrders, getOrderHistory, getTopCoins, saveCoinSettings, getTradingSignals, getDataSourcesStatus, getTradingConfig, saveTradingConfig, updateCoinConfig, addCustomTopCoin, removeCustomTopCoin, getDashboardState, getDashboardSnapshot, quickOrder, updateWatchlistAlert, updateBuyAlert, updateSellAlert, simulateAlert, deleteDashboardItemBySymbol, toggleLiveTrading, getTPSLOrderValues, getOpenOrdersSummary, dashboardBalancesToPortfolioAssets, getExpectedTakeProfitSummary, getExpectedTakeProfitDetails, getTelegramMessages, fixBackendHealth, refreshPortfolio, DashboardState, DashboardBalance, WatchlistItem, OpenOrder, PortfolioAsset, TradingSignals, TopCoin, DataSourceStatus, TradingConfig, CoinSettings, TPSLOrderValues, UnifiedOpenOrder, OpenPosition, ExpectedTPSummary, ExpectedTPSummaryItem, ExpectedTPDetails, ExpectedTPMatchedLot, SimulateAlertResponse, TelegramMessage, StrategyDecision } from '@/app/api';
 import { getApiUrl } from '@/lib/environment';
 import { MonitoringNotificationsProvider, useMonitoringNotifications } from '@/app/context/MonitoringNotificationsContext';
 import MonitoringPanel from '@/app/components/MonitoringPanel';
@@ -3124,10 +3124,26 @@ function resolveDecisionIndexColor(value: number): string {
   }, [topCoins, signals]);
 
   // Fetch portfolio from snapshot (fast, cached)
-  const fetchPortfolio = useCallback(async (options: { showLoader?: boolean; backgroundRefresh?: boolean } = {}) => {
-    const { showLoader = false, backgroundRefresh = false } = options;
+  const fetchPortfolio = useCallback(async (options: { showLoader?: boolean; backgroundRefresh?: boolean; forceRefresh?: boolean } = {}) => {
+    const { showLoader = false, backgroundRefresh = false, forceRefresh = false } = options;
     if (showLoader) {
       setPortfolioLoading(true);
+    }
+    
+    // If forceRefresh is true (user clicked refresh button), force a fresh snapshot from Crypto.com
+    if (forceRefresh || showLoader) {
+      try {
+        logger.info('🔄 Forcing fresh portfolio snapshot from Crypto.com...');
+        const refreshResult = await refreshPortfolio();
+        if (refreshResult.success) {
+          logger.info(`✅ Portfolio snapshot refreshed: ${refreshResult.snapshot?.assets?.length || 0} assets, total=$${refreshResult.snapshot?.total_value_usd || 0}`);
+        } else {
+          logger.warn(`⚠️ Portfolio refresh failed: ${refreshResult.error || 'Unknown error'}`);
+        }
+      } catch (refreshErr) {
+        logger.warn('⚠️ Failed to refresh portfolio snapshot, will use cached data:', refreshErr);
+        // Don't fail the entire fetch if refresh fails - continue with cached data
+      }
     }
     
     // Helper function to update portfolio from dashboard state
@@ -4645,7 +4661,7 @@ function resolveDecisionIndexColor(value: number): string {
                   setTogglingLiveTrading(false);
                 }
               }}
-              onRefreshPortfolio={() => fetchPortfolio({ showLoader: true })}
+              onRefreshPortfolio={() => fetchPortfolio({ showLoader: true, forceRefresh: true })}
             />
           )}
 

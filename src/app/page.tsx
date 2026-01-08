@@ -4755,8 +4755,30 @@ function resolveDecisionIndexColor(value: number): string {
                 // Update the coin in topCoins array immediately after mutation
                 updateSingleCoin(symbol, updates);
                 
-                // Also update SL/TP percentage state if provided in updates
                 const symbolKey = normalizeSymbolKey(symbol);
+                
+                // Update trade_enabled state if provided
+                if (updates.trade_enabled !== undefined) {
+                  setCoinTradeStatus(prev => ({ ...prev, [symbolKey]: updates.trade_enabled! }));
+                }
+                
+                // Update trade_on_margin state if provided
+                if (updates.trade_on_margin !== undefined) {
+                  setCoinMarginStatus(prev => ({ ...prev, [symbolKey]: updates.trade_on_margin! }));
+                }
+                
+                // Update alert states if provided
+                if (updates.alert_enabled !== undefined) {
+                  setCoinAlertStatus(prev => ({ ...prev, [symbolKey]: updates.alert_enabled! }));
+                }
+                if (updates.buy_alert_enabled !== undefined) {
+                  setCoinBuyAlertStatus(prev => ({ ...prev, [symbolKey]: updates.buy_alert_enabled! }));
+                }
+                if (updates.sell_alert_enabled !== undefined) {
+                  setCoinSellAlertStatus(prev => ({ ...prev, [symbolKey]: updates.sell_alert_enabled! }));
+                }
+                
+                // Also update SL/TP percentage state if provided in updates
                 if (updates.sl_percentage !== undefined) {
                   setCoinSLPercent(prev => {
                     const updated = { ...prev };

@@ -227,15 +227,20 @@ export default function WatchlistTab({
     setUpdatingCoins(prev => new Set(prev).add(symbol));
     
     try {
-      // Optimistic update
+      // Optimistic update - update both hook state and parent state if parent props are provided
       setCoinTradeStatus(prev => ({ ...prev, [symbolKey]: newStatus }));
+      
+      // If parent props are provided, also update parent immediately for instant UI feedback
+      if (parentCoinTradeStatus !== undefined && onCoinUpdated) {
+        onCoinUpdated(symbol, { trade_enabled: newStatus });
+      }
       
       // Save to backend
       const result = await saveCoinSettings(symbol, {
         trade_enabled: newStatus,
       });
       
-      // Update parent's topCoins array with backend response
+      // Update parent's topCoins array and state with backend response
       if (onCoinUpdated && result) {
         onCoinUpdated(symbol, {
           trade_enabled: result.trade_enabled,
@@ -252,6 +257,10 @@ export default function WatchlistTab({
       logger.error(`Failed to update trade status for ${symbol}:`, err);
       // Revert optimistic update
       setCoinTradeStatus(prev => ({ ...prev, [symbolKey]: currentStatus }));
+      // Also revert parent if we updated it
+      if (parentCoinTradeStatus !== undefined && onCoinUpdated) {
+        onCoinUpdated(symbol, { trade_enabled: currentStatus });
+      }
     } finally {
       setUpdatingCoins(prev => {
         const next = new Set(prev);
@@ -259,7 +268,7 @@ export default function WatchlistTab({
         return next;
       });
     }
-  }, [coinTradeStatus, setCoinTradeStatus]);
+  }, [coinTradeStatus, setCoinTradeStatus, onCoinUpdated, parentCoinTradeStatus]);
 
   const handleAlertToggle = useCallback(async (symbol: string, alertType: 'master' | 'buy' | 'sell') => {
     const symbolKey = normalizeSymbolKey(symbol);
@@ -360,7 +369,7 @@ export default function WatchlistTab({
         return next;
       });
     }
-  }, [coinAlertStatus, coinBuyAlertStatus, coinSellAlertStatus, setCoinAlertStatus, setCoinBuyAlertStatus, setCoinSellAlertStatus]);
+  }, [coinAlertStatus, coinBuyAlertStatus, coinSellAlertStatus, setCoinAlertStatus, setCoinBuyAlertStatus, setCoinSellAlertStatus, onCoinUpdated]);
 
   const handleMarginToggle = useCallback(async (symbol: string) => {
     const symbolKey = normalizeSymbolKey(symbol);
@@ -370,8 +379,13 @@ export default function WatchlistTab({
     setUpdatingCoins(prev => new Set(prev).add(symbol));
     
     try {
-      // Optimistic update
+      // Optimistic update - update local state
       setLocalCoinMarginStatus(prev => ({ ...prev, [symbolKey]: newStatus }));
+      
+      // If parent props are provided, also update parent immediately for instant UI feedback
+      if (parentCoinMarginStatus !== undefined && onCoinUpdated) {
+        onCoinUpdated(symbol, { trade_on_margin: newStatus });
+      }
       
       // Save to backend
       const result = await saveCoinSettings(symbol, {
@@ -385,7 +399,7 @@ export default function WatchlistTab({
         setLocalCoinMarginStatus(prev => ({ ...prev, [symbolKey]: Boolean(result.trade_on_margin) }));
       }
       
-      // Update parent's topCoins array with backend response
+      // Update parent's topCoins array and state with backend response
       if (onCoinUpdated && result) {
         onCoinUpdated(symbol, {
           trade_on_margin: result.trade_on_margin,
@@ -400,6 +414,10 @@ export default function WatchlistTab({
       logger.error(`Failed to update margin status for ${symbol}:`, err);
       // Revert optimistic update
       setLocalCoinMarginStatus(prev => ({ ...prev, [symbolKey]: currentStatus }));
+      // Also revert parent if we updated it
+      if (parentCoinMarginStatus !== undefined && onCoinUpdated) {
+        onCoinUpdated(symbol, { trade_on_margin: currentStatus });
+      }
       // Show error to user
       alert(`Error al actualizar el estado de margen para ${symbol}. Por favor, intenta de nuevo.`);
     } finally {
@@ -409,7 +427,7 @@ export default function WatchlistTab({
         return next;
       });
     }
-  }, [coinMarginStatus]);
+  }, [coinMarginStatus, onCoinUpdated, parentCoinMarginStatus]);
 
   const handleAmountSave = useCallback(async (symbol: string, value: string) => {
     const symbolKey = normalizeSymbolKey(symbol);

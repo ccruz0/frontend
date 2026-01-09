@@ -1174,7 +1174,8 @@ export async function updateCoinConfig(symbol: string, config: CoinConfigUpdate)
 // Update alert_enabled for watchlist item
 export async function updateWatchlistAlert(symbol: string, alertEnabled: boolean): Promise<{ ok: boolean; symbol: string; alert_enabled: boolean }> {
   try {
-    const data = await fetchAPI<{ ok: boolean; symbol: string; alert_enabled: boolean }>(`/watchlist/${symbol}/alert`, {
+    const encodedSymbol = encodeURIComponent(symbol);
+    const data = await fetchAPI<{ ok: boolean; symbol: string; alert_enabled: boolean }>(`/watchlist/${encodedSymbol}/alert`, {
       method: 'PUT',
       body: JSON.stringify({ alert_enabled: alertEnabled })
     });
@@ -1193,7 +1194,8 @@ export async function updateWatchlistAlert(symbol: string, alertEnabled: boolean
 // Update buy_alert_enabled for watchlist item
 export async function updateBuyAlert(symbol: string, buyAlertEnabled: boolean): Promise<{ ok: boolean; symbol: string; buy_alert_enabled: boolean; alert_enabled: boolean; message: string }> {
   try {
-    const data = await fetchAPI<{ ok: boolean; symbol: string; buy_alert_enabled: boolean; alert_enabled: boolean; message: string }>(`/watchlist/${symbol}/buy-alert`, {
+    const encodedSymbol = encodeURIComponent(symbol);
+    const data = await fetchAPI<{ ok: boolean; symbol: string; buy_alert_enabled: boolean; alert_enabled: boolean; message: string }>(`/watchlist/${encodedSymbol}/buy-alert`, {
       method: 'PUT',
       body: JSON.stringify({ buy_alert_enabled: buyAlertEnabled })
     });
@@ -1212,7 +1214,8 @@ export async function updateBuyAlert(symbol: string, buyAlertEnabled: boolean): 
 // Update sell_alert_enabled for watchlist item
 export async function updateSellAlert(symbol: string, sellAlertEnabled: boolean): Promise<{ ok: boolean; symbol: string; sell_alert_enabled: boolean; alert_enabled: boolean; message: string }> {
   try {
-    const data = await fetchAPI<{ ok: boolean; symbol: string; sell_alert_enabled: boolean; alert_enabled: boolean; message: string }>(`/watchlist/${symbol}/sell-alert`, {
+    const encodedSymbol = encodeURIComponent(symbol);
+    const data = await fetchAPI<{ ok: boolean; symbol: string; sell_alert_enabled: boolean; alert_enabled: boolean; message: string }>(`/watchlist/${encodedSymbol}/sell-alert`, {
       method: 'PUT',
       body: JSON.stringify({ sell_alert_enabled: sellAlertEnabled })
     });
@@ -1778,7 +1781,8 @@ export interface ExpectedTPDetails {
 
 export async function getExpectedTakeProfitDetails(symbol: string): Promise<ExpectedTPDetails> {
   try {
-    const data = await fetchAPI<ExpectedTPDetails>(`/dashboard/expected-take-profit/${symbol}`);
+    const encodedSymbol = encodeURIComponent(symbol);
+    const data = await fetchAPI<ExpectedTPDetails>(`/dashboard/expected-take-profit/${encodedSymbol}`);
     return data;
   } catch (error) {
     logRequestIssue(

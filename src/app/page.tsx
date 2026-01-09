@@ -955,7 +955,7 @@ function DashboardPageContent() {
   const [executedOrdersLastUpdate, setExecutedOrdersLastUpdate] = useState<Date | null>(null);
   const [executedOrdersError, setExecutedOrdersError] = useState<string | null>(null);
   const [portfolioError, setPortfolioError] = useState<string | null>(null);
-  const [botStatus, setBotStatus] = useState<{ is_running: boolean; status: 'running' | 'stopped'; reason: string | null; live_trading_enabled?: boolean; mode?: 'LIVE' | 'DRY_RUN' } | null>(null);
+  const [botStatus, setBotStatus] = useState<{ is_running: boolean; status: 'running' | 'stopped'; reason: string | null; live_trading_enabled?: boolean; mode?: 'LIVE' | 'DRY_RUN'; kill_switch_on?: boolean } | null>(null);
   const [togglingLiveTrading, setTogglingLiveTrading] = useState(false);
   const [openOrders, setOpenOrders] = useState<OpenOrder[]>([]);
   const [executedOrders, setExecutedOrders] = useState<OpenOrder[]>([]);

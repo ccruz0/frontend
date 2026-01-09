@@ -231,6 +231,9 @@ export interface DashboardState {
     is_running: boolean;
     status: 'running' | 'stopped';
     reason: string | null;
+    live_trading_enabled?: boolean;
+    mode?: 'LIVE' | 'DRY_RUN';
+    kill_switch_on?: boolean;
   };
   errors?: string[];  // Optional errors array
 }

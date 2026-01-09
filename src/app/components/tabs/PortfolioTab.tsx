@@ -19,7 +19,7 @@ interface PortfolioTabProps {
   snapshotLastUpdated: Date | null;
   snapshotStale: boolean;
   snapshotStaleSeconds: number | null;
-  botStatus: { is_running: boolean; status: 'running' | 'stopped'; reason: string | null; live_trading_enabled?: boolean; mode?: 'LIVE' | 'DRY_RUN' } | null;
+  botStatus: { is_running: boolean; status: 'running' | 'stopped'; reason: string | null; live_trading_enabled?: boolean; mode?: 'LIVE' | 'DRY_RUN'; kill_switch_on?: boolean } | null;
   togglingLiveTrading: boolean;
   isUpdating: boolean;
   topCoinsLoading: boolean;
@@ -133,6 +133,11 @@ export default function PortfolioTab({
             }`} title={botStatus.reason || undefined}>
               {botStatus.is_running ? '🟢 Bot Activo' : '🔴 Bot Detenido'}
             </div>
+            {botStatus.kill_switch_on && (
+              <div className="px-3 py-1 rounded-full text-xs font-semibold bg-red-600 text-white" title="Kill Switch is ON - All trading is disabled">
+                🛑 KILL SWITCH ON
+              </div>
+            )}
             <button
               onClick={onToggleLiveTrading}
               disabled={togglingLiveTrading || isUpdating || topCoinsLoading || portfolioLoading}

@@ -1241,7 +1241,9 @@ export async function updateWatchlistItem(
   updates: Partial<WatchlistItem>
 ): Promise<UpdateWatchlistItemResponse> {
   try {
-    const data = await fetchAPI<UpdateWatchlistItemResponse>(`/dashboard/symbol/${symbol}`, {
+    // URL encode the symbol to handle special characters like underscores
+    const encodedSymbol = encodeURIComponent(symbol);
+    const data = await fetchAPI<UpdateWatchlistItemResponse>(`/dashboard/symbol/${encodedSymbol}`, {
       method: 'PUT',
       body: JSON.stringify(updates)
     });

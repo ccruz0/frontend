@@ -253,7 +253,7 @@ export default function WatchlistTab({
       }
       
       logger.info(`✅ Trade status updated for ${symbol}: ${newStatus}`);
-    } catch (err) {
+    } catch (err: unknown) {
       logger.error(`Failed to update trade status for ${symbol}:`, err);
       // Revert optimistic update
       setCoinTradeStatus(prev => ({ ...prev, [symbolKey]: currentStatus }));
@@ -261,6 +261,14 @@ export default function WatchlistTab({
       if (parentCoinTradeStatus !== undefined && onCoinUpdated) {
         onCoinUpdated(symbol, { trade_enabled: currentStatus });
       }
+      // Show error to user with more details
+      const errorMessage = err?.message || err?.toString() || 'Unknown error';
+      const errorDetails = errorMessage.includes('Failed to fetch') 
+        ? 'Error de conexión. Verifica tu conexión a internet.'
+        : errorMessage.length > 100 
+        ? 'Error del servidor. Por favor, intenta de nuevo.'
+        : errorMessage;
+      alert(`Error al actualizar el estado de trade para ${symbol}.\n\n${errorDetails}\n\nPor favor, intenta de nuevo.`);
     } finally {
       setUpdatingCoins(prev => {
         const next = new Set(prev);
@@ -410,7 +418,7 @@ export default function WatchlistTab({
           tp_price: result.tp_price,
         });
       }
-    } catch (err) {
+    } catch (err: unknown) {
       logger.error(`Failed to update margin status for ${symbol}:`, err);
       // Revert optimistic update
       setLocalCoinMarginStatus(prev => ({ ...prev, [symbolKey]: currentStatus }));
@@ -418,8 +426,14 @@ export default function WatchlistTab({
       if (parentCoinMarginStatus !== undefined && onCoinUpdated) {
         onCoinUpdated(symbol, { trade_on_margin: currentStatus });
       }
-      // Show error to user
-      alert(`Error al actualizar el estado de margen para ${symbol}. Por favor, intenta de nuevo.`);
+      // Show error to user with more details
+      const errorMessage = err?.message || err?.toString() || 'Unknown error';
+      const errorDetails = errorMessage.includes('Failed to fetch') 
+        ? 'Error de conexión. Verifica tu conexión a internet.'
+        : errorMessage.length > 100 
+        ? 'Error del servidor. Por favor, intenta de nuevo.'
+        : errorMessage;
+      alert(`Error al actualizar el estado de margen para ${symbol}.\n\n${errorDetails}\n\nPor favor, intenta de nuevo.`);
     } finally {
       setUpdatingCoins(prev => {
         const next = new Set(prev);

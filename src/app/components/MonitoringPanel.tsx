@@ -825,6 +825,76 @@ export default function MonitoringPanel({
     return 'text-blue-700 font-medium';
   };
 
+  // Component for expandable decision details
+  const DecisionDetailsDropdown = ({ msg, idx }: { msg: TelegramMessage; idx: number }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const hasDetails = !!(msg.decision_type || msg.reason_code || msg.reason_message || msg.context_json || msg.exchange_error_snippet);
+    
+    if (!hasDetails) return null;
+    
+    return (
+      <div className="mt-2">
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="text-xs text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+        >
+          <span>{isOpen ? 'Hide' : 'Show'} Details</span>
+          <span className="text-xs">{isOpen ? '▼' : '▶'}</span>
+        </button>
+        {isOpen && (
+          <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs space-y-2">
+            {msg.decision_type && (
+              <div>
+                <span className="font-semibold text-gray-700">Decision:</span>{' '}
+                <span className={`px-2 py-0.5 rounded ${
+                  msg.decision_type === 'FAILED' 
+                    ? 'bg-red-100 text-red-800' 
+                    : 'bg-yellow-100 text-yellow-800'
+                }`}>
+                  {msg.decision_type}
+                </span>
+              </div>
+            )}
+            {msg.reason_code && (
+              <div>
+                <span className="font-semibold text-gray-700">Reason Code:</span>{' '}
+                <code className="px-2 py-0.5 bg-gray-200 rounded text-gray-800">{msg.reason_code}</code>
+              </div>
+            )}
+            {msg.reason_message && (
+              <div>
+                <span className="font-semibold text-gray-700">Reason:</span>{' '}
+                <span className="text-gray-700">{msg.reason_message}</span>
+              </div>
+            )}
+            {msg.exchange_error_snippet && (
+              <div>
+                <span className="font-semibold text-red-700">Exchange Error:</span>
+                <pre className="mt-1 p-2 bg-red-50 border border-red-200 rounded text-red-800 whitespace-pre-wrap break-words max-h-32 overflow-y-auto">
+                  {msg.exchange_error_snippet}
+                </pre>
+              </div>
+            )}
+            {msg.context_json && (
+              <div>
+                <span className="font-semibold text-gray-700">Context:</span>
+                <pre className="mt-1 p-2 bg-gray-100 border border-gray-300 rounded text-gray-700 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
+                  {JSON.stringify(msg.context_json, null, 2)}
+                </pre>
+              </div>
+            )}
+            {msg.correlation_id && (
+              <div>
+                <span className="font-semibold text-gray-700">Correlation ID:</span>{' '}
+                <code className="px-2 py-0.5 bg-gray-200 rounded text-gray-600 text-xs">{msg.correlation_id}</code>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // Build telegram message items array
   const telegramItems: React.ReactNode[] = [];
   try {
@@ -832,9 +902,23 @@ export default function MonitoringPanel({
       for (let idx = 0; idx < filteredTelegramMessages.length; idx++) {
         const msg = filteredTelegramMessages[idx];
         if (!msg) continue;
-        // Determine status label: order_skipped takes precedence over blocked
+        // Determine status label: decision_type takes precedence, then order_skipped, then blocked
         let statusLabel: string;
-        if (msg.order_skipped) {
+        let decisionBadge: React.ReactNode | null = null;
+        if (msg.decision_type) {
+          statusLabel = msg.decision_type;
+          decisionBadge = (
+            <span
+              className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${
+                msg.decision_type === 'FAILED'
+                  ? 'bg-red-100 text-red-800 border-red-200'
+                  : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+              }`}
+            >
+              {msg.decision_type}
+            </span>
+          );
+        } else if (msg.order_skipped) {
           statusLabel = 'ORDER SKIPPED';
         } else if (msg.throttle_status) {
           statusLabel = msg.throttle_status.toUpperCase();
@@ -843,16 +927,18 @@ export default function MonitoringPanel({
         } else {
           statusLabel = 'SENT';
         }
-        // Background color: order_skipped gets yellow/orange, blocked gets gray, sent gets blue
-        const bgColor = msg.order_skipped 
-          ? 'bg-yellow-50' 
-          : msg.blocked 
-          ? 'bg-gray-50' 
-          : 'bg-blue-50';
+        // Background color: FAILED gets red tint, SKIPPED gets yellow/orange, blocked gets gray, sent gets blue
+        const bgColor = msg.decision_type === 'FAILED'
+          ? 'bg-red-50 border-red-200'
+          : msg.decision_type === 'SKIPPED' || msg.order_skipped
+          ? 'bg-yellow-50 border-yellow-200'
+          : msg.blocked
+          ? 'bg-gray-50 border-gray-200'
+          : 'bg-blue-50 border-blue-200';
         telegramItems.push(
           <div
             key={idx}
-            className={`p-4 ${bgColor}`}
+            className={`p-4 border ${bgColor}`}
           >
             <div className="flex items-start justify-between">
               <div className="flex-1">
@@ -862,20 +948,35 @@ export default function MonitoringPanel({
                   {msg.message}
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span
-                    className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${
-                      msg.order_skipped
-                        ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
-                        : getThrottleStatusStyles(statusLabel)
-                    }`}
-                  >
-                    {statusLabel}
-                  </span>
+                  {decisionBadge || (
+                    <span
+                      className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${
+                        msg.order_skipped
+                          ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                          : getThrottleStatusStyles(statusLabel)
+                      }`}
+                    >
+                      {statusLabel}
+                    </span>
+                  )}
+                  {msg.reason_code && (
+                    <code className="px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded">
+                      {msg.reason_code}
+                    </code>
+                  )}
                   {msg.symbol && (
                     <span className="text-xs text-gray-600 font-medium">{msg.symbol}</span>
                   )}
                 </div>
-                {msg.throttle_reason && (
+                {msg.reason_message && (
+                  <p
+                    className="text-xs text-gray-700 mt-1 font-medium"
+                    title={msg.reason_message}
+                  >
+                    {msg.reason_message}
+                  </p>
+                )}
+                {msg.throttle_reason && !msg.reason_message && (
                   <p
                     className="text-xs text-gray-500 mt-1 line-clamp-2"
                     title={msg.throttle_reason}
@@ -883,11 +984,7 @@ export default function MonitoringPanel({
                     {msg.throttle_reason}
                   </p>
                 )}
-                {msg.symbol && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Symbol: {msg.symbol}
-                  </p>
-                )}
+                <DecisionDetailsDropdown msg={msg} idx={idx} />
               </div>
               <div className="ml-4 text-xs text-gray-400">
                 {formatTimestamp(msg.timestamp)}

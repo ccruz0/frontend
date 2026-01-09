@@ -1807,6 +1807,13 @@ export interface TelegramMessage {
   timestamp: string;
   throttle_status?: string | null;
   throttle_reason?: string | null;
+  // Decision tracing fields (new)
+  decision_type?: string | null;  // "SKIPPED" or "FAILED"
+  reason_code?: string | null;  // Canonical reason code (e.g., "TRADE_DISABLED", "EXCHANGE_REJECTED")
+  reason_message?: string | null;  // Human-readable reason message
+  context_json?: Record<string, any> | null;  // Contextual data (prices, balances, thresholds, etc.)
+  exchange_error_snippet?: string | null;  // Raw exchange error message for FAILED decisions
+  correlation_id?: string | null;  // Correlation ID for tracing across logs
 }
 
 export interface TelegramMessagesResponse {

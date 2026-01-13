@@ -91,8 +91,8 @@ test.describe('Monitor Active Alerts Fix Verification', () => {
     await activeAlertsHeader.scrollIntoViewIfNeeded();
     await page.waitForTimeout(1000);
     
-    // Find the panel containing Active Alerts
-    const panel = activeAlertsHeader.locator('..').or(page.locator('div:has(h3:has-text("Active Alerts"))').first());
+    // Find the panel containing Active Alerts - use first() to avoid strict mode violation
+    const panel = page.locator('div:has(h3:has-text("Active Alerts"))').first();
     
     // Take screenshot of Active Alerts panel
     await panel.screenshot({ path: 'test-results/active_alerts_panel.png' });
@@ -112,7 +112,7 @@ test.describe('Monitor Active Alerts Fix Verification', () => {
       const statusCount = await statusLabels.count();
       console.log(`Found ${statusCount} status labels (SENT/BLOCKED/FAILED)`);
       
-      // Check for "signal detected" - should NOT be present
+      // Check for "signal detected" - should NOT be present anywhere on the Monitor page
       const signalDetected = page.locator('text=/signal detected/i');
       const signalDetectedCount = await signalDetected.count();
       console.log(`Found ${signalDetectedCount} instances of "signal detected" (should be 0)`);
@@ -124,15 +124,28 @@ test.describe('Monitor Active Alerts Fix Verification', () => {
         console.log('⚠️  WARNING: No status labels found, but table exists');
       }
       
+      // Regression assertion: "signal detected" must NOT appear anywhere
       expect(signalDetectedCount).toBe(0);
       console.log('✅ PASS: No "signal detected" text found');
+      
+      // Assert "Last updated" label is present
+      const lastUpdated = page.locator('text=/Last updated/i');
+      const lastUpdatedCount = await lastUpdated.count();
+      expect(lastUpdatedCount).toBeGreaterThan(0);
+      console.log(`✅ PASS: Found "Last updated" label (${lastUpdatedCount} instances)`);
+      
+      // Assert "Window" label shows "30"
+      const windowLabel = page.locator('text=/Window.*30/i');
+      const windowCount = await windowLabel.count();
+      expect(windowCount).toBeGreaterThan(0);
+      console.log(`✅ PASS: Found "Window: 30" label (${windowCount} instances)`);
       
       // Take screenshot of throttle section if it exists
       const throttleSection = page.locator('text=/Throttle|Mensajes Enviados/i').first();
       if (await throttleSection.isVisible({ timeout: 2000 })) {
         await throttleSection.scrollIntoViewIfNeeded();
         await page.waitForTimeout(500);
-        const throttlePanel = throttleSection.locator('..').or(page.locator('div:has-text("Throttle")').first());
+        const throttlePanel = page.locator('div:has-text("Throttle")').first();
         await throttlePanel.screenshot({ path: 'test-results/throttle_sent.png' });
         console.log('✅ Screenshot: throttle_sent.png');
       }
@@ -142,7 +155,7 @@ test.describe('Monitor Active Alerts Fix Verification', () => {
       if (await blockedSection.isVisible({ timeout: 2000 })) {
         await blockedSection.scrollIntoViewIfNeeded();
         await page.waitForTimeout(500);
-        const blockedPanel = blockedSection.locator('..').or(page.locator('div:has-text("Telegram")').first());
+        const blockedPanel = page.locator('div:has-text("Telegram")').first();
         await blockedPanel.screenshot({ path: 'test-results/throttle_blocked.png' });
         console.log('✅ Screenshot: throttle_blocked.png');
       }

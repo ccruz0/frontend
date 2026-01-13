@@ -2410,6 +2410,9 @@ export async function getDashboardState(): Promise<DashboardState> {
 // Monitoring API
 export interface MonitoringSummary {
   active_alerts: number;
+  active_total?: number;
+  window_minutes?: number;
+  generated_at_utc?: string;  // ISO timestamp with Z suffix
   backend_health: 'healthy' | 'degraded' | 'unhealthy' | 'error';
   last_sync_seconds: number | null;
   portfolio_state_duration: number;
@@ -2420,13 +2423,26 @@ export interface MonitoringSummary {
   last_backend_restart: number | null;
   backend_restart_status?: 'restarting' | 'restarted' | 'failed' | null;
   backend_restart_timestamp?: number | null;
+  signals_last_calculated?: string | null;  // ISO timestamp when signals were last calculated
   alerts: Array<{
     type: string;
     symbol: string;
     message: string;
     timestamp: string;
     severity: string;
+    alert_status?: string;
+    status_label?: string;
+    decision_type?: string;
+    reason_code?: string;
+    reason_message?: string;
+    message_id?: number;
+    order_intent_status?: string;
   }>;
+  alert_counts?: {
+    sent: number;
+    blocked: number;
+    failed: number;
+  };
 }
 
 export interface TelegramMessage {
@@ -2437,6 +2453,13 @@ export interface TelegramMessage {
   timestamp: string;
   throttle_status?: string | null;
   throttle_reason?: string | null;
+  // Decision tracing fields (new)
+  decision_type?: string | null;  // "SKIPPED" or "FAILED"
+  reason_code?: string | null;  // Canonical reason code (e.g., "TRADE_DISABLED", "EXCHANGE_REJECTED")
+  reason_message?: string | null;  // Human-readable reason message
+  context_json?: Record<string, any> | null;  // Contextual data (prices, balances, thresholds, etc.)
+  exchange_error_snippet?: string | null;  // Raw exchange error message for FAILED decisions
+  correlation_id?: string | null;  // Correlation ID for tracing across logs
 }
 
 export interface TelegramMessagesResponse {
@@ -2456,9 +2479,16 @@ export interface SignalThrottleEntry {
   telegram_message?: string | null;  // Full Telegram message
 }
 
-export async function getMonitoringSummary(): Promise<MonitoringSummary> {
+export async function getMonitoringSummary(forceRefresh: boolean = false): Promise<MonitoringSummary> {
   try {
-    const data = await fetchAPI<MonitoringSummary>('/monitoring/summary');
+    const queryParam = forceRefresh ? '?force_refresh=true' : '';
+    // Add cache-busting to prevent stale data
+    const data = await fetchAPI<MonitoringSummary>(`/monitoring/summary${queryParam}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache',
+      },
+    });
     return data;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
@@ -2481,6 +2511,7 @@ export async function getMonitoringSummary(): Promise<MonitoringSummary> {
       last_backend_restart: null,
       backend_restart_status: null,
       backend_restart_timestamp: null,
+      signals_last_calculated: null,
       alerts: []
     };
   }

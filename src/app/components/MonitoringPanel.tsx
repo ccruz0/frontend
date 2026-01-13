@@ -217,9 +217,27 @@ export default function MonitoringPanel({
   const [restarting, setRestarting] = useState(false);
   const [refreshingSignals, setRefreshingSignals] = useState(false); // Track when signals are being recalculated
   const [signalsLastCalculated, setSignalsLastCalculated] = useState<Date | null>(null); // Track when signals were last calculated
+  const [isFetching, setIsFetching] = useState(false); // Guard against overlapping fetches
+  const fetchDataControllerRef = useRef<AbortController | null>(null); // Guard against overlapping polls
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null); // Store polling interval
+  const isFetchingRef = useRef(false); // Ref to track fetching state without causing re-renders
 
   const fetchData = useCallback(async (forceRefresh: boolean = false) => {
+    // Prevent overlapping fetches
+    if (isFetchingRef.current) {
+      console.log('⏭️ Skipping fetch - already in progress');
+      return;
+    }
+
+    // Cancel any in-flight request
+    if (fetchDataControllerRef.current) {
+      fetchDataControllerRef.current.abort();
+    }
+    fetchDataControllerRef.current = new AbortController();
+
     try {
+      setIsFetching(true);
+      isFetchingRef.current = true;
       setError(null);
       if (forceRefresh) {
         setRefreshingSignals(true);
@@ -236,12 +254,19 @@ export default function MonitoringPanel({
         }
       }
     } catch (err) {
+      // Don't show error for aborted requests
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMsg);
       console.error('Failed to fetch monitoring data:', err);
     } finally {
       setLoading(false);
       setRefreshingSignals(false);
+      setIsFetching(false);
+      isFetchingRef.current = false;
+      fetchDataControllerRef.current = null;
     }
   }, []);
   
@@ -384,6 +409,25 @@ export default function MonitoringPanel({
     fetchData();
     fetchThrottle();
     fetchWorkflows(true); // Initial load
+
+    // Auto-refresh polling every 15 seconds
+    pollingIntervalRef.current = setInterval(() => {
+      if (!isFetchingRef.current) {
+        fetchData();
+      }
+    }, 15000); // 15 seconds
+
+    // Cleanup on unmount
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      if (fetchDataControllerRef.current) {
+        fetchDataControllerRef.current.abort();
+        fetchDataControllerRef.current = null;
+      }
+    };
 
     const interval = setInterval(() => {
       fetchData();
@@ -1175,6 +1219,25 @@ export default function MonitoringPanel({
                 <span>Recalculating signals...</span>
               </div>
             )}
+            {data?.generated_at_utc && (
+              <div className="text-xs text-gray-500">
+                Last updated: {new Date(data.generated_at_utc).toLocaleString(undefined, {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: true,
+                  timeZoneName: 'short'
+                })}
+              </div>
+            )}
+            {data?.window_minutes && (
+              <div className="text-xs text-gray-500">
+                Window: {data.window_minutes} min
+              </div>
+            )}
             {signalsLastCalculated && !refreshingSignals && (
               <div className="text-xs text-gray-500">
                 Signals calculated: {signalsLastCalculated.toLocaleString(undefined, {
@@ -1190,8 +1253,27 @@ export default function MonitoringPanel({
               </div>
             )}
           </div>
-          <button
-            onClick={handleRefreshSignals}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fetchData(false)}
+              disabled={isFetching}
+              className="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+              title="Refresh data"
+            >
+              {isFetching ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600"></div>
+                  <span>Refreshing...</span>
+                </>
+              ) : (
+                <>
+                  <span>↻</span>
+                  <span>Refresh</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleRefreshSignals}
             disabled={refreshingSignals || loading}
             className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             title="Force recalculation of signals"

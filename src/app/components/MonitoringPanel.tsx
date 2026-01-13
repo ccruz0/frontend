@@ -215,21 +215,39 @@ export default function MonitoringPanel({
   const [workflowsLastUpdate, setWorkflowsLastUpdate] = useState<Date | null>(null); // For "Updated Xs ago" label
   const workflowsFetchControllerRef = useRef<AbortController | null>(null); // Guard against overlapping polls
   const [restarting, setRestarting] = useState(false);
+  const [refreshingSignals, setRefreshingSignals] = useState(false); // Track when signals are being recalculated
+  const [signalsLastCalculated, setSignalsLastCalculated] = useState<Date | null>(null); // Track when signals were last calculated
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (forceRefresh: boolean = false) => {
     try {
       setError(null);
-      const summary = await getMonitoringSummary();
+      if (forceRefresh) {
+        setRefreshingSignals(true);
+      }
+      const summary = await getMonitoringSummary(forceRefresh);
       setData(summary);
       setLastUpdate(new Date());
+      // Update signals last calculated timestamp if provided
+      if (summary.signals_last_calculated) {
+        try {
+          setSignalsLastCalculated(new Date(summary.signals_last_calculated));
+        } catch (e) {
+          console.warn('Failed to parse signals_last_calculated timestamp:', e);
+        }
+      }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMsg);
       console.error('Failed to fetch monitoring data:', err);
     } finally {
       setLoading(false);
+      setRefreshingSignals(false);
     }
   }, []);
+  
+  const handleRefreshSignals = useCallback(async () => {
+    await fetchData(true); // Force refresh signals
+  }, [fetchData]);
 
   const fetchThrottle = useCallback(async () => {
     try {
@@ -599,7 +617,7 @@ export default function MonitoringPanel({
       <div className="text-center py-8 text-red-500">
         <p>Error loading monitoring data: {error}</p>
         <button
-          onClick={fetchData}
+          onClick={() => fetchData(false)}
           className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
           Retry
@@ -671,15 +689,45 @@ export default function MonitoringPanel({
   if (Array.isArray(monitoringData.alerts) && monitoringData.alerts.length > 0) {
     for (let idx = 0; idx < monitoringData.alerts.length; idx++) {
       const alert = monitoringData.alerts[idx];
+      // Use status_label if available (from backend fix), otherwise fallback to alert_status
+      const status = alert.status_label || alert.alert_status || (alert.blocked === false ? 'SENT' : alert.decision_type === 'FAILED' ? 'FAILED' : 'BLOCKED');
+      
+      // Status badge colors
+      const getStatusBadgeColor = (status: string) => {
+        if (status === 'SENT') return 'bg-green-100 text-green-800 border-green-200';
+        if (status === 'FAILED') return 'bg-red-100 text-red-800 border-red-200';
+        if (status === 'BLOCKED') return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+      };
+      
       alertRows.push(
         <tr key={idx} className="hover:bg-gray-50">
           <td className="px-4 py-3 text-sm text-gray-900">{alert.type}</td>
           <td className="px-4 py-3 text-sm font-medium text-gray-900">{alert.symbol}</td>
-          <td className="px-4 py-3 text-sm text-gray-700">{alert.message}</td>
           <td className="px-4 py-3">
-            <span className={`px-2 py-1 text-xs font-semibold rounded border ${getSeverityColor(alert.severity)}`}>
-              {alert.severity}
+            <span className={`px-2 py-1 text-xs font-semibold rounded border ${getStatusBadgeColor(status)}`}>
+              {status}
             </span>
+            {alert.reason_code && status !== 'SENT' && (
+              <div className="mt-1">
+                <code className="px-1.5 py-0.5 text-xs bg-gray-200 text-gray-700 rounded">{alert.reason_code}</code>
+              </div>
+            )}
+          </td>
+          <td className="px-4 py-3 text-sm text-gray-700">
+            {/* Show reason_code/reason_message when status != SENT */}
+            {status !== 'SENT' && (alert.reason_code || alert.reason_message) ? (
+              <div>
+                {alert.reason_message && (
+                  <div className="text-gray-700">{alert.reason_message}</div>
+                )}
+                {!alert.reason_message && alert.reason_code && (
+                  <div className="text-gray-600">{alert.reason_code}</div>
+                )}
+              </div>
+            ) : (
+              <span className="text-gray-500">Signal sent successfully</span>
+            )}
           </td>
           <td className="px-4 py-3 text-sm text-gray-500">{formatTimestamp(alert.timestamp)}</td>
         </tr>
@@ -1017,7 +1065,7 @@ export default function MonitoringPanel({
           </div>
         )}
         <button
-          onClick={fetchData}
+          onClick={() => fetchData(false)}
           className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
           disabled={loading}
         >
@@ -1118,8 +1166,48 @@ export default function MonitoringPanel({
 
       {/* Alerts Table */}
       <div className="bg-white rounded-lg shadow border border-gray-200 mb-6">
-        <div className="p-4 border-b border-gray-200">
-          <h3 className="text-lg font-semibold">Active Alerts</h3>
+        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h3 className="text-lg font-semibold">Active Alerts</h3>
+            {refreshingSignals && (
+              <div className="flex items-center gap-2 text-sm text-blue-600">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                <span>Recalculating signals...</span>
+              </div>
+            )}
+            {signalsLastCalculated && !refreshingSignals && (
+              <div className="text-xs text-gray-500">
+                Signals calculated: {signalsLastCalculated.toLocaleString(undefined, {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: true,
+                  timeZoneName: 'short'
+                })}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={handleRefreshSignals}
+            disabled={refreshingSignals || loading}
+            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            title="Force recalculation of signals"
+          >
+            {refreshingSignals ? (
+              <>
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                <span>Refreshing...</span>
+              </>
+            ) : (
+              <>
+                <span>🔄</span>
+                <span>Refresh Signals</span>
+              </>
+            )}
+          </button>
         </div>
         {alertRows.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
@@ -1132,8 +1220,8 @@ export default function MonitoringPanel({
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Symbol</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Message</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Severity</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
                 </tr>
               </thead>

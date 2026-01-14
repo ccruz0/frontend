@@ -1219,9 +1219,9 @@ export default function MonitoringPanel({
                 <span>Recalculating signals...</span>
               </div>
             )}
-            {data?.generated_at_utc && (
+            {(data?.generated_at_utc || monitoringData?.generated_at_utc) && (
               <div className="text-xs text-gray-500">
-                Last updated: {new Date(data.generated_at_utc).toLocaleString(undefined, {
+                Last updated: {new Date(data?.generated_at_utc || monitoringData?.generated_at_utc || '').toLocaleString(undefined, {
                   year: 'numeric',
                   month: '2-digit',
                   day: '2-digit',
@@ -1233,9 +1233,9 @@ export default function MonitoringPanel({
                 })}
               </div>
             )}
-            {data?.window_minutes && (
+            {(data?.window_minutes || monitoringData?.window_minutes) && (
               <div className="text-xs text-gray-500">
-                Window: {data.window_minutes} min
+                Window: {data?.window_minutes || monitoringData?.window_minutes} min
               </div>
             )}
             {signalsLastCalculated && !refreshingSignals && (

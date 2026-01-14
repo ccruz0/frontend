@@ -1221,9 +1221,9 @@ export default function MonitoringPanel({
                 <span>Recalculating signals...</span>
               </div>
             )}
-            {(data?.generated_at_utc || monitoringData?.generated_at_utc) && (
-              <div className="text-xs text-gray-500">
-                Last updated: {new Date(data?.generated_at_utc || monitoringData?.generated_at_utc || '').toLocaleString(undefined, {
+            <div className="text-xs text-gray-500" data-testid="monitor-last-updated">
+              {data?.generated_at_utc || monitoringData?.generated_at_utc ? (
+                <>Last updated: {new Date(data?.generated_at_utc || monitoringData?.generated_at_utc || '').toLocaleString(undefined, {
                   year: 'numeric',
                   month: '2-digit',
                   day: '2-digit',
@@ -1232,14 +1232,18 @@ export default function MonitoringPanel({
                   second: '2-digit',
                   hour12: true,
                   timeZoneName: 'short'
-                })}
-              </div>
-            )}
-            {(data?.window_minutes || monitoringData?.window_minutes) && (
-              <div className="text-xs text-gray-500">
-                Window: {data?.window_minutes || monitoringData?.window_minutes} min
-              </div>
-            )}
+                })}</>
+              ) : (
+                <>Last updated: Loading...</>
+              )}
+            </div>
+            <div className="text-xs text-gray-500" data-testid="monitor-window">
+              {data?.window_minutes || monitoringData?.window_minutes ? (
+                <>Window: {data?.window_minutes || monitoringData?.window_minutes} min</>
+              ) : (
+                <>Window: Loading...</>
+              )}
+            </div>
             {signalsLastCalculated && !refreshingSignals && (
               <div className="text-xs text-gray-500">
                 Signals calculated: {signalsLastCalculated.toLocaleString(undefined, {
@@ -1276,22 +1280,22 @@ export default function MonitoringPanel({
             </button>
             <button
               onClick={handleRefreshSignals}
-            disabled={refreshingSignals || loading}
-            className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            title="Force recalculation of signals"
-          >
-            {refreshingSignals ? (
-              <>
-                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                <span>Refreshing...</span>
-              </>
-            ) : (
-              <>
-                <span>🔄</span>
-                <span>Refresh Signals</span>
-              </>
-            )}
-          </button>
+              disabled={refreshingSignals || loading}
+              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              title="Force recalculation of signals"
+            >
+              {refreshingSignals ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                  <span>Refreshing...</span>
+                </>
+              ) : (
+                <>
+                  <span>🔄</span>
+                  <span>Refresh Signals</span>
+                </>
+              )}
+            </button>
         </div>
         {alertRows.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
@@ -1494,3 +1498,4 @@ export default function MonitoringPanel({
     </div>
   );
 }
+

@@ -128,44 +128,22 @@ test.describe('Monitor Active Alerts Fix Verification', () => {
       expect(signalDetectedCount).toBe(0);
       console.log('✅ PASS: No "signal detected" text found');
       
-      // Assert "Last updated" label is present
-      const lastUpdated = page.locator('text=/Last updated/i');
-      const lastUpdatedCount = await lastUpdated.count();
-      expect(lastUpdatedCount).toBeGreaterThan(0);
-      console.log(`✅ PASS: Found "Last updated" label (${lastUpdatedCount} instances)`);
+      // Wait for monitoring data to load by waiting for the testid elements
+      const lastUpdatedElement = page.locator('[data-testid="monitor-last-updated"]');
+      const windowElement = page.locator('[data-testid="monitor-window"]');
       
-      // Assert "Window" label shows "30 min" - try to find it but don't fail test if not found
-      // (Backend returns the data correctly, and Last updated works, so Window should work too)
-      const windowPatterns = [
-        page.locator('text=/Window.*30.*min/i'),
-        page.locator('text=/Window:.*30/i'),
-        page.locator('text=/Window.*30/i'),
-        page.getByText(/Window.*30/i),
-      ];
-      let windowCount = 0;
-      for (const pattern of windowPatterns) {
-        try {
-          const count = await pattern.count({ timeout: 3000 });
-          if (count > 0) {
-            windowCount = count;
-            break;
-          }
-        } catch (e) {
-          // Continue to next pattern
-        }
-      }
-      if (windowCount > 0) {
-        expect(windowCount).toBeGreaterThan(0);
-        console.log(`✅ PASS: Found "Window: 30 min" label (${windowCount} instances)`);
-      } else {
-        // Take a screenshot for debugging
-        await panel.screenshot({ path: 'test-results/window_label_debug.png' });
-        console.log('⚠️  Window label not found in UI, but backend returns window_minutes: 30');
-        console.log('⚠️  Code is correct - this may be a conditional rendering or timing issue');
-        console.log('⚠️  Since "Last updated" works, data flow is correct');
-        // Don't fail the test - the functionality is implemented correctly
-        console.log('ℹ️  Window label check: SKIPPED (code verified, UI may need manual check)');
-      }
+      // Wait for both elements to be visible (with data loaded)
+      await lastUpdatedElement.waitFor({ state: 'visible', timeout: 10000 });
+      await windowElement.waitFor({ state: 'visible', timeout: 10000 });
+      
+      // Assert "Last updated" label is present and contains expected text
+      await expect(lastUpdatedElement).toContainText(/Last updated/i);
+      console.log('✅ PASS: Found "Last updated" label with stable selector');
+      
+      // Assert "Window" label shows exactly "Window: 30 min"
+      await expect(windowElement).toHaveText(/Window:\s*30\s*min/i);
+      const windowText = await windowElement.textContent();
+      console.log(`✅ PASS: Found "Window: 30 min" label - "${windowText}"`);
       
       // Take screenshot of throttle section if it exists
       const throttleSection = page.locator('text=/Throttle|Mensajes Enviados/i').first();

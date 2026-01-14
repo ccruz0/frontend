@@ -676,6 +676,8 @@ export default function MonitoringPanel({
   try {
     monitoringData = data ? {
       ...data,
+      window_minutes: data.window_minutes ?? null,
+      generated_at_utc: data.generated_at_utc ?? null,
       errors: Array.isArray(data.errors) ? data.errors : [],
       alerts: Array.isArray(data.alerts) ? data.alerts : [],
       active_alerts: typeof data.active_alerts === 'number' ? data.active_alerts : 0,

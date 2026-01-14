@@ -736,7 +736,7 @@ export default function MonitoringPanel({
     for (let idx = 0; idx < monitoringData.alerts.length; idx++) {
       const alert = monitoringData.alerts[idx];
       // Use status_label if available (from backend fix), otherwise fallback to alert_status
-      const status = alert.status_label || alert.alert_status || (alert.blocked === false ? 'SENT' : alert.decision_type === 'FAILED' ? 'FAILED' : 'BLOCKED');
+      const status = alert.status_label || alert.alert_status || (alert.decision_type === 'FAILED' ? 'FAILED' : 'BLOCKED');
       
       // Status badge colors
       const getStatusBadgeColor = (status: string) => {
@@ -1296,6 +1296,7 @@ export default function MonitoringPanel({
                 </>
               )}
             </button>
+          </div>
         </div>
         {alertRows.length === 0 ? (
           <div className="p-8 text-center text-gray-500">

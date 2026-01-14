@@ -132,13 +132,27 @@ test.describe('Monitor Active Alerts Fix Verification', () => {
       const lastUpdatedElement = page.locator('[data-testid="monitor-last-updated"]');
       const windowElement = page.locator('[data-testid="monitor-window"]');
       
-      // Wait for both elements to be visible (with data loaded)
-      await lastUpdatedElement.waitFor({ state: 'visible', timeout: 10000 });
-      await windowElement.waitFor({ state: 'visible', timeout: 10000 });
+      // Wait for elements to be attached to DOM first, then wait for them to be visible with data
+      await lastUpdatedElement.waitFor({ state: 'attached', timeout: 15000 });
+      await windowElement.waitFor({ state: 'attached', timeout: 15000 });
+      
+      // Wait for data to load (elements should contain actual data, not "Loading...")
+      await lastUpdatedElement.waitFor({ 
+        state: 'visible', 
+        timeout: 20000 
+      });
+      await expect(lastUpdatedElement).not.toContainText(/Loading/i);
+      
+      await windowElement.waitFor({ 
+        state: 'visible', 
+        timeout: 20000 
+      });
+      await expect(windowElement).not.toContainText(/Loading/i);
       
       // Assert "Last updated" label is present and contains expected text
       await expect(lastUpdatedElement).toContainText(/Last updated/i);
-      console.log('✅ PASS: Found "Last updated" label with stable selector');
+      const lastUpdatedText = await lastUpdatedElement.textContent();
+      console.log(`✅ PASS: Found "Last updated" label - "${lastUpdatedText}"`);
       
       // Assert "Window" label shows exactly "Window: 30 min"
       await expect(windowElement).toHaveText(/Window:\s*30\s*min/i);

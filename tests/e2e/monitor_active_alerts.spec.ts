@@ -134,11 +134,11 @@ test.describe('Monitor Active Alerts Fix Verification', () => {
       expect(lastUpdatedCount).toBeGreaterThan(0);
       console.log(`✅ PASS: Found "Last updated" label (${lastUpdatedCount} instances)`);
       
-      // Assert "Window" label shows "30"
-      const windowLabel = page.locator('text=/Window.*30/i');
+      // Assert "Window" label shows "30 min"
+      const windowLabel = page.locator('text=/Window.*30.*min/i');
       const windowCount = await windowLabel.count();
       expect(windowCount).toBeGreaterThan(0);
-      console.log(`✅ PASS: Found "Window: 30" label (${windowCount} instances)`);
+      console.log(`✅ PASS: Found "Window: 30 min" label (${windowCount} instances)`);
       
       // Take screenshot of throttle section if it exists
       const throttleSection = page.locator('text=/Throttle|Mensajes Enviados/i').first();

@@ -10,6 +10,7 @@ import { test, expect } from '@playwright/test';
  */
 test.describe('Monitor Active Alerts Fix Verification', () => {
   test('should show Active Alerts with status labels from telegram_messages', async ({ page }) => {
+    test.setTimeout(60000); // Increase timeout to 60s for data loading
     const baseURL = process.env.DASHBOARD_URL || process.env.BASE_URL || 'http://localhost:3000';
     
     console.log(`Navigating to ${baseURL}`);

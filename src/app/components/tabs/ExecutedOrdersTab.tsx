@@ -251,6 +251,7 @@ export default function ExecutedOrdersTab({
             value={orderFilter.status}
             onChange={(e) => onFilterChange({ ...orderFilter, status: e.target.value })}
             className="px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600 dark:text-white"
+            aria-label="Filter by status"
           >
             <option value="">All Status</option>
             <option value="FILLED">Filled</option>
@@ -261,6 +262,7 @@ export default function ExecutedOrdersTab({
             value={orderFilter.side}
             onChange={(e) => onFilterChange({ ...orderFilter, side: e.target.value })}
             className="px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600 dark:text-white"
+            aria-label="Filter by side"
           >
             <option value="">All Sides</option>
             <option value="BUY">BUY</option>
@@ -271,12 +273,14 @@ export default function ExecutedOrdersTab({
             value={orderFilter.startDate}
             onChange={(e) => onFilterChange({ ...orderFilter, startDate: e.target.value })}
             className="px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600 dark:text-white"
+            aria-label="Start date"
           />
           <input
             type="date"
             value={orderFilter.endDate}
             onChange={(e) => onFilterChange({ ...orderFilter, endDate: e.target.value })}
             className="px-3 py-2 border rounded dark:bg-slate-700 dark:border-slate-600 dark:text-white"
+            aria-label="End date"
           />
         </div>
       </div>
@@ -387,7 +391,7 @@ export default function ExecutedOrdersTab({
                 const updateTime = order.update_time 
                   ? (typeof order.update_time === 'number' ? new Date(order.update_time) : new Date(order.update_time))
                   : null;
-                const createDatetime = order.create_datetime || (createTime ? formatDateTime(createTime) : 'N/A');
+                const createDatetime = createTime ? formatDateTime(createTime) : 'N/A';
                 const updateDatetime = updateTime ? formatDateTime(updateTime) : createDatetime;
                 
                 return (

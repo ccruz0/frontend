@@ -106,15 +106,15 @@ class EnvironmentManager {
       return config;
     } else if (isLocalhost) {
       // Local browser access (user accessing http://localhost:3000 from their Mac)
+      // Use relative /api path to avoid CORS issues - Next.js rewrites will proxy to backend
       // If NEXT_PUBLIC_API_URL was compiled with backend-aws, use it (Docker environment)
-      // Otherwise, use localhost:8002 (Docker port mapping exposes backend on host)
       // NOTE: Browsers cannot resolve Docker service names, but if the frontend was built
       // with NEXT_PUBLIC_API_URL=http://backend-aws:8002/api, it means we're in Docker
       // and the Next.js server-side can proxy/rewrite these requests
       const useDockerService = compiledApiUrl && compiledApiUrl.includes('backend-aws');
       
       const config = {
-        apiUrl: useDockerService ? compiledApiUrl : 'http://localhost:8002/api',
+        apiUrl: useDockerService ? compiledApiUrl : '/api',  // Use relative path to avoid CORS
         environment: 'local' as const,
         isLocal: true,
         isAWS: false

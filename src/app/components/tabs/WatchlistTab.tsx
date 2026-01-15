@@ -262,7 +262,7 @@ export default function WatchlistTab({
         onCoinUpdated(symbol, { trade_enabled: currentStatus });
       }
       // Show error to user with more details
-      const errorMessage = err?.message || err?.toString() || 'Unknown error';
+      const errorMessage = err instanceof Error ? err.message : (typeof err === 'string' ? err : String(err)) || 'Unknown error';
       const errorDetails = errorMessage.includes('Failed to fetch') 
         ? 'Error de conexión. Verifica tu conexión a internet.'
         : errorMessage.length > 100 
@@ -427,7 +427,7 @@ export default function WatchlistTab({
         onCoinUpdated(symbol, { trade_on_margin: currentStatus });
       }
       // Show error to user with more details
-      const errorMessage = err?.message || err?.toString() || 'Unknown error';
+      const errorMessage = err instanceof Error ? err.message : (typeof err === 'string' ? err : String(err)) || 'Unknown error';
       const errorDetails = errorMessage.includes('Failed to fetch') 
         ? 'Error de conexión. Verifica tu conexión a internet.'
         : errorMessage.length > 100 

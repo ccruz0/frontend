@@ -28,6 +28,12 @@ const nextConfig: NextConfig = {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:8002';
     
     return [
+      // Catch-all for /api/* paths - this handles all API requests
+      {
+        source: '/api/:path*',
+        destination: `${backendUrl}/api/:path*`,
+      },
+      // Keep old routes for backward compatibility
       {
         source: '/health/:path*',
         destination: `${backendUrl}/api/health/:path*`,

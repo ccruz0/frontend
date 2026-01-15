@@ -2443,6 +2443,14 @@ export interface MonitoringSummary {
     blocked: number;
     failed: number;
   };
+  active_signals_count?: number;  // NEW: Current signal state count (always === active_signals.length)
+  active_signals?: Array<{  // NEW: Current signal state list (not events - see Active Alerts for events)
+    symbol: string;  // Always present, non-empty
+    decision: 'BUY' | 'SELL';  // Always "BUY" or "SELL" (never "WAIT")
+    strategy_key?: string | null;  // Strategy identifier (e.g., "swing-conservative") or null
+    last_price?: number | null;  // Last known price or null if unavailable
+    timestamp: string;  // ISO timestamp (always present)
+  }>;
 }
 
 export interface TelegramMessage {

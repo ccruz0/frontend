@@ -33,10 +33,6 @@ export interface WatchlistItem {
   res_up?: number;
   res_down?: number;
   signals?: TradingSignals;
-  // Per-field update timestamps (from master table)
-  field_updated_at?: Record<string, string>;  // Maps field names to ISO timestamps
-  created_at?: string;
-  updated_at?: string;
 }
 
 export interface WatchlistInput {
@@ -99,7 +95,6 @@ export interface PortfolioAsset {
   reserved_qty: number;
   haircut: number;
   value_usd: number;
-  usd_value?: number;  // Optional alternative field name (backend may return either)
   updated_at: string;
   tp?: number;  // Take profit price
   sl?: number;  // Stop loss price
@@ -118,11 +113,6 @@ export interface TopCoin {
   alert_enabled?: boolean;  // Alert enabled status for TRADE ALERT YES
   buy_alert_enabled?: boolean;  // Enable BUY alerts specifically
   sell_alert_enabled?: boolean;  // Enable SELL alerts specifically
-  // Strategy fields (optional; backend may provide any of these)
-  strategy_key?: string;       // e.g., "swing-conservative"
-  strategy_preset?: string;    // e.g., "swing"
-  strategy_risk?: string;      // e.g., "conservative"
-  sl_tp_mode?: string;        // SL/TP mode (e.g., "conservative", "aggressive")
   // Technical indicators (now included in cache)
   rsi?: number;
   ma50?: number;
@@ -140,21 +130,11 @@ export interface TopCoin {
   // Strategy-related fields
   strategy?: string;  // Strategy type (swing, scalp, etc.)
   strategy_state?: string;  // Strategy state
-  // SL/TP fields from backend (calculated based on strategy)
-  sl_price?: number;  // Calculated stop loss price
-  tp_price?: number;  // Calculated take profit price
-  sl_percentage?: number | null;  // Manual SL percentage override
-  tp_percentage?: number | null;  // Manual TP percentage override
-  // Watchlist fields
-  trade_enabled?: boolean;
-  trade_amount_usd?: number | null;
-  trade_on_margin?: boolean;
 }
 
 // Dashboard State Types (new unified endpoint)
 export interface DashboardBalance {
   asset: string;
-  coin?: string; // Backward-compat: some payloads may use `coin` instead of `asset`
   balance: number;  // Explicit balance field from Crypto.com
   free: number;
   locked: number;
@@ -205,17 +185,6 @@ export interface DashboardOrder {
   updated_at?: string | null;
 }
 
-// Dashboard portfolio shape returned by `/dashboard/state`
-// Keep this aligned with backend fields; all are optional for backward compatibility.
-export interface DashboardPortfolio {
-  assets?: PortfolioAsset[];
-  total_value_usd?: number;
-  total_assets_usd?: number;
-  total_collateral_usd?: number;
-  total_borrowed_usd?: number;
-  portfolio_value_source?: string;
-}
-
 export interface DashboardState {
   source?: string;  // "crypto.com" when using direct API values
   total_usd_value?: number;  // Total USD value from Crypto.com
@@ -226,14 +195,14 @@ export interface DashboardState {
   open_position_counts?: { [symbol: string]: number };
   open_orders_summary?: UnifiedOpenOrder[];  // Open orders summary
   last_sync: string | null;
-  portfolio?: DashboardPortfolio;
+  portfolio?: {
+    assets?: PortfolioAsset[];
+    total_value_usd?: number;
+  };
   bot_status: {
     is_running: boolean;
     status: 'running' | 'stopped';
     reason: string | null;
-    live_trading_enabled?: boolean;
-    mode?: 'LIVE' | 'DRY_RUN';
-    kill_switch_on?: boolean;
   };
   errors?: string[];  // Optional errors array
 }
@@ -248,9 +217,6 @@ export interface CoinSettings {
   buy_alert_enabled?: boolean;
   sell_alert_enabled?: boolean;
   sl_tp_mode?: string;
-  strategy_key?: string; // Optional: some endpoints may return resolved strategy key
-  strategy_preset?: string; // Optional: strategy preset (e.g., "swing")
-  strategy_risk?: string; // Optional: strategy risk (e.g., "conservative")
   min_price_change_pct?: number | null;
   sl_percentage?: number | null;
   tp_percentage?: number | null;
@@ -388,8 +354,6 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
           timeoutMs = 15000; // 15s for watchlist alert updates (increased from 10s to allow for network delays)
         } else if (endpoint.includes('/market/top-coins/custom')) {
           timeoutMs = 30000; // 30s for adding custom coins (database operations)
-        } else if (endpoint.includes('/dashboard/expected-take-profit')) {
-          timeoutMs = 60000; // 60s for expected-take-profit (database queries and calculations)
         }
         const controller = new AbortController();
         const timeoutId = setTimeout(() => {
@@ -573,9 +537,17 @@ export async function updateDashboardItem(id: number, item: Partial<WatchlistIte
 }
 
 // Save coin settings by symbol
-// Uses the direct /dashboard/symbol/{symbol} endpoint for more reliable updates
+// Finds the watchlist item by symbol and updates it with the provided settings
 export async function saveCoinSettings(symbol: string, settings: Partial<CoinSettings>): Promise<CoinSettings> {
   try {
+    // Get dashboard to find the item by symbol
+    const dashboard = await getDashboard();
+    const item = dashboard.find(item => item.symbol === symbol.toUpperCase());
+    
+    if (!item) {
+      throw new Error(`Watchlist item not found for symbol: ${symbol}`);
+    }
+    
     // Convert CoinSettings to WatchlistItem format (handle null values and type mismatches)
     const watchlistUpdate: Partial<WatchlistItem> = {};
     
@@ -596,39 +568,28 @@ export async function saveCoinSettings(symbol: string, settings: Partial<CoinSet
     if (settings.min_price_change_pct !== undefined) watchlistUpdate.min_price_change_pct = settings.min_price_change_pct;
     if (settings.sl_percentage !== undefined) watchlistUpdate.sl_percentage = settings.sl_percentage;
     if (settings.tp_percentage !== undefined) watchlistUpdate.tp_percentage = settings.tp_percentage;
-    // CRITICAL: Map sl_price/tp_price to the correct backend fields
-    // Backend has both sl_price/tp_price (calculated) and stop_loss/take_profit (legacy)
-    // We should update sl_price/tp_price for consistency
-    if (settings.sl_price !== undefined) {
-      watchlistUpdate.sl_price = settings.sl_price;
-      // Also update stop_loss for backward compatibility
-      watchlistUpdate.stop_loss = settings.sl_price;
-    }
-    if (settings.tp_price !== undefined) {
-      watchlistUpdate.tp_price = settings.tp_price;
-      // Also update take_profit for backward compatibility
-      watchlistUpdate.take_profit = settings.tp_price;
-    }
+    if (settings.sl_price !== undefined) watchlistUpdate.stop_loss = settings.sl_price;
+    if (settings.tp_price !== undefined) watchlistUpdate.take_profit = settings.tp_price;
     
-    // Use the direct symbol endpoint for more reliable updates
-    const updated = await updateWatchlistItem(symbol, watchlistUpdate);
+    // Update the item using the existing updateDashboardItem function
+    const updated = await updateDashboardItem(item.id, watchlistUpdate);
     
     // Return the updated settings in CoinSettings format
     return {
-      symbol: updated.item.symbol,
-      exchange: updated.item.exchange,
-      trade_enabled: updated.item.trade_enabled,
-      trade_amount_usd: updated.item.trade_amount_usd,
-      trade_on_margin: updated.item.trade_on_margin,
-      alert_enabled: updated.item.alert_enabled,
-      buy_alert_enabled: updated.item.buy_alert_enabled,
-      sell_alert_enabled: updated.item.sell_alert_enabled,
-      sl_tp_mode: updated.item.sl_tp_mode,
-      min_price_change_pct: updated.item.min_price_change_pct,
-      sl_percentage: updated.item.sl_percentage,
-      tp_percentage: updated.item.tp_percentage,
-      sl_price: updated.item.stop_loss || updated.item.sl_price,
-      tp_price: updated.item.take_profit || updated.item.tp_price,
+      symbol: updated.symbol,
+      exchange: updated.exchange,
+      trade_enabled: updated.trade_enabled,
+      trade_amount_usd: updated.trade_amount_usd,
+      trade_on_margin: updated.trade_on_margin,
+      alert_enabled: updated.alert_enabled,
+      buy_alert_enabled: updated.buy_alert_enabled,
+      sell_alert_enabled: updated.sell_alert_enabled,
+      sl_tp_mode: updated.sl_tp_mode,
+      min_price_change_pct: updated.min_price_change_pct,
+      sl_percentage: updated.sl_percentage,
+      tp_percentage: updated.tp_percentage,
+      sl_price: updated.stop_loss,
+      tp_price: updated.take_profit,
     };
   } catch (error) {
     logRequestIssue(
@@ -819,7 +780,7 @@ export async function getPortfolio(): Promise<{ assets: PortfolioAsset[], total_
   try {
     // Use /dashboard/state endpoint which uses PostgreSQL with up-to-date portfolio data
     // instead of /assets which uses outdated SQLite database
-    const data = await fetchAPI<{ portfolio?: DashboardPortfolio }>('/dashboard/state');
+    const data = await fetchAPI<{ portfolio?: { assets?: PortfolioAsset[]; total_value_usd?: number } }>('/dashboard/state');
     const portfolio = data.portfolio || {};
     return { 
       assets: portfolio.assets || [], 
@@ -1177,8 +1138,7 @@ export async function updateCoinConfig(symbol: string, config: CoinConfigUpdate)
 // Update alert_enabled for watchlist item
 export async function updateWatchlistAlert(symbol: string, alertEnabled: boolean): Promise<{ ok: boolean; symbol: string; alert_enabled: boolean }> {
   try {
-    const encodedSymbol = encodeURIComponent(symbol);
-    const data = await fetchAPI<{ ok: boolean; symbol: string; alert_enabled: boolean }>(`/watchlist/${encodedSymbol}/alert`, {
+    const data = await fetchAPI<{ ok: boolean; symbol: string; alert_enabled: boolean }>(`/watchlist/${symbol}/alert`, {
       method: 'PUT',
       body: JSON.stringify({ alert_enabled: alertEnabled })
     });
@@ -1197,8 +1157,7 @@ export async function updateWatchlistAlert(symbol: string, alertEnabled: boolean
 // Update buy_alert_enabled for watchlist item
 export async function updateBuyAlert(symbol: string, buyAlertEnabled: boolean): Promise<{ ok: boolean; symbol: string; buy_alert_enabled: boolean; alert_enabled: boolean; message: string }> {
   try {
-    const encodedSymbol = encodeURIComponent(symbol);
-    const data = await fetchAPI<{ ok: boolean; symbol: string; buy_alert_enabled: boolean; alert_enabled: boolean; message: string }>(`/watchlist/${encodedSymbol}/buy-alert`, {
+    const data = await fetchAPI<{ ok: boolean; symbol: string; buy_alert_enabled: boolean; alert_enabled: boolean; message: string }>(`/watchlist/${symbol}/buy-alert`, {
       method: 'PUT',
       body: JSON.stringify({ buy_alert_enabled: buyAlertEnabled })
     });
@@ -1217,8 +1176,7 @@ export async function updateBuyAlert(symbol: string, buyAlertEnabled: boolean): 
 // Update sell_alert_enabled for watchlist item
 export async function updateSellAlert(symbol: string, sellAlertEnabled: boolean): Promise<{ ok: boolean; symbol: string; sell_alert_enabled: boolean; alert_enabled: boolean; message: string }> {
   try {
-    const encodedSymbol = encodeURIComponent(symbol);
-    const data = await fetchAPI<{ ok: boolean; symbol: string; sell_alert_enabled: boolean; alert_enabled: boolean; message: string }>(`/watchlist/${encodedSymbol}/sell-alert`, {
+    const data = await fetchAPI<{ ok: boolean; symbol: string; sell_alert_enabled: boolean; alert_enabled: boolean; message: string }>(`/watchlist/${symbol}/sell-alert`, {
       method: 'PUT',
       body: JSON.stringify({ sell_alert_enabled: sellAlertEnabled })
     });
@@ -1227,37 +1185,6 @@ export async function updateSellAlert(symbol: string, sellAlertEnabled: boolean)
     logRequestIssue(
       `updateSellAlert:${symbol}`,
       'Handled sell alert update failure',
-      error,
-      'warn'
-    );
-    throw error;
-  }
-}
-
-// Update watchlist item in master table (new unified endpoint)
-export interface UpdateWatchlistItemResponse {
-  ok: boolean;
-  message: string;
-  item: WatchlistItem;
-  updated_fields: string[];
-}
-
-export async function updateWatchlistItem(
-  symbol: string,
-  updates: Partial<WatchlistItem>
-): Promise<UpdateWatchlistItemResponse> {
-  try {
-    // URL encode the symbol to handle special characters like underscores
-    const encodedSymbol = encodeURIComponent(symbol);
-    const data = await fetchAPI<UpdateWatchlistItemResponse>(`/dashboard/symbol/${encodedSymbol}`, {
-      method: 'PUT',
-      body: JSON.stringify(updates)
-    });
-    return data;
-  } catch (error) {
-    logRequestIssue(
-      `updateWatchlistItem:${symbol}`,
-      'Handled watchlist item update failure',
       error,
       'warn'
     );
@@ -1397,43 +1324,6 @@ export async function fixBackendHealth(): Promise<{ ok: boolean; message?: strin
       'error'
     );
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
-  }
-}
-
-// Portfolio refresh - force fresh snapshot from Crypto.com
-export interface RefreshPortfolioResponse {
-  success: boolean;
-  snapshot?: {
-    assets: PortfolioAsset[];
-    total_value_usd: number;
-    total_assets_usd?: number;
-    total_collateral_usd?: number;
-    total_borrowed_usd?: number;
-    portfolio_value_source: string;
-    as_of: string;
-  };
-  message?: string;
-  error?: string;
-}
-
-export async function refreshPortfolio(): Promise<RefreshPortfolioResponse> {
-  try {
-    const data = await fetchAPI<RefreshPortfolioResponse>('/portfolio/refresh', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-    return data;
-  } catch (error) {
-    logRequestIssue(
-      'refreshPortfolio',
-      'Failed to refresh portfolio snapshot',
-      error,
-      'error'
-    );
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : String(error) 
-    };
   }
 }
 
@@ -1784,8 +1674,7 @@ export interface ExpectedTPDetails {
 
 export async function getExpectedTakeProfitDetails(symbol: string): Promise<ExpectedTPDetails> {
   try {
-    const encodedSymbol = encodeURIComponent(symbol);
-    const data = await fetchAPI<ExpectedTPDetails>(`/dashboard/expected-take-profit/${encodedSymbol}`);
+    const data = await fetchAPI<ExpectedTPDetails>(`/dashboard/expected-take-profit/${symbol}`);
     return data;
   } catch (error) {
     logRequestIssue(
@@ -1807,13 +1696,6 @@ export interface TelegramMessage {
   timestamp: string;
   throttle_status?: string | null;
   throttle_reason?: string | null;
-  // Decision tracing fields (new)
-  decision_type?: string | null;  // "SKIPPED" or "FAILED"
-  reason_code?: string | null;  // Canonical reason code (e.g., "TRADE_DISABLED", "EXCHANGE_REJECTED")
-  reason_message?: string | null;  // Human-readable reason message
-  context_json?: Record<string, any> | null;  // Contextual data (prices, balances, thresholds, etc.)
-  exchange_error_snippet?: string | null;  // Raw exchange error message for FAILED decisions
-  correlation_id?: string | null;  // Correlation ID for tracing across logs
 }
 
 export interface TelegramMessagesResponse {

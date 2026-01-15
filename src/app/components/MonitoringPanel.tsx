@@ -645,6 +645,44 @@ export default function MonitoringPanel({
     }
   };
 
+  // Helper to format backend UTC timestamps robustly
+  const formatBackendUtcTimestamp = (ts: string | null | undefined): string | null => {
+    if (!ts) return null;
+    const raw = String(ts).trim();
+    if (!raw) return null;
+
+    // If backend returns `YYYY-MM-DD HH:MM:SS` (no T / timezone), normalize to ISO UTC.
+    let normalized = raw;
+    if (!normalized.includes('T') && normalized.includes(' ')) {
+      normalized = normalized.replace(' ', 'T');
+    }
+    // If there is no timezone designator, assume UTC.
+    if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(normalized)) {
+      normalized = `${normalized}Z`;
+    }
+
+    const d = new Date(normalized);
+    if (isNaN(d.getTime())) return null;
+
+    const formatted = d.toLocaleString(undefined, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+      timeZoneName: 'short',
+    });
+
+    // Harden: if formatted result contains "Invalid Date", return null
+    if (formatted && formatted.toLowerCase().includes('invalid date')) {
+      return null;
+    }
+
+    return formatted;
+  };
+
   // Early returns AFTER all hooks but BEFORE data processing
   // This ensures all hooks are called consistently while allowing early exit for loading/error states
   if (loading && !data) {
@@ -1147,6 +1185,15 @@ export default function MonitoringPanel({
           <div className="text-2xl font-bold text-gray-800">
             {monitoringData.active_alerts}
           </div>
+          <div className="text-xs text-gray-400 mt-1">Events (Telegram/throttle)</div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
+          <div className="text-sm text-gray-500 mb-1">Active Signals</div>
+          <div className="text-2xl font-bold text-gray-800">
+            {(monitoringData.active_signals_count ?? 0)}
+          </div>
+          <div className="text-xs text-gray-400 mt-1">Current state (not events)</div>
         </div>
 
         <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
@@ -1222,20 +1269,15 @@ export default function MonitoringPanel({
               </div>
             )}
             <div className="text-xs text-gray-500" data-testid="monitor-last-updated">
-              {data?.generated_at_utc || monitoringData?.generated_at_utc ? (
-                <>Last updated: {new Date(data?.generated_at_utc || monitoringData?.generated_at_utc || '').toLocaleString(undefined, {
-                  year: 'numeric',
-                  month: '2-digit',
-                  day: '2-digit',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                  hour12: true,
-                  timeZoneName: 'short'
-                })}</>
-              ) : (
-                <>Last updated: Loading...</>
-              )}
+              {(() => {
+                const ts = (data?.generated_at_utc ?? monitoringData?.generated_at_utc) as any;
+                const formatted = formatBackendUtcTimestamp(ts);
+                // Never show "Invalid Date" - show "—" if missing or invalid
+                const safe = (formatted && !formatted.toLowerCase().includes('invalid date')) 
+                  ? formatted 
+                  : '—';
+                return <>Last updated: {safe}</>;
+              })()}
             </div>
             <div className="text-xs text-gray-500" data-testid="monitor-window">
               {data?.window_minutes || monitoringData?.window_minutes ? (
@@ -1316,6 +1358,84 @@ export default function MonitoringPanel({
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {alertRows}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Active Signals Table (Current State) */}
+      {/* NOTE: Active Signals = current BUY/SELL state from watchlist, NOT emitted events.
+          For events (Telegram messages, throttle records), see "Active Alerts" above. */}
+      <div className="bg-white rounded-lg shadow border border-gray-200 mb-6">
+        <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold">Active Signals (Current State)</h3>
+            <p className="text-xs text-gray-500">Current BUY/SELL signals from watchlist (not events)</p>
+          </div>
+        </div>
+        {!monitoringData.active_signals || monitoringData.active_signals.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">
+            No active signals
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Symbol</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Decision</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Strategy</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Price</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Timestamp</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {monitoringData.active_signals.map((signal, idx) => {
+                  // Robust null handling - never crash on missing data
+                  const symbol = signal?.symbol || 'UNKNOWN';
+                  const decision = signal?.decision || 'UNKNOWN';
+                  const strategyKey = signal?.strategy_key ?? null;
+                  const lastPrice = signal?.last_price ?? null;
+                  const timestamp = signal?.timestamp || null;
+                  
+                  // Format timestamp safely
+                  let formattedTimestamp = '—';
+                  if (timestamp) {
+                    try {
+                      const date = new Date(timestamp);
+                      if (!isNaN(date.getTime())) {
+                        formattedTimestamp = date.toLocaleString();
+                      }
+                    } catch (e) {
+                      // Invalid timestamp - show fallback
+                      formattedTimestamp = '—';
+                    }
+                  }
+                  
+                  // Determine badge color based on decision
+                  const badgeClass = decision === 'BUY' 
+                    ? 'bg-green-100 text-green-800 border border-green-200'
+                    : decision === 'SELL'
+                    ? 'bg-red-100 text-red-800 border border-red-200'
+                    : 'bg-gray-100 text-gray-800 border border-gray-200';
+                  
+                  return (
+                    <tr key={`${symbol}-${idx}`} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{symbol}</td>
+                      <td className="px-4 py-3 text-sm">
+                        <span className={`px-2 py-1 rounded text-xs font-semibold ${badgeClass}`}>
+                          {decision}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{strategyKey || 'N/A'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {lastPrice !== null && lastPrice > 0 ? `$${lastPrice.toFixed(4)}` : 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">{formattedTimestamp}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

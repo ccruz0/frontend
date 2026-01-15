@@ -43,7 +43,7 @@ export default function StrategyConfigModal({
     setFormData((prev) => {
       const newData = { ...prev };
       const keys = field.split('.');
-      let current: any = newData;
+      let current: unknown = newData;
       
       for (let i = 0; i < keys.length - 1; i++) {
         if (!current[keys[i]]) {

@@ -150,10 +150,22 @@ test.describe('Monitor Active Alerts Fix Verification', () => {
       });
       await expect(windowElement).not.toContainText(/Loading/i);
       
-      // Assert "Last updated" label is present and contains expected text
-      await expect(lastUpdatedElement).toContainText(/Last updated/i);
+      // Strict assertion: "Last updated" element must be visible
+      await expect(lastUpdatedElement).toBeVisible();
+      
+      // Strict assertion: "Last updated" must NOT contain "Invalid Date"
       const lastUpdatedText = await lastUpdatedElement.textContent();
+      expect(lastUpdatedText).not.toContain('Invalid Date');
+      expect(lastUpdatedText?.toLowerCase()).not.toContain('invalid date');
       console.log(`✅ PASS: Found "Last updated" label - "${lastUpdatedText}"`);
+      console.log(`✅ PASS: "Last updated" does not contain "Invalid Date"`);
+      
+      // Global guard: "Invalid Date" must NOT appear anywhere on the page
+      const pageContent = await page.content();
+      const pageText = await page.textContent('body');
+      expect(pageContent).not.toContain('Invalid Date');
+      expect(pageText?.toLowerCase()).not.toContain('invalid date');
+      console.log(`✅ PASS: "Invalid Date" not found anywhere on the page`);
       
       // Assert "Window" label shows exactly "Window: 30 min"
       await expect(windowElement).toHaveText(/Window:\s*30\s*min/i);

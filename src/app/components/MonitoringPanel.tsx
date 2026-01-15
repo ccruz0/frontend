@@ -651,8 +651,13 @@ export default function MonitoringPanel({
     const raw = String(ts).trim();
     if (!raw) return null;
 
-    // If backend returns `YYYY-MM-DD HH:MM:SS` (no T / timezone), normalize to ISO UTC.
+    // Normalize known backend edge cases and formats.
     let normalized = raw;
+    // Fix invalid "+00:00Z" suffix if present.
+    if (normalized.endsWith("+00:00Z")) {
+      normalized = normalized.replace("+00:00Z", "Z");
+    }
+    // If backend returns `YYYY-MM-DD HH:MM:SS` (no T / timezone), normalize to ISO UTC.
     if (!normalized.includes('T') && normalized.includes(' ')) {
       normalized = normalized.replace(' ', 'T');
     }

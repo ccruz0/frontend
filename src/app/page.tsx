@@ -2,7 +2,7 @@
 
 import '@/lib/polyfill';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { getDashboard, getOpenOrders, getOrderHistory, getTopCoins, saveCoinSettings, getTradingSignals, getDataSourcesStatus, getTradingConfig, saveTradingConfig, updateCoinConfig, addCustomTopCoin, removeCustomTopCoin, getDashboardState, getDashboardSnapshot, quickOrder, updateWatchlistAlert, updateBuyAlert, updateSellAlert, simulateAlert, deleteDashboardItemBySymbol, toggleLiveTrading, getTPSLOrderValues, getOpenOrdersSummary, dashboardBalancesToPortfolioAssets, getExpectedTakeProfitSummary, getExpectedTakeProfitDetails, getTelegramMessages, fixBackendHealth, refreshPortfolio, DashboardState, DashboardBalance, WatchlistItem, OpenOrder, PortfolioAsset, TradingSignals, TopCoin, DataSourceStatus, TradingConfig, CoinSettings, TPSLOrderValues, UnifiedOpenOrder, OpenPosition, ExpectedTPSummary, ExpectedTPSummaryItem, ExpectedTPDetails, ExpectedTPMatchedLot, SimulateAlertResponse, TelegramMessage, StrategyDecision } from '@/app/api';
+import { getDashboard, getOpenOrders, getOrderHistory, getTopCoins, saveCoinSettings, getTradingSignals, getDataSourcesStatus, getTradingConfig, saveTradingConfig, updateCoinConfig, addCustomTopCoin, removeCustomTopCoin, getDashboardState, getDashboardSnapshot, quickOrder, updateWatchlistAlert, updateBuyAlert, updateSellAlert, simulateAlert, deleteDashboardItemBySymbol, toggleLiveTrading, getTPSLOrderValues, getOpenOrdersSummary, dashboardBalancesToPortfolioAssets, getExpectedTakeProfitSummary, getExpectedTakeProfitDetails, getTelegramMessages, fixBackendHealth, DashboardState, DashboardBalance, WatchlistItem, OpenOrder, PortfolioAsset, TradingSignals, TopCoin, DataSourceStatus, TradingConfig, CoinSettings, TPSLOrderValues, UnifiedOpenOrder, OpenPosition, ExpectedTPSummary, ExpectedTPSummaryItem, ExpectedTPDetails, ExpectedTPMatchedLot, SimulateAlertResponse, TelegramMessage, StrategyDecision } from '@/app/api';
 import { getApiUrl } from '@/lib/environment';
 import { MonitoringNotificationsProvider, useMonitoringNotifications } from '@/app/context/MonitoringNotificationsContext';
 import MonitoringPanel from '@/app/components/MonitoringPanel';
@@ -3162,9 +3162,10 @@ function resolveDecisionIndexColor(value: number): string {
     if (forceRefresh || showLoader) {
       try {
         logger.info('🔄 Forcing fresh portfolio snapshot from Crypto.com...');
-        const refreshResult = await refreshPortfolio();
-        if (refreshResult.success) {
-          logger.info(`✅ Portfolio snapshot refreshed: ${refreshResult.snapshot?.assets?.length || 0} assets, total=$${refreshResult.snapshot?.total_value_usd || 0}`);
+        // refreshPortfolio function removed - using getDashboardState instead
+        const refreshResult = await getDashboardState();
+        if (refreshResult) {
+          logger.info(`✅ Portfolio snapshot refreshed`);
         } else {
           logger.warn(`⚠️ Portfolio refresh failed: ${refreshResult.error || 'Unknown error'}`);
         }

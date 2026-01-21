@@ -17,6 +17,7 @@ export interface StrategyRules {
   volumeMinRatio?: number;                    // Minimum volume ratio (e.g., 0.5, 1, 1.5, 2)
   minPriceChangePct?: number;                 // Minimum price change % required for order creation/alerts (default: 1.0)
   alertCooldownMinutes?: number;              // Cooldown in minutes between same-side alerts (default: 5.0)
+  maxOrdersPerSymbolPerDay?: number;          // Daily order limit per symbol (leave undefined to use env default)
   trendFilters?: {
     require_price_above_ma200?: boolean;
     require_ema10_above_ma50?: boolean;

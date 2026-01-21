@@ -43,15 +43,17 @@ export default function StrategyConfigModal({
     setFormData((prev) => {
       const newData = { ...prev };
       const keys = field.split('.');
-      let current: unknown = newData;
-      
+      let current: Record<string, unknown> = newData as Record<string, unknown>;
+
       for (let i = 0; i < keys.length - 1; i++) {
-        if (!current[keys[i]]) {
-          current[keys[i]] = {};
+        const key = keys[i];
+        const nextValue = current[key];
+        if (!nextValue || typeof nextValue !== 'object' || Array.isArray(nextValue)) {
+          current[key] = {};
         }
-        current = current[keys[i]];
+        current = current[key] as Record<string, unknown>;
       }
-      
+
       current[keys[keys.length - 1]] = value;
       return newData;
     });
@@ -63,9 +65,10 @@ export default function StrategyConfigModal({
     handleInputChange(field, checked);
   };
 
-  const handleNumberChange = (field: string, value: string) => {
-    const numValue = value === '' ? undefined : parseFloat(value);
-    if (value === '' || (!isNaN(numValue!) && numValue! >= 0)) {
+  const handleNumberChange = (field: string, value: string | null) => {
+    const normalizedValue = value ?? '';
+    const numValue = normalizedValue === '' ? undefined : parseFloat(normalizedValue);
+    if (normalizedValue === '' || (!isNaN(numValue!) && numValue! >= 0)) {
       handleInputChange(field, numValue);
     }
   };
@@ -131,10 +134,14 @@ export default function StrategyConfigModal({
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label
+                    htmlFor="strategy-rsi-buy-below"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
                     RSI Buy Below
                   </label>
                   <input
+                    id="strategy-rsi-buy-below"
                     type="number"
                     min="1"
                     max="100"
@@ -145,10 +152,14 @@ export default function StrategyConfigModal({
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label
+                    htmlFor="strategy-rsi-sell-above"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
                     RSI Sell Above
                   </label>
                   <input
+                    id="strategy-rsi-sell-above"
                     type="number"
                     min="1"
                     max="100"
@@ -159,10 +170,14 @@ export default function StrategyConfigModal({
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label
+                    htmlFor="strategy-volume-min-ratio"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
                     Volume Min Ratio
                   </label>
                   <input
+                    id="strategy-volume-min-ratio"
                     type="number"
                     min="0"
                     max="10"
@@ -175,10 +190,14 @@ export default function StrategyConfigModal({
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label
+                    htmlFor="strategy-min-price-change-pct"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
                     Min Price Change %
                   </label>
                   <input
+                    id="strategy-min-price-change-pct"
                     type="number"
                     min="0"
                     max="100"
@@ -187,6 +206,25 @@ export default function StrategyConfigModal({
                     onChange={(e) => handleNumberChange('minPriceChangePct', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"
                   />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="strategy-max-orders-per-symbol-per-day"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
+                    Max Orders Per Symbol / Day
+                  </label>
+                  <input
+                    id="strategy-max-orders-per-symbol-per-day"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formData.maxOrdersPerSymbolPerDay ?? ''}
+                    onChange={(e) => handleNumberChange('maxOrdersPerSymbolPerDay', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Leave empty to use global default</p>
                 </div>
               </div>
             </div>
@@ -247,10 +285,14 @@ export default function StrategyConfigModal({
                 <p className="text-xs text-gray-500 ml-6">Require RSI to cross up above the level before allowing entry</p>
                 
                 <div className="ml-6">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label
+                    htmlFor="strategy-rsi-cross-level"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
                     RSI Cross Level
                   </label>
                   <input
+                    id="strategy-rsi-cross-level"
                     type="number"
                     min="1"
                     max="100"
@@ -285,10 +327,14 @@ export default function StrategyConfigModal({
                 <p className="text-xs text-gray-500 ml-6">Require close price to be above EMA10</p>
                 
                 <div className="ml-6">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label
+                    htmlFor="strategy-rsi-rising-n-candles"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
                     RSI Rising N Candles
                   </label>
                   <input
+                    id="strategy-rsi-rising-n-candles"
                     type="number"
                     min="0"
                     max="10"
@@ -309,10 +355,14 @@ export default function StrategyConfigModal({
               
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label
+                    htmlFor="strategy-atr-period"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
                     ATR Period
                   </label>
                   <input
+                    id="strategy-atr-period"
                     type="number"
                     min="5"
                     max="50"
@@ -323,10 +373,14 @@ export default function StrategyConfigModal({
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label
+                    htmlFor="strategy-atr-multiplier-sl"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
                     ATR Multiplier (SL)
                   </label>
                   <input
+                    id="strategy-atr-multiplier-sl"
                     type="number"
                     min="0.5"
                     max="5"
@@ -339,16 +393,20 @@ export default function StrategyConfigModal({
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label
+                    htmlFor="strategy-atr-multiplier-tp"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
                     ATR Multiplier (TP) - Optional
                   </label>
                   <input
+                    id="strategy-atr-multiplier-tp"
                     type="number"
                     min="0.5"
                     max="10"
                     step="0.1"
                     value={formData.atr?.multiplier_tp ?? ''}
-                    onChange={(e) => handleNumberChange('atr.multiplier_tp', e.target.value === '' ? null : e.target.value)}
+                    onChange={(e) => handleNumberChange('atr.multiplier_tp', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md dark:bg-slate-700 dark:border-slate-600 dark:text-white"
                     placeholder="Leave empty to use RR"
                   />
@@ -365,10 +423,14 @@ export default function StrategyConfigModal({
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label
+                    htmlFor="strategy-sl-fallback-pct"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
                     SL Fallback Percentage
                   </label>
                   <input
+                    id="strategy-sl-fallback-pct"
                     type="number"
                     min="0"
                     max="20"
@@ -381,10 +443,14 @@ export default function StrategyConfigModal({
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label
+                    htmlFor="strategy-tp-rr"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
                     Risk:Reward Ratio
                   </label>
                   <input
+                    id="strategy-tp-rr"
                     type="number"
                     min="0.5"
                     max="5"

@@ -95,6 +95,7 @@ export interface PortfolioAsset {
   reserved_qty: number;
   haircut: number;
   value_usd: number;
+  usd_value?: number;  // Alternative field from Crypto.com API
   updated_at: string;
   tp?: number;  // Take profit price
   sl?: number;  // Stop loss price
@@ -130,6 +131,15 @@ export interface TopCoin {
   // Strategy-related fields
   strategy?: string;  // Strategy type (swing, scalp, etc.)
   strategy_state?: string;  // Strategy state
+  strategy_key?: string | null;
+  strategy_preset?: string | null;
+  strategy_risk?: string | null;
+  sl_price?: number;
+  tp_price?: number;
+  trade_enabled?: boolean;
+  trade_on_margin?: boolean;
+  sl_percentage?: number | null;
+  tp_percentage?: number | null;
 }
 
 // Dashboard State Types (new unified endpoint)
@@ -144,6 +154,7 @@ export interface DashboardBalance {
   quantity?: number;
   max_withdrawal?: number;
   currency?: string;  // Currency code
+  coin?: string;  // Alternative to asset (used in some API responses)
   tp?: number;  // Take profit price
   sl?: number;  // Stop loss price
 }
@@ -198,6 +209,10 @@ export interface DashboardState {
   portfolio?: {
     assets?: PortfolioAsset[];
     total_value_usd?: number;
+    total_assets_usd?: number;
+    total_collateral_usd?: number;
+    total_borrowed_usd?: number;
+    portfolio_value_source?: string;
   };
   bot_status: {
     is_running: boolean;
@@ -688,41 +703,31 @@ export async function getOrderHistory(
   limit: number = 100,
   offset: number = 0,
   sync: boolean = false
-): Promise<{ 
-  orders: OpenOrder[], 
-  count: number,
-  total?: number,
-  has_more?: boolean
+): Promise<{
+  orders: OpenOrder[];
+  count: number;
+  total?: number;
+  has_more?: boolean;
 }> {
-  try {
-    const params = new URLSearchParams({
-      limit: limit.toString(),
-      offset: offset.toString()
-    });
-    if (sync) {
-      params.set('sync', 'true');
-    }
-    const data = await fetchAPI<{ 
-      orders?: OpenOrder[]; 
-      count?: number;
-      total?: number;
-      has_more?: boolean;
+  const params = new URLSearchParams({
+    limit: limit.toString(),
+    offset: offset.toString()
+  });
+  if (sync) {
+    params.set('sync', 'true');
+  }
+  const data = await fetchAPI<{
+    orders?: OpenOrder[];
+    count?: number;
+    total?: number;
+    has_more?: boolean;
   }>(`/orders/history?${params.toString()}`);
-  return { 
-    orders: data.orders || [], 
+  return {
+    orders: data.orders || [],
     count: data.count || 0,
     total: data.total,
     has_more: data.has_more
   };
-} catch (error) {
-  logRequestIssue(
-    'getOrderHistory',
-    'Handled order history fetch failure (returning empty list)',
-    error,
-    'warn'
-  );
-  return { orders: [], count: 0 };
-}
 }
 
 // Trading

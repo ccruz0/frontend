@@ -8,11 +8,13 @@ import { MonitoringNotificationsProvider, useMonitoringNotifications } from '@/a
 import MonitoringPanel from '@/app/components/MonitoringPanel';
 import ErrorBoundary from '@/app/components/ErrorBoundary';
 import StrategyConfigModal from '@/app/components/StrategyConfigModal';
+import ExchangeCredentialsModal from '@/app/components/ExchangeCredentialsModal';
 import PortfolioTab from '@/app/components/tabs/PortfolioTab';
 import WatchlistTab from '@/app/components/tabs/WatchlistTab';
 import OrdersTab from '@/app/components/tabs/OrdersTab';
 import ExpectedTakeProfitTab from '@/app/components/tabs/ExpectedTakeProfitTab';
 import ExecutedOrdersTab from '@/app/components/tabs/ExecutedOrdersTab';
+import OpenClawTab from '@/app/components/tabs/OpenClawTab';
 import SystemHealthPanel from '@/components/SystemHealth';
 import { palette } from '@/theme/palette';
 import { logger } from '@/utils/logger';
@@ -319,7 +321,7 @@ const SkeletonBlock = ({ className = '' }: { className?: string }) => (
   <div className={`animate-pulse bg-gray-200 dark:bg-slate-700 rounded ${className}`} />
 );
 
-type Tab = 'portfolio' | 'watchlist' | 'signals' | 'orders' | 'expected-take-profit' | 'executed-orders' | 'version-history' | 'monitoring';
+type Tab = 'portfolio' | 'watchlist' | 'signals' | 'orders' | 'expected-take-profit' | 'executed-orders' | 'version-history' | 'monitoring' | 'openclaw';
 
 // Helper function to add thousand separators
 function addThousandSeparators(numStr: string): string {
@@ -1012,6 +1014,7 @@ function DashboardPageContent() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [signals, setSignals] = useState<Record<string, TradingSignals | null>>({});
   const [showSignalConfig, setShowSignalConfig] = useState(false);
+  const [showExchangeCredentialsModal, setShowExchangeCredentialsModal] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [dataSourceStatus, setDataSourceStatus] = useState<DataSourceStatus | null>(null);
   const [tradingConfig, setTradingConfig] = useState<TradingConfig | null>(null);
@@ -3167,7 +3170,7 @@ function resolveDecisionIndexColor(value: number): string {
         if (refreshResult) {
           logger.info(`✅ Portfolio snapshot refreshed`);
         } else {
-          logger.warn(`⚠️ Portfolio refresh failed: ${refreshResult.error || 'Unknown error'}`);
+          logger.warn(`⚠️ Portfolio refresh failed: Unknown error`);
         }
       } catch (refreshErr) {
         logger.warn('⚠️ Failed to refresh portfolio snapshot, will use cached data:', refreshErr);
@@ -4615,6 +4618,7 @@ function resolveDecisionIndexColor(value: number): string {
     { id: 'executed-orders', label: 'Executed Orders' },
     { id: 'monitoring', label: 'Monitoring' },
     { id: 'version-history', label: 'Version History' },
+    { id: 'openclaw', label: 'OpenClaw' },
   ];
 
   return (
@@ -4623,12 +4627,20 @@ function resolveDecisionIndexColor(value: number): string {
         {/* Header */}
         <div className="mb-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Trading Dashboard</h1>
-          <button
-            onClick={() => setShowSignalConfig(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-          >
-            ⚙️ Configure Strategy
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowExchangeCredentialsModal(true)}
+              className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 transition-colors"
+            >
+              🔑 Set Exchange Credentials
+            </button>
+            <button
+              onClick={() => setShowSignalConfig(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              ⚙️ Configure Strategy
+            </button>
+          </div>
         </div>
 
         {/* System Health Panel */}
@@ -5149,6 +5161,8 @@ function resolveDecisionIndexColor(value: number): string {
               </div>
             </div>
           )}
+
+          {activeTab === 'openclaw' && <OpenClawTab />}
         </ErrorBoundary>
       </div>
 
@@ -5160,6 +5174,13 @@ function resolveDecisionIndexColor(value: number): string {
         riskMode={selectedConfigRisk}
         rules={currentRules}
         onSave={handleSaveStrategyConfig}
+      />
+
+      {/* Exchange credentials: persisted to runtime.env; backend restart required for portfolio sync */}
+      <ExchangeCredentialsModal
+        isOpen={showExchangeCredentialsModal}
+        onClose={() => setShowExchangeCredentialsModal(false)}
+        onSaved={() => fetchPortfolio({ showLoader: false, forceRefresh: true })}
       />
     </div>
   );

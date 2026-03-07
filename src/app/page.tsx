@@ -4627,20 +4627,12 @@ function resolveDecisionIndexColor(value: number): string {
         {/* Header */}
         <div className="mb-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Trading Dashboard</h1>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowExchangeCredentialsModal(true)}
-              className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 transition-colors"
-            >
-              🔑 Set Exchange Credentials
-            </button>
-            <button
-              onClick={() => setShowSignalConfig(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-            >
-              ⚙️ Configure Strategy
-            </button>
-          </div>
+          <button
+            onClick={() => setShowSignalConfig(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            ⚙️ Configure Strategy
+          </button>
         </div>
 
         {/* System Health Panel */}

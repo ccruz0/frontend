@@ -4,7 +4,7 @@ import React from 'react';
 
 export default function OpenClawTab() {
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 220px)', minHeight: '500px' }}>
+    <div className="flex flex-col h-[calc(100vh-220px)] min-h-[500px]">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white">OpenClaw</h2>
         <button
@@ -28,6 +28,9 @@ export default function OpenClawTab() {
           Open Full Dashboard
         </button>
       </div>
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+        If the panel is blank, open the link in a new tab, sign in with Basic Auth, then refresh this page.
+      </p>
       <div className="flex-1 min-h-0 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden bg-white dark:bg-gray-900">
         <iframe
           src="/openclaw/"

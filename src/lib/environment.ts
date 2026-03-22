@@ -226,6 +226,14 @@ export function getApiUrl(): string {
   return getEnvironmentManager().getApiUrl();
 }
 
+/** WebSocket URL for real-time price stream (/api/ws/prices). Same origin as API. */
+export function getWebSocketPricesUrl(): string {
+  const apiUrl = getApiUrl();
+  const wsProtocol = apiUrl.startsWith('https') ? 'wss:' : 'ws:';
+  const rest = apiUrl.replace(/^https?:\/\//, '');
+  return `${wsProtocol}//${rest.replace(/\/+$/, '')}/ws/prices`;
+}
+
 export function getEnvironmentConfig(): EnvironmentConfig {
   return getEnvironmentManager().getConfig();
 }

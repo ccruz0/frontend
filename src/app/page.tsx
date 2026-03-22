@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { getDashboard, getOpenOrders, getOrderHistory, getTopCoins, saveCoinSettings, getTradingSignals, getDataSourcesStatus, getTradingConfig, saveTradingConfig, updateCoinConfig, addCustomTopCoin, removeCustomTopCoin, getDashboardState, getDashboardSnapshot, quickOrder, updateWatchlistAlert, updateBuyAlert, updateSellAlert, simulateAlert, deleteDashboardItemBySymbol, toggleLiveTrading, getTPSLOrderValues, getOpenOrdersSummary, dashboardBalancesToPortfolioAssets, getExpectedTakeProfitSummary, getExpectedTakeProfitDetails, getTelegramMessages, fixBackendHealth, DashboardState, DashboardBalance, WatchlistItem, OpenOrder, PortfolioAsset, TradingSignals, TopCoin, DataSourceStatus, TradingConfig, CoinSettings, TPSLOrderValues, UnifiedOpenOrder, OpenPosition, ExpectedTPSummary, ExpectedTPSummaryItem, ExpectedTPDetails, ExpectedTPMatchedLot, SimulateAlertResponse, TelegramMessage, StrategyDecision } from '@/app/api';
 import { getApiUrl } from '@/lib/environment';
 import { MonitoringNotificationsProvider, useMonitoringNotifications } from '@/app/context/MonitoringNotificationsContext';
+import { PriceStreamProvider } from '@/app/context/PriceStreamContext';
 import MonitoringPanel from '@/app/components/MonitoringPanel';
 import ErrorBoundary from '@/app/components/ErrorBoundary';
 import StrategyConfigModal from '@/app/components/StrategyConfigModal';
@@ -15,6 +16,7 @@ import OrdersTab from '@/app/components/tabs/OrdersTab';
 import ExpectedTakeProfitTab from '@/app/components/tabs/ExpectedTakeProfitTab';
 import ExecutedOrdersTab from '@/app/components/tabs/ExecutedOrdersTab';
 import OpenClawTab from '@/app/components/tabs/OpenClawTab';
+import AgentOpsTab from '@/app/components/tabs/AgentOpsTab';
 import SystemHealthPanel from '@/components/SystemHealth';
 import { palette } from '@/theme/palette';
 import { logger } from '@/utils/logger';
@@ -196,7 +198,9 @@ function transformOrdersToPositions(orders: UnifiedOpenOrder[], portfolioAssets?
 export default function DashboardPage() {
   return (
     <MonitoringNotificationsProvider>
-      <DashboardPageContent />
+      <PriceStreamProvider>
+        <DashboardPageContent />
+      </PriceStreamProvider>
     </MonitoringNotificationsProvider>
   );
 }
@@ -321,7 +325,7 @@ const SkeletonBlock = ({ className = '' }: { className?: string }) => (
   <div className={`animate-pulse bg-gray-200 dark:bg-slate-700 rounded ${className}`} />
 );
 
-type Tab = 'portfolio' | 'watchlist' | 'signals' | 'orders' | 'expected-take-profit' | 'executed-orders' | 'version-history' | 'monitoring' | 'openclaw';
+type Tab = 'portfolio' | 'watchlist' | 'signals' | 'orders' | 'expected-take-profit' | 'executed-orders' | 'version-history' | 'monitoring' | 'openclaw' | 'agent-ops';
 
 // Helper function to add thousand separators
 function addThousandSeparators(numStr: string): string {
@@ -4619,6 +4623,7 @@ function resolveDecisionIndexColor(value: number): string {
     { id: 'monitoring', label: 'Monitoring' },
     { id: 'version-history', label: 'Version History' },
     { id: 'openclaw', label: 'OpenClaw' },
+    { id: 'agent-ops', label: 'Agent Ops' },
   ];
 
   return (
@@ -5155,6 +5160,7 @@ function resolveDecisionIndexColor(value: number): string {
           )}
 
           {activeTab === 'openclaw' && <OpenClawTab />}
+          {activeTab === 'agent-ops' && <AgentOpsTab />}
         </ErrorBoundary>
       </div>
 

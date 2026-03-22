@@ -679,6 +679,8 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
           timeoutMs = 30000; // 30s for adding custom coins (database operations)
         } else if (endpoint.includes('/monitoring/workflows')) {
           timeoutMs = 150000; // 150s (2.5 minutes) for workflows - may need time for file system operations and initialization
+        } else if (endpoint.includes('/health/system')) {
+          timeoutMs = 15000; // 15s for system health - backend uses short DB timeout; fail fast so UI can show retry
         }
         const controller = new AbortController();
         const timeoutId = setTimeout(() => {

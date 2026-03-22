@@ -42,7 +42,8 @@ COPY --from=builder /app/public ./public
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD wget -qO- http://localhost:3000/ || exit 1
+# SECURITY: No wget in runtime - use node to avoid RCE payloads that rely on wget/curl
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD ["node", "-e", "require('http').get('http://127.0.0.1:3000/', (r)=>process.exit(r.statusCode===200?0:1)).on('error', ()=>process.exit(1));"]
 
 USER app
 

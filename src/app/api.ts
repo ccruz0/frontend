@@ -23,6 +23,9 @@ export interface WatchlistItem {
   tp_percentage?: number | null;
   sl_price?: number;
   tp_price?: number;
+  strategy_key?: string | null;
+  strategy_preset?: string | null;
+  strategy_risk?: string | null;
   order_status?: string;
   price?: number;
   rsi?: number;
@@ -140,6 +143,8 @@ export interface TopCoin {
   tp_price?: number;
   trade_enabled?: boolean;
   trade_on_margin?: boolean;
+  trade_amount_usd?: number | null;
+  sl_tp_mode?: string;
   sl_percentage?: number | null;
   tp_percentage?: number | null;
 }
@@ -239,6 +244,9 @@ export interface CoinSettings {
   tp_percentage?: number | null;
   sl_price?: number;
   tp_price?: number;
+  strategy_key?: string | null;
+  strategy_preset?: string | null;
+  strategy_risk?: string | null;
   alert_cooldown_minutes?: number | null;  // Alert cooldown in minutes (nullable)
   id?: number;  // Optional ID field
   message?: string;  // Optional message field
@@ -607,6 +615,9 @@ export async function saveCoinSettings(symbol: string, settings: Partial<CoinSet
       tp_percentage: updated.tp_percentage,
       sl_price: updated.stop_loss,
       tp_price: updated.take_profit,
+      strategy_key: updated.strategy_key,
+      strategy_preset: updated.strategy_preset,
+      strategy_risk: updated.strategy_risk,
     };
   } catch (error) {
     logRequestIssue(
@@ -1750,3 +1761,187 @@ export interface UnifiedOpenOrder {
 
 // Strategy Decision type - re-exported from @/lib/api for consistency
 export type { StrategyDecision } from '@/lib/api';
+
+// Agent Operations Visibility API
+export interface AgentStatus {
+  scheduler_running: boolean;
+  automation_enabled: boolean;
+  last_scheduler_cycle: string;
+  scheduler_interval_s: number;
+  pending_notion_tasks: number;
+  tasks_in_investigation: number;
+  tasks_in_patch_phase: number;
+  tasks_awaiting_deploy: number;
+  tasks_deploying: number;
+  pending_approvals: number;
+}
+
+export interface AgentOpsRecovery {
+  ok: boolean;
+  recovery_actions: Array<{
+    timestamp: string;
+    event_type: string;
+    task_id: string | null;
+    task_title: string | null;
+    details: Record<string, unknown>;
+  }>;
+  count: number;
+  error?: string;
+}
+
+export interface AgentOpsFailedInvestigations {
+  ok: boolean;
+  failed_investigations: Array<{
+    timestamp: string;
+    event_type: string;
+    task_id: string | null;
+    task_title: string | null;
+    details: Record<string, unknown>;
+  }>;
+  count: number;
+  error?: string;
+}
+
+export interface AgentOpsActiveTasks {
+  ok: boolean;
+  patching: Array<{ id?: string | null; task?: string | null; status?: string | null; priority?: string | null }>;
+  deploying: Array<{ id?: string | null; task?: string | null; status?: string | null; priority?: string | null }>;
+  awaiting_deploy_approval: Array<{ id?: string | null; task?: string | null; status?: string | null; priority?: string | null }>;
+  error?: string;
+}
+
+export interface AgentOpsSmokeChecks {
+  ok: boolean;
+  smoke_checks: Array<{
+    timestamp: string;
+    event_type: string;
+    task_id: string | null;
+    task_title: string | null;
+    details: Record<string, unknown>;
+  }>;
+  count: number;
+  error?: string;
+}
+
+export interface AgentOpsDeployTracker {
+  ok: boolean;
+  recent_deploys: Array<{ task_id: string; triggered_at: string; triggered_by: string }>;
+  last_deploy_task_id: string;
+  error?: string;
+}
+
+export interface AgentOpsCursorBridgeEvents {
+  ok: boolean;
+  cursor_bridge_events: Array<{
+    timestamp: string;
+    event_type: string;
+    task_id: string | null;
+    task_title: string | null;
+    details: Record<string, unknown>;
+  }>;
+  count: number;
+  error?: string;
+}
+
+export async function getAgentStatus(): Promise<AgentStatus> {
+  try {
+    return await fetchAPI<AgentStatus>('/agent/status');
+  } catch (error) {
+    logRequestIssue('getAgentStatus', 'Agent status fetch failed', error, 'warn');
+    return {
+      scheduler_running: false,
+      automation_enabled: false,
+      last_scheduler_cycle: '',
+      scheduler_interval_s: 300,
+      pending_notion_tasks: -1,
+      tasks_in_investigation: -1,
+      tasks_in_patch_phase: -1,
+      tasks_awaiting_deploy: -1,
+      tasks_deploying: -1,
+      pending_approvals: -1,
+    };
+  }
+}
+
+export async function getAgentOpsRecovery(limit = 20): Promise<AgentOpsRecovery> {
+  try {
+    return await fetchAPI<AgentOpsRecovery>(`/agent/ops/recovery?limit=${limit}`);
+  } catch (error) {
+    logRequestIssue('getAgentOpsRecovery', 'Recovery fetch failed', error, 'warn');
+    return { ok: false, recovery_actions: [], count: 0 };
+  }
+}
+
+export async function getAgentOpsFailedInvestigations(limit = 20): Promise<AgentOpsFailedInvestigations> {
+  try {
+    return await fetchAPI<AgentOpsFailedInvestigations>(`/agent/ops/failed-investigations?limit=${limit}`);
+  } catch (error) {
+    logRequestIssue('getAgentOpsFailedInvestigations', 'Failed investigations fetch failed', error, 'warn');
+    return { ok: false, failed_investigations: [], count: 0 };
+  }
+}
+
+export async function getAgentOpsActiveTasks(): Promise<AgentOpsActiveTasks> {
+  try {
+    return await fetchAPI<AgentOpsActiveTasks>('/agent/ops/active-tasks');
+  } catch (error) {
+    logRequestIssue('getAgentOpsActiveTasks', 'Active tasks fetch failed', error, 'warn');
+    return {
+      ok: false,
+      patching: [],
+      deploying: [],
+      awaiting_deploy_approval: [],
+    };
+  }
+}
+
+export async function getAgentOpsSmokeChecks(limit = 20): Promise<AgentOpsSmokeChecks> {
+  try {
+    return await fetchAPI<AgentOpsSmokeChecks>(`/agent/ops/smoke-checks?limit=${limit}`);
+  } catch (error) {
+    logRequestIssue('getAgentOpsSmokeChecks', 'Smoke checks fetch failed', error, 'warn');
+    return { ok: false, smoke_checks: [], count: 0 };
+  }
+}
+
+export async function getAgentOpsDeployTracker(limit = 10): Promise<AgentOpsDeployTracker> {
+  try {
+    return await fetchAPI<AgentOpsDeployTracker>(`/agent/ops/deploy-tracker?limit=${limit}`);
+  } catch (error) {
+    logRequestIssue('getAgentOpsDeployTracker', 'Deploy tracker fetch failed', error, 'warn');
+    return { ok: false, recent_deploys: [], last_deploy_task_id: '' };
+  }
+}
+
+export async function getAgentOpsCursorBridgeEvents(limit = 15): Promise<AgentOpsCursorBridgeEvents> {
+  try {
+    return await fetchAPI<AgentOpsCursorBridgeEvents>(`/agent/ops/cursor-bridge-events?limit=${limit}`);
+  } catch (error) {
+    logRequestIssue('getAgentOpsCursorBridgeEvents', 'Cursor bridge events fetch failed', error, 'warn');
+    return { ok: false, cursor_bridge_events: [], count: 0 };
+  }
+}
+
+export interface AgentOpsCursorBridgeDiagnostics {
+  ok: boolean;
+  enabled?: boolean;
+  cursor_cli_path?: string;
+  cursor_cli_found?: boolean;
+  staging_root?: string;
+  staging_root_writable?: boolean;
+  staging_dir_count?: number;
+  max_staging_dirs?: number;
+  handoff_dir_exists?: boolean;
+  github_token_set?: boolean;
+  ready?: boolean;
+  error?: string;
+}
+
+export async function getAgentOpsCursorBridgeDiagnostics(): Promise<AgentOpsCursorBridgeDiagnostics> {
+  try {
+    return await fetchAPI<AgentOpsCursorBridgeDiagnostics>('/agent/cursor-bridge/diagnostics');
+  } catch (error) {
+    logRequestIssue('getAgentOpsCursorBridgeDiagnostics', 'Cursor bridge diagnostics fetch failed', error, 'warn');
+    return { ok: false, error: String(error) };
+  }
+}

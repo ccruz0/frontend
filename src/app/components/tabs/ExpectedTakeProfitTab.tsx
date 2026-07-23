@@ -4,11 +4,35 @@
  */
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { ExpectedTPSummaryItem, ExpectedTPDetails } from '@/app/api';
+import { ExpectedTPSummaryItem, ExpectedTPDetails, ExpectedTPEntryOrder, createProtectionSmart } from '@/app/api';
 import { formatDateTime, formatNumber } from '@/utils/formatting';
+import {
+  positionBadgeClass,
+  positionDirectionEs,
+  sideBadgeClass,
+  sideLabelEs,
+} from '@/utils/tradeSideLabels';
+import {
+  formatTpFillProximityPct,
+  tpFillProximityPct,
+  tpFillProximityToneClass,
+} from '@/utils/tpFillProximity';
 
-type SortField = 'symbol' | 'net_qty' | 'position_value' | 'covered_qty' | 'uncovered_qty' | 'total_expected_profit' | 'current_price' | 'coverage_ratio';
+type SortField =
+  | 'symbol'
+  | 'net_qty'
+  | 'position_value'
+  | 'avg_entry_price'
+  | 'covered_qty'
+  | 'uncovered_qty'
+  | 'total_expected_profit'
+  | 'current_price'
+  | 'coverage_ratio'
+  | 'max_tp_fill_proximity_pct';
 type SortDirection = 'asc' | 'desc';
+
+const TP_PROXIMITY_TOOLTIP =
+  'Cercanía al fill del TP: progreso del precio desde la entrada hacia el TP. 100% = mark en o más allá del precio del TP (cerca de ejecutarse). No es cobertura de cantidad.';
 
 interface ExpectedTakeProfitTabProps {
   expectedTPSummary: ExpectedTPSummaryItem[];
@@ -18,10 +42,11 @@ interface ExpectedTakeProfitTabProps {
   expectedTPDetailsLoading: boolean;
   expectedTPDetailsSymbol: string | null;
   showExpectedTPDetailsDialog: boolean;
+  deepLink?: { symbol: string; orderId: string } | null;
   onFetchExpectedTakeProfitSummary: () => Promise<void>;
   onFetchExpectedTakeProfitDetails: (symbol: string) => Promise<void>;
   onCloseDetailsDialog: () => void;
-  // Add other props as needed
+  onDeepLinkHandled?: () => void;
 }
 
 export default function ExpectedTakeProfitTab({
@@ -32,12 +57,121 @@ export default function ExpectedTakeProfitTab({
   expectedTPDetailsLoading,
   expectedTPDetailsSymbol,
   showExpectedTPDetailsDialog,
+  deepLink,
   onFetchExpectedTakeProfitSummary,
   onFetchExpectedTakeProfitDetails,
   onCloseDetailsDialog,
+  onDeepLinkHandled,
 }: ExpectedTakeProfitTabProps) {
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [expandedEntryRows, setExpandedEntryRows] = useState<Set<string>>(new Set());
+  const [highlightOrderId, setHighlightOrderId] = useState<string | null>(null);
+  const [creatingKey, setCreatingKey] = useState<string | null>(null);
+  const [createMessage, setCreateMessage] = useState<string | null>(null);
+  const deepLinkRequestedRef = useRef(false);
+
+  const toggleEntryRow = (rowKey: string) => {
+    setExpandedEntryRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowKey)) {
+        next.delete(rowKey);
+      } else {
+        next.add(rowKey);
+      }
+      return next;
+    });
+  };
+
+  const entryOrders = useMemo(() => {
+    if (!expectedTPDetails?.entry_orders?.length) return [];
+    return expectedTPDetails.entry_orders;
+  }, [expectedTPDetails]);
+
+  // When details open, expand every entry that has TP/SL so nested rows are visible
+  // without a second click (summary chevron → details should feel like one expand).
+  useEffect(() => {
+    if (!showExpectedTPDetailsDialog || expectedTPDetailsLoading || !expectedTPDetails) {
+      return;
+    }
+    // Deep-link already sets a specific expansion; don't override it.
+    if (deepLink?.orderId) {
+      return;
+    }
+    const keys = (expectedTPDetails.entry_orders || [])
+      .map((entry, index) => {
+        const rowKey = entry.order_id || `entry-${index}`;
+        const hasChildren = entry.take_profits.length > 0 || entry.stop_loss !== null;
+        return hasChildren ? rowKey : null;
+      })
+      .filter((k): k is string => Boolean(k));
+    setExpandedEntryRows(new Set(keys));
+  }, [
+    showExpectedTPDetailsDialog,
+    expectedTPDetailsLoading,
+    expectedTPDetails,
+    deepLink?.orderId,
+  ]);
+
+  useEffect(() => {
+    if (!showExpectedTPDetailsDialog) {
+      setExpandedEntryRows(new Set());
+    }
+  }, [showExpectedTPDetailsDialog]);
+
+  const formatExitPrice = (price: number | null | undefined, symbol: string) => {
+    if (price === null || price === undefined) return '—';
+    return formatNumber(price, symbol);
+  };
+
+  const sideLabel = (side: ExpectedTPEntryOrder['side']) => sideLabelEs(side);
+
+  const positionLabel = (positionSide?: string | null) => positionDirectionEs(positionSide);
+
+  const statusBadgeClass = (status: string) => {
+    if (status === 'FILLED' || status === 'ACTIVE') {
+      return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+    }
+    if (status === 'CANCELLED' || status === 'REJECTED') {
+      return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+    }
+    return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+  };
+
+  const handleCreateProtection = async (
+    entry: ExpectedTPEntryOrder,
+    opts: { create_sl: boolean; create_tp: boolean },
+  ) => {
+    if (!entry.order_id) return;
+    const key = `${entry.order_id}:${opts.create_sl ? 'sl' : ''}${opts.create_tp ? 'tp' : ''}`;
+    setCreatingKey(key);
+    setCreateMessage(null);
+    try {
+      const result = await createProtectionSmart({
+        order_id: entry.order_id,
+        create_sl: opts.create_sl,
+        create_tp: opts.create_tp,
+        quantity: entry.qty,
+      });
+      const created = (result.created || []).map((c) => c.role).join(', ') || 'none';
+      const errText = (result.errors || [])
+        .map((e) => `${e.role}: ${JSON.stringify(e.error)}`)
+        .join('; ');
+      setCreateMessage(
+        result.ok
+          ? `Created: ${created}`
+          : `Partial/failed — created: ${created}${errText ? ` | ${errText}` : ''}`,
+      );
+      if (expectedTPDetailsSymbol) {
+        await onFetchExpectedTakeProfitDetails(expectedTPDetailsSymbol);
+      }
+      await onFetchExpectedTakeProfitSummary();
+    } catch (err) {
+      setCreateMessage(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCreatingKey(null);
+    }
+  };
 
   // Fetch expected take profit summary on mount (Strict Mode safe)
   const didFetchRef = useRef(false);
@@ -48,6 +182,43 @@ export default function ExpectedTakeProfitTab({
     onFetchExpectedTakeProfitSummary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps: only run on mount. onFetchExpectedTakeProfitSummary is passed as prop from parent.
+
+  useEffect(() => {
+    if (!deepLink) {
+      deepLinkRequestedRef.current = false;
+      return;
+    }
+    if (deepLinkRequestedRef.current) return;
+    deepLinkRequestedRef.current = true;
+    onFetchExpectedTakeProfitDetails(deepLink.symbol);
+  }, [deepLink, onFetchExpectedTakeProfitDetails]);
+
+  useEffect(() => {
+    if (!deepLink?.orderId || expectedTPDetailsLoading || !expectedTPDetails || !showExpectedTPDetailsDialog) {
+      return;
+    }
+
+    const targetId = deepLink.orderId;
+    setHighlightOrderId(targetId);
+    setExpandedEntryRows(new Set([targetId]));
+
+    const scrollTimer = window.setTimeout(() => {
+      document.getElementById(`expected-tp-entry-${targetId}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }, 150);
+
+    const clearTimer = window.setTimeout(() => {
+      setHighlightOrderId(null);
+      onDeepLinkHandled?.();
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(scrollTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [deepLink, expectedTPDetails, expectedTPDetailsLoading, showExpectedTPDetailsDialog, onDeepLinkHandled]);
 
   // Sort summary items
   const sortedSummary = useMemo(() => {
@@ -74,6 +245,10 @@ export default function ExpectedTakeProfitTab({
           aVal = a.position_value || 0;
           bVal = b.position_value || 0;
           break;
+        case 'avg_entry_price':
+          aVal = a.avg_entry_price ?? 0;
+          bVal = b.avg_entry_price ?? 0;
+          break;
         case 'covered_qty':
           aVal = a.covered_qty || 0;
           bVal = b.covered_qty || 0;
@@ -93,6 +268,10 @@ export default function ExpectedTakeProfitTab({
         case 'coverage_ratio':
           aVal = a.coverage_ratio || 0;
           bVal = b.coverage_ratio || 0;
+          break;
+        case 'max_tp_fill_proximity_pct':
+          aVal = a.max_tp_fill_proximity_pct ?? -1;
+          bVal = b.max_tp_fill_proximity_pct ?? -1;
           break;
       }
 
@@ -157,6 +336,12 @@ export default function ExpectedTakeProfitTab({
               <tr>
                 <th
                   scope="col"
+                  className="sticky left-0 z-10 bg-gray-50 dark:bg-slate-800 px-2 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-10"
+                >
+                  <span className="sr-only">Expandir</span>
+                </th>
+                <th
+                  scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                   onClick={() => handleSort('symbol')}
                 >
@@ -166,8 +351,15 @@ export default function ExpectedTakeProfitTab({
                 </th>
                 <th
                   scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                >
+                  Dirección
+                </th>
+                <th
+                  scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
                   onClick={() => handleSort('net_qty')}
+                  title="Suma de cantidades de lotes abiertos (no inventario neto firmado)"
                 >
                   <div className="flex items-center gap-1">
                     Net Qty {sortField === 'net_qty' && (sortDirection === 'asc' ? '↑' : '↓')}
@@ -180,6 +372,16 @@ export default function ExpectedTakeProfitTab({
                 >
                   <div className="flex items-center gap-1">
                     Position Value {sortField === 'position_value' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </div>
+                </th>
+                <th
+                  scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                  onClick={() => handleSort('avg_entry_price')}
+                  title="Precio de entrada promedio (ponderado por cantidad). Ver Detalles para cada orden."
+                >
+                  <div className="flex items-center gap-1">
+                    Entry / Avg {sortField === 'avg_entry_price' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </div>
                 </th>
                 <th
@@ -229,6 +431,17 @@ export default function ExpectedTakeProfitTab({
                 </th>
                 <th
                   scope="col"
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                  onClick={() => handleSort('max_tp_fill_proximity_pct')}
+                  title={TP_PROXIMITY_TOOLTIP}
+                >
+                  <div className="flex items-center gap-1">
+                    TP cerca %{' '}
+                    {sortField === 'max_tp_fill_proximity_pct' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </div>
+                </th>
+                <th
+                  scope="col"
                   className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
                 >
                   Actions
@@ -236,10 +449,52 @@ export default function ExpectedTakeProfitTab({
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-slate-900 divide-y divide-gray-200 dark:divide-gray-700">
-              {sortedSummary.map((item) => (
-                <tr key={item.symbol} className="hover:bg-gray-50 dark:hover:bg-slate-800">
+              {sortedSummary.map((item) => {
+                const isDetailsOpen =
+                  showExpectedTPDetailsDialog && expectedTPDetailsSymbol === item.symbol;
+                const isDetailsLoading =
+                  expectedTPDetailsLoading && expectedTPDetailsSymbol === item.symbol;
+                return (
+                <tr
+                  key={item.symbol}
+                  className="hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer"
+                  onClick={() => onFetchExpectedTakeProfitDetails(item.symbol)}
+                >
+                  <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 px-2 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <button
+                      type="button"
+                      className="inline-flex w-6 h-6 items-center justify-center rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-600"
+                      aria-expanded={isDetailsOpen}
+                      aria-label={
+                        isDetailsLoading
+                          ? `Cargando detalles de ${item.symbol}`
+                          : isDetailsOpen
+                            ? `Cerrar detalles de ${item.symbol}`
+                            : `Expandir detalles de ${item.symbol}`
+                      }
+                      title={isDetailsLoading ? 'Cargando…' : isDetailsOpen ? 'Cerrar' : 'Ver TP/SL'}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isDetailsOpen) {
+                          onCloseDetailsDialog();
+                        } else {
+                          onFetchExpectedTakeProfitDetails(item.symbol);
+                        }
+                      }}
+                    >
+                      {isDetailsLoading ? '…' : isDetailsOpen ? '▾' : '▸'}
+                    </button>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-200">
                     {item.symbol}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-semibold ${positionBadgeClass(item.position_side)}`}
+                      title={positionDirectionEs(item.position_side)}
+                    >
+                      {positionLabel(item.position_side)}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                     {formatNumber(item.net_qty)}
@@ -248,18 +503,42 @@ export default function ExpectedTakeProfitTab({
                     {formatNumber(item.position_value, '$')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    {item.cost_basis_unknown || item.avg_entry_price == null ? (
+                      <span className="text-gray-400 dark:text-gray-500" title="Cost basis not tracked">
+                        —
+                      </span>
+                    ) : (
+                      <div>
+                        <div className="text-gray-900 dark:text-gray-200">
+                          {formatNumber(item.avg_entry_price, item.symbol)}
+                        </div>
+                        {(item.entry_lot_count ?? 0) > 1 && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            avg · {item.entry_lot_count} lots
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                     {formatNumber(item.covered_qty)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                     {formatNumber(item.uncovered_qty)}
                   </td>
-                  <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${
-                    (item.total_expected_profit || 0) >= 0 
-                      ? 'text-green-600 dark:text-green-400' 
-                      : 'text-red-600 dark:text-red-400'
-                  }`}>
-                    {formatNumber(item.total_expected_profit, '$')}
-                  </td>
+                  {item.cost_basis_unknown ? (
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-400 dark:text-gray-500" title="Cost basis not tracked (no recorded buy orders)">
+                      —
+                    </td>
+                  ) : (
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${
+                      (item.total_expected_profit || 0) >= 0 
+                        ? 'text-green-600 dark:text-green-400' 
+                        : 'text-red-600 dark:text-red-400'
+                    }`}>
+                      {formatNumber(item.total_expected_profit, '$')}
+                    </td>
+                  )}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                     {item.current_price ? formatNumber(item.current_price, item.symbol) : 'N/A'}
                   </td>
@@ -268,16 +547,27 @@ export default function ExpectedTakeProfitTab({
                       ? `${(item.coverage_ratio * 100).toFixed(1)}%` 
                       : 'N/A'}
                   </td>
+                  <td
+                    className={`px-6 py-4 whitespace-nowrap text-sm ${tpFillProximityToneClass(item.max_tp_fill_proximity_pct)}`}
+                    title={TP_PROXIMITY_TOOLTIP}
+                  >
+                    {formatTpFillProximityPct(item.max_tp_fill_proximity_pct)}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
-                      onClick={() => onFetchExpectedTakeProfitDetails(item.symbol)}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onFetchExpectedTakeProfitDetails(item.symbol);
+                      }}
                       className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                     >
                       View Details
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
           <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
@@ -290,10 +580,27 @@ export default function ExpectedTakeProfitTab({
       {showExpectedTPDetailsDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onCloseDetailsDialog}>
           <div className="bg-white dark:bg-slate-800 rounded-lg p-6 max-w-5xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Expected TP Details: {expectedTPDetailsSymbol}
-              </h3>
+            <div className="flex justify-between items-start mb-4 gap-4">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  Expected TP Details: {expectedTPDetailsSymbol}
+                </h3>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {expectedTPDetails?.position_side && (
+                    <span
+                      className={`px-2 py-1 rounded text-sm font-semibold ${positionBadgeClass(expectedTPDetails.position_side)}`}
+                    >
+                      {positionLabel(expectedTPDetails.position_side)}
+                    </span>
+                  )}
+                  {expectedTPDetails?.current_price !== undefined && expectedTPDetails?.current_price !== null && (
+                    <span className="px-2 py-1 rounded text-sm font-semibold bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-100">
+                      Precio actual:{' '}
+                      {formatNumber(expectedTPDetails.current_price, expectedTPDetailsSymbol || '')}
+                    </span>
+                  )}
+                </div>
+              </div>
               <button
                 onClick={onCloseDetailsDialog}
                 className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-2xl leading-none"
@@ -301,6 +608,11 @@ export default function ExpectedTakeProfitTab({
                 ✕
               </button>
             </div>
+            {createMessage && (
+              <div className="mb-3 text-sm rounded px-3 py-2 bg-slate-100 dark:bg-slate-700 text-gray-800 dark:text-gray-100">
+                {createMessage}
+              </div>
+            )}
             {expectedTPDetailsLoading ? (
               <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -308,12 +620,31 @@ export default function ExpectedTakeProfitTab({
               </div>
             ) : expectedTPDetails ? (
               <div className="space-y-6">
+                {expectedTPDetails.orphaned_protection_only && (
+                  <div className="rounded-lg border border-orange-300 bg-orange-50 dark:border-orange-700 dark:bg-orange-900/30 p-3 text-sm text-orange-800 dark:text-orange-200">
+                    Portfolio balance is zero or negative, but active SL/TP protection orders
+                    remain on the exchange. Entry orders below show orphaned protection linked
+                    to prior filled buys — not an open spot position.
+                  </div>
+                )}
+                {expectedTPDetails.cost_basis_unknown && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/30 p-3 text-sm text-amber-800 dark:text-amber-200">
+                    Cost basis not tracked for this position — there are no recorded buy orders,
+                    so the buy price and expected profit cannot be computed and are shown as "—".
+                    Quantities and current position value remain accurate.
+                  </div>
+                )}
                 {/* Summary Section */}
                 <div className="bg-gray-50 dark:bg-slate-700 rounded-lg p-4">
                   <h4 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">Summary</h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Net Qty</div>
+                      <div
+                        className="text-sm text-gray-600 dark:text-gray-400"
+                        title="Suma de cantidades de lotes abiertos (cada entrada con SL/TP activo). No es el inventario neto firmado Long−Short."
+                      >
+                        Open Lots Qty
+                      </div>
                       <div className="text-lg font-semibold text-gray-900 dark:text-white">
                         {formatNumber(expectedTPDetails.net_qty)}
                       </div>
@@ -338,22 +669,47 @@ export default function ExpectedTakeProfitTab({
                     </div>
                     <div>
                       <div className="text-sm text-gray-600 dark:text-gray-400">Expected Profit</div>
-                      <div className={`text-lg font-semibold ${
-                        (expectedTPDetails.total_expected_profit || 0) >= 0
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-red-600 dark:text-red-400'
-                      }`}>
-                        {formatNumber(expectedTPDetails.total_expected_profit, '$')}
-                      </div>
+                      {expectedTPDetails.cost_basis_unknown ? (
+                        <div className="text-lg font-semibold text-gray-400 dark:text-gray-500" title="Cost basis not tracked (no recorded buy orders)">
+                          —
+                        </div>
+                      ) : (
+                        <div className={`text-lg font-semibold ${
+                          (expectedTPDetails.total_expected_profit || 0) >= 0
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-red-600 dark:text-red-400'
+                        }`}>
+                          {formatNumber(expectedTPDetails.total_expected_profit, '$')}
+                        </div>
+                      )}
                     </div>
                     {expectedTPDetails.current_price !== undefined && (
                       <div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Current Price</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Precio actual</div>
                         <div className="text-lg font-semibold text-gray-900 dark:text-white">
                           {formatNumber(expectedTPDetails.current_price, expectedTPDetailsSymbol || '')}
                         </div>
                       </div>
                     )}
+                    <div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {(expectedTPDetails.entry_lot_count ?? 0) > 1 ? 'Avg Entry' : 'Entry Price'}
+                      </div>
+                      {expectedTPDetails.cost_basis_unknown || expectedTPDetails.avg_entry_price == null ? (
+                        <div className="text-lg font-semibold text-gray-400 dark:text-gray-500" title="Cost basis not tracked">
+                          —
+                        </div>
+                      ) : (
+                        <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                          {formatNumber(expectedTPDetails.avg_entry_price, expectedTPDetailsSymbol || '')}
+                          {(expectedTPDetails.entry_lot_count ?? 0) > 1 && (
+                            <span className="ml-2 text-xs font-normal text-gray-500 dark:text-gray-400">
+                              ({expectedTPDetails.entry_lot_count} lots)
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     {expectedTPDetails.uncovered_entry && (
                       <div className="col-span-2">
                         <div className="text-sm text-gray-600 dark:text-gray-400">Uncovered Entry</div>
@@ -365,8 +721,269 @@ export default function ExpectedTakeProfitTab({
                   </div>
                 </div>
 
-                {/* Matched Lots Section */}
-                {expectedTPDetails.matched_lots && expectedTPDetails.matched_lots.length > 0 ? (
+                {/* Entry Orders Section (expandable TP / SL per original order) */}
+                {entryOrders.length > 0 ? (
+                  <div>
+                    <h4 className="text-lg font-semibold mb-1 text-gray-900 dark:text-white">
+                      Entry Orders ({entryOrders.length})
+                    </h4>
+                    <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">
+                      Inventario por lote: cada fila es una entrada ejecutada que aún espera su SL/TP.
+                      {expectedTPDetails.position_side === 'MIXED' && (
+                        <> Incluye lotes Long (Compra) y Short (Venta) a la vez.</>
+                      )}
+                    </p>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-slate-700">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider w-10">
+                              <span className="sr-only">Expand</span>
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Par
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Order ID
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Dirección
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Precio
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Qty
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Entry Time
+                            </th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Acción
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-gray-700">
+                          {entryOrders.map((entry, index) => {
+                            const rowKey = entry.order_id || `entry-${index}`;
+                            const isExpanded = expandedEntryRows.has(rowKey);
+                            const hasTp = entry.take_profits.length > 0;
+                            const hasSl = entry.stop_loss !== null;
+                            const hasChildren = hasTp || hasSl;
+                            const needSl = !hasSl;
+                            const needTp = !hasTp;
+                            const canCreate = Boolean(entry.order_id) && (needSl || needTp) && !entry.cost_basis_unknown;
+                            const createKey = `${entry.order_id || ''}:${needSl ? 'sl' : ''}${needTp ? 'tp' : ''}`;
+                            const createBusy = creatingKey === createKey;
+                            const createLabel = needSl && needTp ? 'Create SL/TP' : needSl ? 'Create SL' : 'Create TP';
+                            const strategy = expectedTPDetails?.strategy;
+                            const createTitle = strategy
+                              ? `Strategy SL ${strategy.sl_percentage}% / TP ${strategy.tp_percentage}% from buy price. If market already passed the level, places just above/below current.`
+                              : 'Create missing protection from strategy %';
+
+                            return (
+                              <React.Fragment key={rowKey}>
+                                <tr
+                                  id={`expected-tp-entry-${rowKey}`}
+                                  className={`hover:bg-gray-50 dark:hover:bg-slate-700 ${
+                                    highlightOrderId === rowKey || highlightOrderId === entry.order_id
+                                      ? 'ring-2 ring-blue-500 ring-inset bg-blue-50/50 dark:bg-blue-950/30'
+                                      : ''
+                                  }`}
+                                >
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                    {hasChildren ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleEntryRow(rowKey)}
+                                        className="w-6 h-6 inline-flex items-center justify-center rounded border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-600"
+                                        aria-expanded={isExpanded}
+                                        title={isExpanded ? 'Contraer TP/SL' : 'Expandir TP/SL'}
+                                      >
+                                        {isExpanded ? '▾' : '▸'}
+                                      </button>
+                                    ) : (
+                                      <span className="inline-block w-6 text-center text-gray-400">·</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-200">
+                                    {entry.symbol || expectedTPDetailsSymbol || '—'}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm font-mono text-xs text-gray-900 dark:text-gray-200">
+                                    {entry.order_id || '—'}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                    <span className={`px-2 py-1 rounded text-xs font-semibold ${sideBadgeClass(entry.side)}`}>
+                                      {sideLabel(entry.side)}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">
+                                    {entry.cost_basis_unknown ? (
+                                      <span className="text-gray-400 dark:text-gray-500" title="Cost basis not tracked">
+                                        —
+                                      </span>
+                                    ) : (
+                                      formatNumber(entry.entry_price, expectedTPDetailsSymbol || entry.side)
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">
+                                    {formatNumber(entry.qty)}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                    {entry.entry_time ? formatDateTime(new Date(entry.entry_time)) : 'N/A'}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap text-right text-sm">
+                                    {canCreate ? (
+                                      <button
+                                        type="button"
+                                        title={createTitle}
+                                        disabled={createBusy || !!creatingKey}
+                                        onClick={() =>
+                                          handleCreateProtection(entry, {
+                                            create_sl: needSl,
+                                            create_tp: needTp,
+                                          })
+                                        }
+                                        className={`px-2 py-1 rounded text-xs font-semibold ${
+                                          createBusy
+                                            ? 'bg-gray-300 text-gray-500 cursor-wait'
+                                            : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                        }`}
+                                      >
+                                        {createBusy ? 'Creating…' : createLabel}
+                                      </button>
+                                    ) : (
+                                      <span className="text-gray-400 text-xs">
+                                        {needSl || needTp ? (entry.cost_basis_unknown ? 'No entry' : '—') : 'OK'}
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+
+                                {!hasChildren && (needSl || needTp) && (
+                                  <>
+                                    {needTp && (
+                                      <tr className="bg-orange-50/50 dark:bg-orange-950/20">
+                                        <td className="px-4 py-2" />
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm pl-8 text-orange-700 dark:text-orange-300" colSpan={3}>
+                                          <span className="font-semibold mr-2">TP</span>
+                                          <span className="text-gray-400">—</span>
+                                        </td>
+                                        <td className="px-4 py-2 text-sm text-gray-400" colSpan={3}>Missing</td>
+                                        <td className="px-4 py-2" />
+                                      </tr>
+                                    )}
+                                    {needSl && (
+                                      <tr className="bg-orange-50/50 dark:bg-orange-950/20">
+                                        <td className="px-4 py-2" />
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm pl-8 text-orange-700 dark:text-orange-300" colSpan={3}>
+                                          <span className="font-semibold mr-2">SL</span>
+                                          <span className="text-gray-400">—</span>
+                                        </td>
+                                        <td className="px-4 py-2 text-sm text-gray-400" colSpan={3}>Missing</td>
+                                        <td className="px-4 py-2" />
+                                      </tr>
+                                    )}
+                                  </>
+                                )}
+
+                                {isExpanded && hasChildren && (
+                                  <>
+                                    {entry.take_profits.map((tp) => {
+                                      const proximity =
+                                        tp.tp_fill_proximity_pct ??
+                                        tpFillProximityPct({
+                                          mark: expectedTPDetails.current_price,
+                                          entry: entry.entry_price,
+                                          tp: tp.price,
+                                        });
+                                      const proximityLabel = formatTpFillProximityPct(proximity);
+                                      const proximityTitle =
+                                        proximity == null
+                                          ? TP_PROXIMITY_TOOLTIP
+                                          : `Cercanía TP: ${proximityLabel}. ${TP_PROXIMITY_TOOLTIP}`;
+
+                                      return (
+                                      <tr
+                                        key={`${rowKey}-tp-${tp.order_id}`}
+                                        className="bg-green-50/60 dark:bg-green-950/20"
+                                        title={proximityTitle}
+                                      >
+                                        <td className="px-4 py-2" />
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm font-mono text-xs pl-8 text-gray-700 dark:text-gray-300" colSpan={3}>
+                                          <span className="font-semibold text-green-700 dark:text-green-400 mr-2">TP</span>
+                                          {tp.side && (
+                                            <span className={`px-2 py-0.5 rounded text-xs font-semibold mr-2 ${sideBadgeClass(tp.side)}`}>
+                                              {sideLabel(tp.side)}
+                                            </span>
+                                          )}
+                                          {tp.order_id}
+                                        </td>
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">
+                                          {tp.price !== null ? formatNumber(tp.price, expectedTPDetailsSymbol || '') : '—'}
+                                        </td>
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">
+                                          {formatNumber(tp.qty)}
+                                        </td>
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass(tp.status)}`}>
+                                              {tp.status}
+                                            </span>
+                                            <span className="font-semibold text-green-600 dark:text-green-400">
+                                              Salida: {formatExitPrice(tp.price, expectedTPDetailsSymbol || '')}
+                                            </span>
+                                            {proximity != null && (
+                                              <span
+                                                className={`text-xs ${tpFillProximityToneClass(proximity)}`}
+                                                title={proximityTitle}
+                                              >
+                                                Cercanía TP: {proximityLabel}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                      );
+                                    })}
+
+                                    {entry.stop_loss && (
+                                      <tr key={`${rowKey}-sl-${entry.stop_loss.order_id}`} className="bg-red-50/60 dark:bg-red-950/20">
+                                        <td className="px-4 py-2" />
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm font-mono text-xs pl-8 text-gray-700 dark:text-gray-300" colSpan={3}>
+                                          <span className="font-semibold text-red-700 dark:text-red-400 mr-2">SL</span>
+                                          {entry.stop_loss.order_id}
+                                        </td>
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">
+                                          {entry.stop_loss.price !== null
+                                            ? formatNumber(entry.stop_loss.price, expectedTPDetailsSymbol || '')
+                                            : '—'}
+                                        </td>
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">
+                                          {formatNumber(entry.stop_loss.qty)}
+                                        </td>
+                                        <td className="px-4 py-2 whitespace-nowrap text-sm">
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadgeClass(entry.stop_loss.status)}`}>
+                                              {entry.stop_loss.status}
+                                            </span>
+                                            <span className="font-semibold text-red-600 dark:text-red-400">
+                                              Salida: {formatExitPrice(entry.stop_loss.price, expectedTPDetailsSymbol || '')}
+                                            </span>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : expectedTPDetails.matched_lots && expectedTPDetails.matched_lots.length > 0 ? (
                   <div>
                     <h4 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
                       Matched Lots ({expectedTPDetails.matched_lots.length})
@@ -418,7 +1035,13 @@ export default function ExpectedTakeProfitTab({
                                 )}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200">
-                                {formatNumber(lot.buy_price, lot.symbol)}
+                                {lot.cost_basis_unknown ? (
+                                  <span className="text-gray-400 dark:text-gray-500" title="Cost basis not tracked (no recorded buy orders)">
+                                    Cost basis not tracked
+                                  </span>
+                                ) : (
+                                  formatNumber(lot.buy_price, lot.symbol)
+                                )}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                 {lot.buy_time ? formatDateTime(new Date(lot.buy_time)) : 'N/A'}
@@ -447,17 +1070,25 @@ export default function ExpectedTakeProfitTab({
                                 </span>
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
-                                <div className={`font-semibold ${
-                                  (lot.expected_profit || 0) >= 0
-                                    ? 'text-green-600 dark:text-green-400'
-                                    : 'text-red-600 dark:text-red-400'
-                                }`}>
-                                  {formatNumber(lot.expected_profit, '$')}
-                                </div>
-                                {lot.expected_profit_pct !== undefined && (
-                                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                                    ({lot.expected_profit_pct >= 0 ? '+' : ''}{lot.expected_profit_pct.toFixed(2)}%)
+                                {lot.cost_basis_unknown ? (
+                                  <div className="font-semibold text-gray-400 dark:text-gray-500" title="Cost basis not tracked (no recorded buy orders)">
+                                    —
                                   </div>
+                                ) : (
+                                  <>
+                                    <div className={`font-semibold ${
+                                      (lot.expected_profit || 0) >= 0
+                                        ? 'text-green-600 dark:text-green-400'
+                                        : 'text-red-600 dark:text-red-400'
+                                    }`}>
+                                      {formatNumber(lot.expected_profit, '$')}
+                                    </div>
+                                    {lot.expected_profit_pct !== undefined && lot.expected_profit_pct !== null && (
+                                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                                        ({lot.expected_profit_pct >= 0 ? '+' : ''}{lot.expected_profit_pct.toFixed(2)}%)
+                                      </div>
+                                    )}
+                                  </>
                                 )}
                               </td>
                             </tr>
@@ -465,6 +1096,10 @@ export default function ExpectedTakeProfitTab({
                         </tbody>
                       </table>
                     </div>
+                  </div>
+                ) : (expectedTPDetails.covered_qty ?? 0) > 0 || expectedTPDetails.orphaned_protection_only ? (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    Active protection orders are listed under Entry Orders above.
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500 dark:text-gray-400">

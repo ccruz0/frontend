@@ -64,6 +64,9 @@ export type OpenOrder = {
   instrument_name: string;
   side: string;
   order_type: string;
+  execution_origin?: string;
+  execution_origin_label?: string;
+  type_display?: string;
   quantity: string;
   price: string;
   status: string;
@@ -77,6 +80,10 @@ export type OpenOrder = {
   filled_quantity?: string | null; // Filled quantity for executed orders
   filled_price?: string | null; // Filled price for executed orders
   order_role?: string;  // Order role (STOP_LOSS, TAKE_PROFIT, etc.)
+  parent_order_id?: string | null;
+  has_linked_tp?: boolean | null;
+  has_linked_sl?: boolean | null;
+  is_orphan?: boolean;
   is_trigger?: boolean; // True if from get-trigger-orders / advanced trigger list
   trigger_price?: number | null; // Trigger price for TP/SL orders
 }
@@ -104,6 +111,14 @@ export interface PortfolioAsset {
   updated_at: string;
   tp?: number;  // Take profit price
   sl?: number;  // Stop loss price
+  /** Active TP open-order count for this coin (same basis as Watchlist Orders). */
+  open_orders_count?: number;
+  // Per-coin unrealized P&L vs cost basis (from filled BUY orders).
+  // When cost_basis_unknown is true, pnl fields are null and the UI renders "—".
+  avg_buy_price?: number | null;
+  pnl_pct?: number | null;  // (current_price - avg_buy_price) / avg_buy_price * 100
+  net_profit_usd?: number | null;  // balance * (current_price - avg_buy_price)
+  cost_basis_unknown?: boolean;
 }
 
 export interface TopCoin {
@@ -164,6 +179,8 @@ export interface DashboardBalance {
   coin?: string;  // Alternative to asset (used in some API responses)
   tp?: number;  // Take profit price
   sl?: number;  // Stop loss price
+  /** Active TP open-order count for this coin. */
+  open_orders_count?: number;
 }
 
 export interface DashboardSignal {
@@ -203,6 +220,15 @@ export interface DashboardOrder {
   updated_at?: string | null;
 }
 
+export interface OpenOrdersSyncMeta {
+  source?: string;
+  last_updated?: string | null;
+  sync_status?: 'ok' | 'failed_auth' | 'missing_credentials' | 'api_error' | 'stale' | 'skipped';
+  error_code?: number | null;
+  error_message?: string | null;
+  data_verified?: boolean;
+}
+
 export interface DashboardState {
   source?: string;  // "crypto.com" when using direct API values
   total_usd_value?: number;  // Total USD value from Crypto.com
@@ -211,7 +237,9 @@ export interface DashboardState {
   slow_signals: DashboardSignal[];
   open_orders: DashboardOrder[];
   open_position_counts?: { [symbol: string]: number };
-  open_orders_summary?: UnifiedOpenOrder[];  // Open orders summary
+  open_orders_summary?: UnifiedOpenOrder[] | OpenOrdersSummary;
+  open_orders_sync_status?: OpenOrdersSyncMeta['sync_status'];
+  open_orders_data_verified?: boolean;
   last_sync: string | null;
   portfolio?: {
     assets?: PortfolioAsset[];
@@ -563,11 +591,45 @@ export async function updateDashboardItem(id: number, item: Partial<WatchlistIte
 
 // Save coin settings by symbol
 // Finds the watchlist item by symbol and updates it with the provided settings
+function symbolMatchesWatchlistItem(requested: string, itemSymbol: string): boolean {
+  const normalized = requested.toUpperCase();
+  const item = itemSymbol.toUpperCase();
+  if (item === normalized) return true;
+  if (normalized.endsWith('_USD') && item === normalized.replace('_USD', '_USDT')) return true;
+  if (normalized.endsWith('_USDT') && item === normalized.replace('_USDT', '_USD')) return true;
+  return false;
+}
+
+function selectCanonicalWatchlistItem(items: WatchlistItem[]): WatchlistItem | undefined {
+  if (items.length === 0) return undefined;
+  if (items.length === 1) return items[0];
+
+  const nonDeleted = items.filter(item => !item.is_deleted);
+  const candidates = nonDeleted.length > 0 ? nonDeleted : items;
+
+  return [...candidates].sort((a, b) => {
+    const aAlert = a.alert_enabled ? 0 : 1;
+    const bAlert = b.alert_enabled ? 0 : 1;
+    if (aAlert !== bAlert) return aAlert - bAlert;
+
+    const aTime = a.updated_at || a.created_at || '';
+    const bTime = b.updated_at || b.created_at || '';
+    const aTimestamp = aTime ? new Date(aTime).getTime() : 0;
+    const bTimestamp = bTime ? new Date(bTime).getTime() : 0;
+    if (aTimestamp !== bTimestamp) return bTimestamp - aTimestamp;
+
+    return (b.id || 0) - (a.id || 0);
+  })[0];
+}
+
 export async function saveCoinSettings(symbol: string, settings: Partial<CoinSettings>): Promise<CoinSettings> {
   try {
-    // Get dashboard to find the item by symbol
+    const normalizedSymbol = symbol.toUpperCase();
     const dashboard = await getDashboard();
-    const item = dashboard.find(item => item.symbol === symbol.toUpperCase());
+    const matchingItems = dashboard.filter(item =>
+      symbolMatchesWatchlistItem(normalizedSymbol, item.symbol || '')
+    );
+    const item = selectCanonicalWatchlistItem(matchingItems);
     
     if (!item) {
       throw new Error(`Watchlist item not found for symbol: ${symbol}`);
@@ -675,10 +737,19 @@ export async function getAccountBalance(): Promise<AccountSummary[]> {
 }
 
 // Orders
-export async function getOpenOrders(): Promise<{ orders: OpenOrder[], count: number }> {
+export async function getOpenOrders(): Promise<{ orders: OpenOrder[]; count: number } & OpenOrdersSyncMeta> {
   try {
-    const data = await fetchAPI<{ orders?: OpenOrder[]; count?: number }>('/orders/open');
-    return { orders: data.orders || [], count: data.count || 0 };
+    const data = await fetchAPI<{ orders?: OpenOrder[]; count?: number } & OpenOrdersSyncMeta>('/orders/open');
+    return {
+      orders: data.orders || [],
+      count: data.count || 0,
+      source: data.source,
+      last_updated: data.last_updated ?? null,
+      sync_status: data.sync_status,
+      error_code: data.error_code,
+      error_message: data.error_message,
+      data_verified: data.data_verified,
+    };
   } catch (error) {
     logRequestIssue(
       'getOpenOrders',
@@ -712,22 +783,46 @@ export async function getTPSLOrderValues(): Promise<TPSLOrderValues> {
   }
 }
 
+export type GetOrderHistoryOptions = {
+  limit?: number;
+  offset?: number;
+  sync?: boolean;
+  symbol?: string;
+  status?: string;
+  excludeCancelled?: boolean;
+};
+
 export async function getOrderHistory(
-  limit: number = 100,
+  limitOrOptions: number | GetOrderHistoryOptions = 100,
   offset: number = 0,
-  sync: boolean = false
+  sync: boolean = false,
+  symbol?: string
 ): Promise<{
   orders: OpenOrder[];
   count: number;
   total?: number;
   has_more?: boolean;
 }> {
+  const options: GetOrderHistoryOptions =
+    typeof limitOrOptions === 'object' && limitOrOptions !== null
+      ? limitOrOptions
+      : { limit: limitOrOptions, offset, sync, symbol };
+
   const params = new URLSearchParams({
-    limit: limit.toString(),
-    offset: offset.toString()
+    limit: String(options.limit ?? 100),
+    offset: String(options.offset ?? 0),
   });
-  if (sync) {
+  if (options.sync) {
     params.set('sync', 'true');
+  }
+  if (options.symbol) {
+    params.set('symbol', options.symbol);
+  }
+  if (options.status) {
+    params.set('status', options.status);
+  }
+  if (options.excludeCancelled) {
+    params.set('exclude_cancelled', 'true');
   }
   const data = await fetchAPI<{
     orders?: OpenOrder[];
@@ -1072,6 +1167,14 @@ export interface CoinConfig {
 export interface TradingConfig {
   presets?: Record<string, TradingPreset>;
   coins?: Record<string, CoinConfig>;
+  trading_limits?: {
+    maxOpenOrdersTotal?: number;
+    maxOpenOrdersPerCoin?: number;
+    maxUsdPerOrder?: number;
+    minSecondsBetweenOrders?: number;
+    maxOrdersPerSymbolPerDay?: number;
+  };
+  strategy_rules?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
@@ -1562,7 +1665,7 @@ export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
 }
 
 // Open Orders Summary API
-export interface OpenOrdersSummary {
+export interface OpenOrdersSummary extends OpenOrdersSyncMeta {
   orders: UnifiedOpenOrder[];
   last_updated: string | null;
   count: number;
@@ -1586,10 +1689,14 @@ export async function getOpenOrdersSummary(): Promise<OpenOrdersSummary> {
 // Convert dashboard balances to portfolio assets
 export function dashboardBalancesToPortfolioAssets(balances: DashboardBalance[]): PortfolioAsset[] {
   return balances
-    .filter(balance => balance && (balance.asset || balance.currency || balance.coin) && (balance.balance || balance.total || 0) > 0)
+    .filter(balance => {
+      if (!balance || !(balance.asset || balance.currency || balance.coin)) return false;
+      const amount = balance.balance ?? balance.total ?? 0;
+      return amount != 0;
+    })
     .map(balance => {
       const asset = balance.asset || balance.currency || balance.coin || '';
-      const balanceAmount = balance.balance || balance.total || 0;
+      const balanceAmount = balance.balance ?? balance.total ?? 0;
       // Prioritize usd_value, then market_value, then 0
       // Don't filter by > 0 - preserve all values including 0
       const usdValue = (balance.usd_value !== undefined && balance.usd_value !== null)
@@ -1604,7 +1711,10 @@ export function dashboardBalancesToPortfolioAssets(balances: DashboardBalance[])
         reserved_qty: balance.locked || 0,
         haircut: 0,
         value_usd: usdValue,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        open_orders_count: balance.open_orders_count,
+        tp: balance.tp,
+        sl: balance.sl,
       };
     });
 }
@@ -1612,14 +1722,23 @@ export function dashboardBalancesToPortfolioAssets(balances: DashboardBalance[])
 // Expected Take Profit API
 export interface ExpectedTPSummaryItem {
   symbol: string;
+  position_side?: 'LONG' | 'SHORT' | 'MIXED';
   net_qty: number;
   position_value: number;
-  actual_position_value?: number; // Value at buy price (cost basis)
+  actual_position_value?: number | null; // Value at buy price (cost basis); null when cost basis unknown
+  /** Qty-weighted average entry price across open lots; null when cost basis unknown */
+  avg_entry_price?: number | null;
+  /** Number of open entry lots contributing to avg_entry_price */
+  entry_lot_count?: number;
   covered_qty: number;
   uncovered_qty: number;
-  total_expected_profit: number;
+  total_expected_profit: number | null; // null when cost basis is unknown (current-price fallback)
   current_price?: number;
   coverage_ratio?: number;
+  /** Highest path-progress % toward an active TP fill (0–100); not coverage ratio */
+  max_tp_fill_proximity_pct?: number | null;
+  cost_basis_unknown?: boolean; // true when buy price is the current-price fallback (no real BUY orders)
+  orphaned_protection_only?: boolean; // true when SL/TP remain but portfolio balance <= 0
 }
 
 export interface ExpectedTPSummary {
@@ -1659,7 +1778,7 @@ export interface ExpectedTPMatchedLot {
   buy_order_ids?: string[]; // For grouped entries
   buy_order_count?: number; // For grouped entries
   buy_time: string | null;
-  buy_price: number;
+  buy_price: number | null; // null when cost basis is unknown (current-price fallback)
   lot_qty: number;
   tp_order_id: string;
   tp_time: string | null;
@@ -1667,26 +1786,76 @@ export interface ExpectedTPMatchedLot {
   tp_qty: number;
   tp_status: string;
   match_origin: string;
-  expected_profit: number;
-  expected_profit_pct: number;
+  expected_profit: number | null; // null when cost basis is unknown
+  expected_profit_pct: number | null; // null when cost basis is unknown
+  cost_basis_unknown?: boolean; // true when buy price is the current-price fallback
   is_grouped?: boolean; // For grouped entries
+}
+
+export interface ExpectedTPProtectionOrder {
+  order_id: string;
+  side?: 'BUY' | 'SELL' | null;
+  price: number | null;
+  qty: number;
+  remaining_qty: number;
+  status: string;
+  /** Always positive for take-profit rows */
+  expected_amount_usd: number | null;
+  /** Always positive for take-profit rows */
+  expected_amount_pct: number | null;
+  /** Path progress from entry toward this TP fill (0–100); mark at/through TP → 100 */
+  tp_fill_proximity_pct?: number | null;
+}
+
+export interface ExpectedTPStopLossOrder extends ExpectedTPProtectionOrder {
+  /** Always negative for stop-loss rows */
+  expected_amount_usd: number | null;
+  /** Always negative for stop-loss rows */
+  expected_amount_pct: number | null;
+}
+
+export interface ExpectedTPEntryOrder {
+  order_id: string | null;
+  symbol?: string;
+  side: 'BUY' | 'SELL';
+  entry_price: number | null;
+  qty: number;
+  entry_time: string | null;
+  cost_basis_unknown?: boolean;
+  match_origin?: string | null;
+  take_profits: ExpectedTPProtectionOrder[];
+  stop_loss: ExpectedTPStopLossOrder | null;
 }
 
 export interface ExpectedTPDetails {
   symbol: string;
+  position_side?: 'LONG' | 'SHORT' | 'MIXED';
   net_qty: number;
   position_value: number;
-  actual_position_value?: number;
+  actual_position_value?: number | null;
+  /** Qty-weighted average entry price across open lots; null when cost basis unknown */
+  avg_entry_price?: number | null;
+  entry_lot_count?: number;
   covered_qty: number;
   uncovered_qty: number;
-  total_expected_profit: number;
+  total_expected_profit: number | null; // null when cost basis is unknown
   matched_lots: ExpectedTPMatchedLot[]; // Backend returns 'matched_lots', not 'lots'
+  entry_orders?: ExpectedTPEntryOrder[];
   current_price?: number;
+  /** Highest path-progress % toward an active TP fill among entry lots */
+  max_tp_fill_proximity_pct?: number | null;
   has_uncovered?: boolean;
+  cost_basis_unknown?: boolean; // true when buy price is the current-price fallback
   uncovered_entry?: {
     symbol: string;
     uncovered_qty: number;
     label: string;
+  };
+  orphaned_protection_only?: boolean;
+  strategy?: {
+    sl_percentage: number;
+    tp_percentage: number;
+    sl_tp_mode: string;
   };
 }
 
@@ -1703,6 +1872,39 @@ export async function getExpectedTakeProfitDetails(symbol: string): Promise<Expe
     );
     throw error;
   }
+}
+
+export interface CreateProtectionSmartResult {
+  ok: boolean;
+  message?: string;
+  order_id?: string;
+  symbol?: string;
+  created?: Array<{ role: string; order_id: string; price?: number }>;
+  errors?: Array<{ role: string; error: unknown }>;
+  prices?: Record<string, unknown>;
+  strategy?: { sl_percentage: number; tp_percentage: number; sl_tp_mode: string };
+}
+
+export async function createProtectionSmart(params: {
+  order_id: string;
+  create_sl?: boolean;
+  create_tp?: boolean;
+  quantity?: number;
+  force?: boolean;
+  place_live?: boolean;
+}): Promise<CreateProtectionSmartResult> {
+  return fetchAPI<CreateProtectionSmartResult>('/orders/create-protection-smart', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      order_id: params.order_id,
+      create_sl: params.create_sl ?? true,
+      create_tp: params.create_tp ?? true,
+      quantity: params.quantity,
+      force: params.force ?? true,
+      place_live: params.place_live ?? true,
+    }),
+  });
 }
 
 // Telegram Messages API
@@ -1945,3 +2147,618 @@ export async function getAgentOpsCursorBridgeDiagnostics(): Promise<AgentOpsCurs
     return { ok: false, error: String(error) };
   }
 }
+
+// --- Jarvis Phase 3 task execution ---
+
+export interface JarvisExecutionStep {
+  id: string;
+  action: string;
+  tool: string;
+  description: string;
+  safety_level?: string;
+  estimated_cost_usd?: number;
+}
+
+export interface JarvisExecutionPlan {
+  steps: JarvisExecutionStep[];
+  total_estimated_cost_usd?: number;
+  overall_safety?: string;
+  objective_summary?: string;
+}
+
+export interface JarvisExecutionTaskSummary {
+  task_id: string;
+  objective: string;
+  status: string;
+  priority?: string;
+  approval_status?: string;
+  estimated_cost_usd?: number;
+  actual_cost_usd?: number;
+  created_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface JarvisExecutionLogEntry {
+  log_id: string;
+  agent: string;
+  tool: string;
+  input_summary?: string;
+  output_summary?: string;
+  duration_ms?: number;
+  timestamp?: string;
+}
+
+export interface JarvisArtifactRecord {
+  artifact_id: string;
+  name: string;
+  format: string;
+  step_id?: string | null;
+  preview?: string;
+}
+
+export interface JarvisValidationCheck {
+  label: string;
+  passed: boolean;
+}
+
+export interface JarvisValidationOutcome {
+  task_type?: string;
+  passed?: boolean;
+  final_status?: string;
+  checks?: JarvisValidationCheck[];
+  explanation?: string;
+  completion_report?: {
+    summary?: string;
+    evidence?: string;
+    conclusion?: string;
+    next_action?: string;
+  };
+}
+
+export interface JarvisExecutionTaskDetail {
+  task_id: string;
+  objective: string;
+  status: string;
+  plan?: JarvisExecutionPlan | Record<string, unknown>;
+  artifacts?: JarvisArtifactRecord[];
+  approval_required?: boolean;
+  approval_status?: string;
+  estimated_cost_usd?: number;
+  actual_cost_usd?: number;
+  current_step?: string | null;
+  execution_log?: JarvisExecutionLogEntry[];
+  final_answer?: string;
+  error?: string | null;
+  review?: {
+    validation?: JarvisValidationOutcome;
+    [key: string]: unknown;
+  };
+}
+
+export async function submitJarvisExecutionTask(body: {
+  objective: string;
+  priority?: string;
+  approval_mode?: string;
+  dry_run?: boolean;
+}): Promise<JarvisExecutionTaskDetail> {
+  return fetchAPI<JarvisExecutionTaskDetail>('/jarvis/tasks/submit', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function listJarvisExecutionTasks(limit = 20): Promise<{ tasks: JarvisExecutionTaskSummary[] }> {
+  return fetchAPI<{ tasks: JarvisExecutionTaskSummary[] }>(`/jarvis/tasks/execution?limit=${limit}`);
+}
+
+export async function getJarvisExecutionTask(taskId: string): Promise<JarvisExecutionTaskDetail> {
+  return fetchAPI<JarvisExecutionTaskDetail>(`/jarvis/tasks/execution/${taskId}`);
+}
+
+export async function approveJarvisTask(
+  taskId: string,
+  body: { actor_id?: string; comment?: string } = {},
+): Promise<JarvisExecutionTaskDetail> {
+  return fetchAPI<JarvisExecutionTaskDetail>(`/jarvis/tasks/${taskId}/approve`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function rejectJarvisTask(
+  taskId: string,
+  body: { actor_id?: string; comment?: string } = {},
+): Promise<JarvisExecutionTaskDetail> {
+  return fetchAPI<JarvisExecutionTaskDetail>(`/jarvis/tasks/${taskId}/reject`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+// --- Phase 4A: Production diagnostic investigations ---
+
+export interface JarvisInvestigationEvidence {
+  source: string;
+  reference: string;
+  detail: string;
+  confidence: string;
+  evidence_type?: string;
+  artifact_id?: string;
+  content_url?: string;
+  mime_type?: string;
+}
+
+export interface JarvisInvestigationRankedCause {
+  cause: string;
+  score: number;
+  supporting_evidence?: string[];
+  explanation?: string;
+}
+
+export interface JarvisInvestigationSummary {
+  investigation_id: string;
+  objective: string;
+  status: string;
+  root_cause?: string | null;
+  confidence: number;
+  evidence_count: number;
+  recommended_fix?: string | null;
+  category?: string;
+  created_at?: string | null;
+}
+
+export interface JarvisInvestigationDetail {
+  investigation_id: string;
+  objective: string;
+  category: string;
+  template_id: string;
+  status: string;
+  summary: string;
+  evidence: JarvisInvestigationEvidence[];
+  evidence_count: number;
+  root_cause: string | null;
+  confidence: number;
+  ranked_causes: JarvisInvestigationRankedCause[];
+  impact: string;
+  recommended_fix: string;
+  verification_steps: string[];
+  next_action: string;
+  proposal_task_id?: string | null;
+  proposal_status?: string | null;
+  created_at?: string | null;
+}
+
+export interface JarvisFixTemplateCandidate {
+  fix_template_id: string;
+  match: string;
+  target_files?: string[];
+  test_paths?: string[];
+  strategy?: string;
+  no_fix_required?: boolean;
+}
+
+export interface JarvisProposalEligibility {
+  eligible: boolean;
+  reasons: string[];
+  confidence: number;
+  fix_template_candidates: JarvisFixTemplateCandidate[];
+  existing_proposal_task_id: string | null;
+}
+
+export interface JarvisProposalTaskDetail extends JarvisExecutionTaskDetail {
+  workflow_type?: string;
+  source_investigation_id?: string | null;
+  fix_template_id?: string | null;
+  sandbox_summary?: Record<string, unknown>;
+}
+
+export interface JarvisInvestigationImageAttachment {
+  filename: string;
+  content_base64: string;
+  caption?: string;
+  content_type?: string;
+}
+
+export interface JarvisInvestigationPreset {
+  id: string;
+  label: string;
+  objective: string;
+}
+
+export async function runJarvisInvestigation(
+  objective: string,
+  attachments?: JarvisInvestigationImageAttachment[],
+): Promise<JarvisInvestigationDetail> {
+  return fetchAPI<JarvisInvestigationDetail>('/jarvis/investigations/run', {
+    method: 'POST',
+    body: JSON.stringify({
+      objective,
+      attachments: attachments ?? [],
+    }),
+  });
+}
+
+export async function listJarvisInvestigations(
+  limit = 20,
+  q = '',
+): Promise<{ investigations: JarvisInvestigationSummary[] }> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (q) params.set('q', q);
+  return fetchAPI<{ investigations: JarvisInvestigationSummary[] }>(
+    `/jarvis/investigations?${params.toString()}`,
+  );
+}
+
+export async function getJarvisInvestigation(
+  investigationId: string,
+): Promise<JarvisInvestigationDetail> {
+  return fetchAPI<JarvisInvestigationDetail>(`/jarvis/investigations/${investigationId}`);
+}
+
+export async function listJarvisInvestigationPresets(): Promise<{ presets: JarvisInvestigationPreset[] }> {
+  return fetchAPI<{ presets: JarvisInvestigationPreset[] }>('/jarvis/investigations/presets');
+}
+
+export interface JarvisScheduledInvestigationSchedule {
+  schedule_id: string;
+  template_id: string;
+  title: string;
+  objective: string;
+  category: string;
+  enabled: boolean;
+  next_run_at: string | null;
+  last_run_at: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface JarvisScheduledInvestigationTask {
+  task_id: string;
+  schedule_id: string;
+  template_id: string;
+  objective: string;
+  status: string;
+  investigation_id: string | null;
+  result_summary: string | null;
+  error_message: string | null;
+  scheduled_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_ms: number;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface JarvisScheduledInvestigationsResponse {
+  scheduler: Record<string, unknown>;
+  schedules: JarvisScheduledInvestigationSchedule[];
+  tasks: JarvisScheduledInvestigationTask[];
+}
+
+export interface JarvisScheduledInvestigationReport {
+  period_hours: number;
+  since: string;
+  generated_at: string;
+  task_counts: Record<string, number>;
+  success_rate_pct: number;
+  failure_rate_pct: number;
+  average_runtime_ms: number;
+  schedules: JarvisScheduledInvestigationSchedule[];
+  recent_tasks: JarvisScheduledInvestigationTask[];
+}
+
+export async function getJarvisScheduledInvestigations(
+  limit = 50,
+): Promise<JarvisScheduledInvestigationsResponse> {
+  return fetchAPI<JarvisScheduledInvestigationsResponse>(
+    `/jarvis/investigations/scheduled?limit=${limit}`,
+  );
+}
+
+export async function getJarvisScheduledInvestigationReport(
+  hours = 24,
+): Promise<JarvisScheduledInvestigationReport> {
+  return fetchAPI<JarvisScheduledInvestigationReport>(
+    `/jarvis/investigations/scheduled/report?hours=${hours}`,
+  );
+}
+
+// --- Phase 6B: Jarvis autonomous alerting ---
+
+export interface JarvisAlertSummary {
+  alert_id: string;
+  created_at: string;
+  updated_at: string;
+  severity: string;
+  source: string;
+  investigation_id: string | null;
+  title: string;
+  summary: string;
+  evidence_count: number;
+  status: string;
+  fingerprint: string;
+  occurrence_count: number;
+  first_seen: string;
+  last_seen: string;
+}
+
+export interface JarvisAlertsResponse {
+  alerts: JarvisAlertSummary[];
+  alerting: Record<string, unknown>;
+}
+
+export interface JarvisDailyReportSummary {
+  id: number;
+  report_id: string;
+  report_date: string;
+  generated_at: string;
+  summary: Record<string, unknown>;
+}
+
+export interface JarvisDailyReportsResponse {
+  reports: JarvisDailyReportSummary[];
+  alerting: Record<string, unknown>;
+}
+
+export async function getJarvisAlerts(limit = 100): Promise<JarvisAlertsResponse> {
+  return fetchAPI<JarvisAlertsResponse>(`/jarvis/alerts?limit=${limit}`);
+}
+
+export async function getJarvisAlert(alertId: string): Promise<JarvisAlertSummary & { evidence: unknown[] }> {
+  return fetchAPI(`/jarvis/alerts/${alertId}`);
+}
+
+export async function acknowledgeJarvisAlert(alertId: string): Promise<JarvisAlertSummary & { evidence: unknown[] }> {
+  return fetchAPI(`/jarvis/alerts/${alertId}/acknowledge`, { method: 'POST' });
+}
+
+export async function resolveJarvisAlert(alertId: string): Promise<JarvisAlertSummary & { evidence: unknown[] }> {
+  return fetchAPI(`/jarvis/alerts/${alertId}/resolve`, { method: 'POST' });
+}
+
+export async function getJarvisDailyReports(limit = 30): Promise<JarvisDailyReportsResponse> {
+  return fetchAPI<JarvisDailyReportsResponse>(`/jarvis/reports?limit=${limit}`);
+}
+
+export async function getJarvisDailyReport(reportId: string): Promise<JarvisDailyReportSummary> {
+  return fetchAPI<JarvisDailyReportSummary>(`/jarvis/reports/${reportId}`);
+}
+
+export async function getProposalEligibility(
+  investigationId: string,
+): Promise<JarvisProposalEligibility> {
+  return fetchAPI<JarvisProposalEligibility>(`/jarvis/proposals/eligibility/${investigationId}`);
+}
+
+export async function proposePatchFromInvestigation(
+  investigationId: string,
+): Promise<JarvisProposalTaskDetail> {
+  return fetchAPI<JarvisProposalTaskDetail>(
+    `/jarvis/investigations/${investigationId}/propose-patch`,
+    { method: 'POST' },
+  );
+}
+
+// --- Phase 4C: Jarvis investigation quality analytics ---
+
+export interface JarvisAnalyticsInvestigationMetrics {
+  total_investigations: number;
+  completed: number;
+  resolved: number;
+  insufficient_evidence: number;
+  partial_failure: number;
+  failed: number;
+  running: number;
+  average_duration_ms: number;
+  median_duration_ms: number;
+  success_rate_pct: number;
+  failure_rate_pct: number;
+  insufficient_evidence_rate_pct: number;
+  false_positives: number;
+  tool_errors_inferred: number;
+}
+
+export interface JarvisAnalyticsQualityScore {
+  overall_score: number;
+  last_7_days: number;
+  last_30_days: number;
+  formula: Record<string, number>;
+}
+
+export interface JarvisAnalyticsOverview {
+  investigations: JarvisAnalyticsInvestigationMetrics;
+  quality_score: JarvisAnalyticsQualityScore;
+  period_rates: Record<string, { completion_rate_pct: number; resolution_rate_pct: number; false_positive_rate_pct: number }>;
+  trends: {
+    last_7_days: Array<Record<string, string | number>>;
+    last_30_days: Array<Record<string, string | number>>;
+    quality_score_daily: Array<{ date: string; quality_score: number }>;
+  };
+  read_only: boolean;
+}
+
+export interface JarvisAnalyticsTemplateRow {
+  template_id: string;
+  investigations: number;
+  completed: number;
+  failed: number;
+  insufficient_evidence: number;
+  completion_rate_pct: number;
+  failure_rate_pct: number;
+  insufficient_evidence_rate_pct: number;
+  average_confidence: number;
+}
+
+export interface JarvisAnalyticsToolRow {
+  tool: string;
+  executions: number;
+  successes: number;
+  failures: number;
+  success_rate_pct: number;
+  failure_rate_pct: number;
+  average_duration_ms: number;
+  common_errors: Array<{ message: string; count: number }>;
+}
+
+export interface JarvisAnalyticsProposals {
+  proposals: {
+    proposals_generated: number;
+    no_fix_required: number;
+    waiting_for_approval: number;
+    approved: number;
+    rejected: number;
+    failed: number;
+    proposing: number;
+    useful_proposals: number;
+    useful_rate_pct: number;
+  };
+  proposal_tasks: number;
+  read_only: boolean;
+}
+
+export interface JarvisAnalyticsRootCauses {
+  most_common_root_causes: Array<{ root_cause: string; occurrences: number; key: string }>;
+  recurring_incidents: Array<{ root_cause: string; occurrences: number; key: string }>;
+  resolved_incidents: Array<{ investigation_id?: string; objective?: string; root_cause: string; status?: string; confidence: number; created_at?: string }>;
+  active_incidents: Array<{ investigation_id?: string; objective?: string; root_cause: string; status?: string; confidence: number; created_at?: string }>;
+  unique_root_causes: number;
+  read_only: boolean;
+}
+
+export async function getJarvisAnalyticsOverview(): Promise<JarvisAnalyticsOverview> {
+  return fetchAPI<JarvisAnalyticsOverview>('/jarvis/analytics/overview');
+}
+
+export async function getJarvisAnalyticsTemplates(): Promise<{ templates: JarvisAnalyticsTemplateRow[]; count: number }> {
+  return fetchAPI<{ templates: JarvisAnalyticsTemplateRow[]; count: number }>('/jarvis/analytics/templates');
+}
+
+export async function getJarvisAnalyticsTools(): Promise<{ tools: JarvisAnalyticsToolRow[]; count: number; noisiest_tools: JarvisAnalyticsToolRow[] }> {
+  return fetchAPI<{ tools: JarvisAnalyticsToolRow[]; count: number; noisiest_tools: JarvisAnalyticsToolRow[] }>('/jarvis/analytics/tools');
+}
+
+export async function getJarvisAnalyticsProposals(): Promise<JarvisAnalyticsProposals> {
+  return fetchAPI<JarvisAnalyticsProposals>('/jarvis/analytics/proposals');
+}
+
+export async function getJarvisAnalyticsRootCauses(): Promise<JarvisAnalyticsRootCauses> {
+  return fetchAPI<JarvisAnalyticsRootCauses>('/jarvis/analytics/root-causes');
+}
+
+// --- Phase 4D: Jarvis self-improvement recommendation engine ---
+
+export interface JarvisImprovementRecommendation {
+  id: string;
+  category: string;
+  priority: 'high' | 'medium' | 'low';
+  priority_score: number;
+  title: string;
+  recommendation: string;
+  reason: string;
+  evidence: string[];
+  expected_benefit: string;
+  impact: string;
+  frequency: number;
+  confidence: number;
+}
+
+export interface JarvisImprovementRecommendations {
+  recommendations: JarvisImprovementRecommendation[];
+  backlog: JarvisImprovementRecommendation[];
+  by_priority: Record<string, JarvisImprovementRecommendation[]>;
+  counts: Record<string, number>;
+  read_only: boolean;
+}
+
+export interface JarvisImprovementTemplateGap {
+  gap_type: string;
+  template_id?: string;
+  category?: string;
+  investigations: number;
+  severity: string;
+  insufficient_evidence?: number;
+  insufficient_evidence_rate_pct?: number;
+  generic_rate_pct?: number;
+  failure_rate_pct?: number;
+  top_keywords?: string[];
+  templates_used?: Record<string, number>;
+}
+
+export interface JarvisImprovementTemplates {
+  gaps: JarvisImprovementTemplateGap[];
+  recommendations: JarvisImprovementRecommendation[];
+  summary: Record<string, unknown>;
+  template_metrics: JarvisAnalyticsTemplateRow[];
+  read_only: boolean;
+}
+
+export interface JarvisImprovementToolEffectiveness {
+  tool: string;
+  category: string;
+  assessment_display: string;
+  executions: number;
+  successes: number;
+  failures: number;
+  success_rate_pct: number;
+  useful_outcomes: number;
+  investigations_using: number;
+  utility_ratio: number;
+  useful_findings?: number;
+  false_positive_contribution?: number;
+  workflow_usage_rate?: number | null;
+  successful_completion_rate?: number | null;
+  failure_association_rate?: number | null;
+  average_duration_ms: number;
+  assessment: string;
+}
+
+export interface JarvisImprovementTools {
+  tools: JarvisImprovementToolEffectiveness[];
+  low_utility_tools: JarvisImprovementToolEffectiveness[];
+  high_value_tools: JarvisImprovementToolEffectiveness[];
+  recommendations: JarvisImprovementRecommendation[];
+  summary: Record<string, unknown>;
+  read_only: boolean;
+}
+
+export interface JarvisImprovementTrends {
+  quality_scores: Record<string, number | string>;
+  false_positives: Record<string, number>;
+  period_rates: Record<string, Record<string, number>>;
+  recurring_incidents: Array<{ root_cause: string; occurrences: number; key: string }>;
+  open_orders_share_pct: number;
+  quality_score_daily: Array<{ date: string; quality_score: number }>;
+  recommendations: JarvisImprovementRecommendation[];
+  read_only: boolean;
+}
+
+export async function getJarvisImprovementRecommendations(): Promise<JarvisImprovementRecommendations> {
+  return fetchAPI<JarvisImprovementRecommendations>('/jarvis/improvement/recommendations');
+}
+
+export async function getJarvisImprovementTemplates(): Promise<JarvisImprovementTemplates> {
+  return fetchAPI<JarvisImprovementTemplates>('/jarvis/improvement/templates');
+}
+
+export async function getJarvisImprovementTools(): Promise<JarvisImprovementTools> {
+  return fetchAPI<JarvisImprovementTools>('/jarvis/improvement/tools');
+}
+
+export async function getJarvisImprovementTrends(): Promise<JarvisImprovementTrends> {
+  return fetchAPI<JarvisImprovementTrends>('/jarvis/improvement/trends');
+}
+
+export interface JarvisImprovementQuality {
+  quality_score: number;
+  recommendation_count: number;
+  high_priority_count: number;
+  suppressed_recommendations: number;
+  duplicate_recommendations: number;
+  evidence_coverage: number;
+  read_only: boolean;
+}
+
+export async function getJarvisImprovementQuality(): Promise<JarvisImprovementQuality> {
+  return fetchAPI<JarvisImprovementQuality>('/jarvis/improvement/quality');
+}
+
